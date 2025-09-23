@@ -10,6 +10,26 @@ interface User {
   isActive: boolean;
 }
 
+interface Evaluation {
+  id: string;
+  userId: string;
+  evaluatorId: string;
+  score: number;
+  feedback: string;
+  createdAt: string;
+}
+
+interface Team {
+  id: string;
+  name: string;
+  region?: {
+    name: string;
+  };
+  userTeams: Array<{
+    user: User;
+  }>;
+}
+
 interface LoginResponse {
   token: string;
   user: User;
@@ -75,9 +95,95 @@ class ApiService {
       }
     };
   }
+
+  async getEvaluations(): Promise<Evaluation[]> {
+    const response = await fetch(`${API_BASE}/api/evaluations`, {
+      headers: this.getHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch evaluations');
+    }
+
+    return response.json();
+  }
+
+  async getTeams(): Promise<Team[]> {
+    const response = await fetch(`${API_BASE}/public-admin/teams`, {
+      headers: this.getHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch teams');
+    }
+
+    return response.json();
+  }
 }
 
 const apiService = new ApiService();
+
+// PWA Service
+class PWAService {
+  private deferredPrompt: any = null;
+
+  constructor() {
+    this.setupInstallPrompt();
+    this.registerServiceWorker();
+  }
+
+  private setupInstallPrompt() {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.deferredPrompt = e;
+      console.log('PWA: Install prompt ready');
+    });
+
+    window.addEventListener('appinstalled', () => {
+      console.log('PWA: App installed successfully');
+      this.deferredPrompt = null;
+    });
+  }
+
+  private async registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        console.log('PWA: Service Worker registered', registration);
+      } catch (error) {
+        console.error('PWA: Service Worker registration failed', error);
+      }
+    }
+  }
+
+  async installApp(): Promise<boolean> {
+    if (!this.deferredPrompt) {
+      return false;
+    }
+
+    this.deferredPrompt.prompt();
+    const { outcome } = await this.deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      console.log('PWA: User accepted install prompt');
+      return true;
+    } else {
+      console.log('PWA: User dismissed install prompt');
+      return false;
+    }
+  }
+
+  isInstallable(): boolean {
+    return this.deferredPrompt !== null;
+  }
+
+  isInstalled(): boolean {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           (window.navigator as any).standalone === true;
+  }
+}
+
+const pwaService = new PWAService();
 
 // Auth Manager (matching iOS AuthManager)
 class AuthManager {
@@ -139,6 +245,8 @@ class AuthManager {
     this.listeners.forEach(listener => listener());
   }
 }
+
+// Components (matching iOS app structure)
 
 // Login View (matching iOS LoginView)
 const LoginView: React.FC<{ authManager: AuthManager }> = ({ authManager }) => {
