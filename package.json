@@ -1,0 +1,71 @@
+{
+  "name": "sales-scorecard-pwa",
+  "version": "1.0.0",
+  "description": "Progressive Web Application for Sales Scorecard platform",
+  "private": true,
+  "homepage": ".",
+  "dependencies": {
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^14.4.3",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.11",
+    "@types/react": "^18.0.26",
+    "@types/react-dom": "^18.0.10",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "typescript": "^4.9.4",
+    "web-vitals": "^2.1.4",
+    "workbox-webpack-plugin": "^6.5.4"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "deploy": "npm run build && aws s3 sync build/ s3://your-bucket-name --delete",
+    "test:pwa": "lighthouse http://localhost:3000 --output=json --output-path=./lighthouse-report.json",
+    "analyze": "npm run build && npx bundle-analyzer build/static/js/*.js"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/workbox-webpack-plugin": "^6.5.0",
+    "lighthouse": "^10.0.0",
+    "webpack-bundle-analyzer": "^4.7.0"
+  },
+  "keywords": [
+    "pwa",
+    "react",
+    "typescript",
+    "sales",
+    "management",
+    "progressive-web-app"
+  ],
+  "author": "Zahari Vassilev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZahariVassilev87/SalesScorecard-PWA.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ZahariVassilev87/SalesScorecard-PWA/issues"
+  }
+}
