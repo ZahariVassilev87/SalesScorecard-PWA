@@ -8,6 +8,7 @@
     <meta name="description" content="Sales Scorecard - Progressive Web Application for sales management and evaluation" />
     
     <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Sales Scorecard">
@@ -28,7 +29,6 @@
     <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/icons/icon-16x16.png">
     
     <!-- Splash Screens -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
     <!-- Preconnect to API -->
@@ -40,7 +40,8 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     
-    <!-- Service Worker Registration -->
+    <!-- Service Worker Registration - Temporarily Disabled -->
+    <!--
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -54,5 +55,6 @@
         });
       }
     </script>
+    -->
   </body>
 </html>
