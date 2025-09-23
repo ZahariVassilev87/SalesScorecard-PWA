@@ -27,7 +27,8 @@ const SalesApp: React.FC = () => {
   const getRoleDisplayName = (role: string) => {
     switch (role) {
       case 'SALES_DIRECTOR': return 'Sales Director';
-      case 'REGIONAL_SALES_MANAGER': return 'Regional Manager';
+      case 'REGIONAL_SALES_MANAGER': 
+      case 'REGIONAL_MANAGER': return 'Regional Manager';
       case 'SALES_LEAD': return 'Sales Lead';
       case 'SALESPERSON': return 'Salesperson';
       case 'ADMIN': return 'Administrator';
@@ -36,15 +37,15 @@ const SalesApp: React.FC = () => {
   };
 
   const canEvaluate = (userRole: string) => {
-    return ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER', 'SALES_LEAD'].includes(userRole);
+    return ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER', 'REGIONAL_MANAGER', 'SALES_LEAD'].includes(userRole);
   };
 
   const canViewAnalytics = (userRole: string) => {
-    return ['ADMIN', 'REGIONAL_SALES_MANAGER', 'SALES_LEAD'].includes(userRole);
+    return ['ADMIN', 'REGIONAL_SALES_MANAGER', 'REGIONAL_MANAGER', 'SALES_LEAD'].includes(userRole);
   };
 
   const canManageTeams = (userRole: string) => {
-    return ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER'].includes(userRole);
+    return ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER', 'REGIONAL_MANAGER'].includes(userRole);
   };
 
   const isSalesDirector = (userRole: string) => {
@@ -85,11 +86,13 @@ const SalesApp: React.FC = () => {
           <h1>🎯 Sales Scorecard</h1>
         </div>
         <div className="header-right">
-          <span className="user-info">
-            {user?.displayName} ({getRoleDisplayName(user?.role || '')})
-          </span>
+          <div className="user-info">
+            <span className="user-name">{user?.displayName}</span>
+            <span className="user-role">{getRoleDisplayName(user?.role || '')}</span>
+          </div>
           <button onClick={handleLogout} className="logout-button">
-            🚪 Sign Out
+            <span>🚪</span>
+            <span>Sign Out</span>
           </button>
         </div>
       </header>
@@ -105,7 +108,8 @@ const SalesApp: React.FC = () => {
                 closeMobileMenu();
               }}
             >
-              📊 Director Dashboard
+              <span>🏢</span>
+              <span>Director Dashboard</span>
             </button>
           </>
         ) : (
@@ -119,7 +123,8 @@ const SalesApp: React.FC = () => {
                   closeMobileMenu();
                 }}
               >
-                📝 Evaluation Form
+                <span>✏️</span>
+                <span>Evaluation Form</span>
               </button>
             )}
             
@@ -130,7 +135,8 @@ const SalesApp: React.FC = () => {
                 closeMobileMenu();
               }}
             >
-              📋 Evaluation History
+              <span>📜</span>
+              <span>Evaluation History</span>
             </button>
 
             {canViewAnalytics(user?.role || '') && (
@@ -141,7 +147,8 @@ const SalesApp: React.FC = () => {
                   closeMobileMenu();
                 }}
               >
-                📊 Analytics
+                <span>📈</span>
+                <span>Analytics</span>
               </button>
             )}
             
@@ -152,7 +159,8 @@ const SalesApp: React.FC = () => {
                 closeMobileMenu();
               }}
             >
-              📊 Dashboard
+              <span>🏠</span>
+              <span>Dashboard</span>
             </button>
             
             <button
@@ -162,7 +170,8 @@ const SalesApp: React.FC = () => {
                 closeMobileMenu();
               }}
             >
-              👥 My Team
+              <span>👤</span>
+              <span>My Team</span>
             </button>
 
             {canManageTeams(user?.role || '') && (
@@ -173,7 +182,8 @@ const SalesApp: React.FC = () => {
                   closeMobileMenu();
                 }}
               >
-                👥 Teams
+                <span>👥</span>
+                <span>Teams</span>
               </button>
             )}
           </>

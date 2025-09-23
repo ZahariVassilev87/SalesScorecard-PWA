@@ -48,6 +48,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       case 'SALES_DIRECTOR':
         return 'Regional Manager Evaluation';
       case 'REGIONAL_SALES_MANAGER':
+      case 'REGIONAL_MANAGER':
         return 'Sales Lead Coaching Evaluation';
       case 'SALES_LEAD':
         return 'Salesperson Evaluation';
@@ -63,6 +64,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       case 'SALES_DIRECTOR':
         return 'Evaluate Regional Manager performance and leadership';
       case 'REGIONAL_SALES_MANAGER':
+      case 'REGIONAL_MANAGER':
         return 'Evaluate Sales Lead coaching abilities in the field';
       case 'SALES_LEAD':
         return 'Evaluate Salesperson performance during sales meetings';
@@ -318,7 +320,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
 
 // Helper functions
 const canEvaluate = (role: string): boolean => {
-  return ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER', 'SALES_LEAD'].includes(role);
+  return ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER', 'REGIONAL_MANAGER', 'SALES_LEAD'].includes(role);
 };
 
 export default EvaluationForm;

@@ -26,7 +26,8 @@ const MyTeam: React.FC = () => {
 
   const getRoleDisplayName = (role: string) => {
     switch (role) {
-      case 'REGIONAL_MANAGER': return 'Regional Manager';
+      case 'SALES_DIRECTOR': return 'Sales Director';
+      case 'REGIONAL_SALES_MANAGER': return 'Regional Manager';
       case 'SALES_LEAD': return 'Sales Lead';
       case 'SALESPERSON': return 'Salesperson';
       case 'ADMIN': return 'Administrator';
@@ -36,7 +37,8 @@ const MyTeam: React.FC = () => {
 
   const getRoleIcon = (role: string) => {
     switch (role) {
-      case 'REGIONAL_MANAGER': return '🏢';
+      case 'SALES_DIRECTOR': return '🏢';
+      case 'REGIONAL_SALES_MANAGER': return '🏢';
       case 'SALES_LEAD': return '👨‍💼';
       case 'SALESPERSON': return '👤';
       case 'ADMIN': return '⚙️';

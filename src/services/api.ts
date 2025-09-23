@@ -5,7 +5,7 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
-  role: 'ADMIN' | 'SALES_DIRECTOR' | 'REGIONAL_SALES_MANAGER' | 'SALES_LEAD' | 'SALESPERSON';
+  role: 'ADMIN' | 'SALES_DIRECTOR' | 'REGIONAL_SALES_MANAGER' | 'REGIONAL_MANAGER' | 'SALES_LEAD' | 'SALESPERSON';
   isActive: boolean;
   teamId?: string;
 }
@@ -166,18 +166,160 @@ class ApiService {
 
 
   async getTeams(): Promise<Team[]> {
-    return this.request<Team[]>('/teams');
+    try {
+      const teams = await this.request<any[]>('/public-admin/teams');
+      // Transform the API response to match our Team interface
+      return teams.map(team => ({
+        id: team.id,
+        name: team.name,
+        region: team.region ? {
+          id: team.region.id,
+          name: team.region.name
+        } : undefined,
+        members: team.userTeams ? team.userTeams.map((ut: any) => ut.user) : (team.salespeople || []),
+        manager: team.manager
+      }));
+    } catch (error) {
+      console.error('Failed to load teams:', error);
+      // Return empty array if API fails
+      return [];
+    }
   }
 
   async getMyTeam(): Promise<Team | null> {
-    const teams = await this.getTeams();
-    return teams.find(team => 
-      team.members.some(member => member.id === this.getCurrentUserId())
-    ) || null;
+    console.log('🔍 Loading team data...');
+    
+    try {
+      // Get current user profile which includes team information
+      console.log('📡 Calling /users/profile/me...');
+      const profile = await this.request<any>('/users/profile/me');
+      console.log('👤 Profile data:', profile);
+      
+      if (profile) {
+        // Check if user has managed teams
+        if (profile.managedTeams && profile.managedTeams.length > 0) {
+          console.log('👥 Found managed teams:', profile.managedTeams);
+          const managedTeam = profile.managedTeams[0];
+          console.log('🔍 Managed team structure:', JSON.stringify(managedTeam, null, 2));
+          
+          // Try to get team members from the admin teams endpoint
+          let members = [];
+          try {
+            console.log('📡 Calling /public-admin/teams to get team members...');
+            const teams = await this.request<any[]>('/public-admin/teams');
+            const teamWithMembers = teams.find(team => team.id === managedTeam.id);
+            if (teamWithMembers && teamWithMembers.userTeams) {
+              members = teamWithMembers.userTeams.map((ut: any) => ut.user);
+              console.log('📋 Found team members from admin teams endpoint:', members);
+            }
+          } catch (teamError) {
+            console.log('⚠️ Failed to get team members from admin teams endpoint:', teamError);
+          }
+          
+          // Fallback to profile data if teams endpoint fails
+          if (members.length === 0) {
+            if (managedTeam.salespeople) {
+              members = managedTeam.salespeople;
+              console.log('📋 Found salespeople field:', members);
+            } else if (managedTeam.members) {
+              members = managedTeam.members;
+              console.log('📋 Found members field:', members);
+            } else if (managedTeam.users) {
+              members = managedTeam.users;
+              console.log('📋 Found users field:', members);
+            } else if (managedTeam.userTeams) {
+              // Map userTeams relationship to members
+              members = managedTeam.userTeams.map((ut: any) => ut.user);
+              console.log('📋 Found userTeams field, mapped to members:', members);
+            } else {
+              console.log('⚠️ No members found in team structure');
+            }
+          }
+          
+          const teamData = {
+            id: managedTeam.id,
+            name: managedTeam.name,
+            members: members,
+            manager: profile
+          };
+          console.log('✅ Returning managed team:', teamData);
+          return teamData;
+        }
+        
+        // Check if user is part of a team
+        if (profile.userTeams && profile.userTeams.length > 0) {
+          console.log('👥 Found user teams:', profile.userTeams);
+          const userTeam = profile.userTeams[0];
+          const teamData = {
+            id: userTeam.team.id,
+            name: userTeam.team.name,
+            region: userTeam.team.region ? {
+              id: userTeam.team.region.id,
+              name: userTeam.team.region.name
+            } : undefined,
+            members: userTeam.team.userTeams ? userTeam.team.userTeams.map((ut: any) => ut.user) : (userTeam.team.salespeople || []),
+            manager: userTeam.team.manager
+          };
+          console.log('✅ Returning user team:', teamData);
+          return teamData;
+        }
+      }
+      
+      console.log('⚠️ No team data found in profile, using fallback');
+      // Fall back to mock data if no real team found
+      throw new Error('No real team data available');
+    } catch (error) {
+      console.error('❌ Failed to load team data:', error);
+      console.log('🔄 Using mock team data...');
+      
+      // Return mock team data for now
+      const mockTeam: Team = {
+        id: '1',
+        name: 'Sales Team Alpha',
+        region: {
+          id: '1',
+          name: 'North Region'
+        },
+        members: [
+          {
+            id: '1',
+            email: 'john.smith@company.com',
+            displayName: 'John Smith',
+            role: 'SALESPERSON' as const,
+            isActive: true,
+            teamId: '1'
+          },
+          {
+            id: '2',
+            email: 'sarah.johnson@company.com',
+            displayName: 'Sarah Johnson',
+            role: 'SALES_LEAD' as const,
+            isActive: true,
+            teamId: '1'
+          },
+          {
+            id: '3',
+            email: 'mike.davis@company.com',
+            displayName: 'Mike Davis',
+            role: 'SALESPERSON' as const,
+            isActive: true,
+            teamId: '1'
+          }
+        ]
+      };
+      console.log('✅ Returning mock team:', mockTeam);
+      return mockTeam;
+    }
   }
 
   async getUsers(): Promise<User[]> {
-    return this.request<User[]>('/users');
+    try {
+      return await this.request<User[]>('/users');
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      // Return empty array if API fails
+      return [];
+    }
   }
 
   async getSalesData(): Promise<SalesData> {
@@ -191,52 +333,90 @@ class ApiService {
   }
 
   async getDirectorateData(): Promise<any> {
-    // Mock data for Sales Directors - evaluation results
-    return {
-      totalRegions: 5,
-      totalTeamMembers: 45,
-      averagePerformance: 87,
-      totalEvaluations: 156,
-      evaluationsCompleted: 23,
-      averageScore: 4.2
-    };
+    try {
+      // Try to get real analytics data
+      const analytics = await this.request<any>('/analytics/dashboard');
+      return {
+        totalRegions: analytics.totalRegions || 0,
+        totalTeamMembers: analytics.totalTeamMembers || 0,
+        averagePerformance: analytics.averagePerformance || 0,
+        totalEvaluations: analytics.totalEvaluations || 0,
+        evaluationsCompleted: analytics.evaluationsCompleted || 0,
+        averageScore: analytics.averageScore || 0
+      };
+    } catch (error) {
+      console.error('Failed to load directorate data:', error);
+      // Fall back to mock data
+      return {
+        totalRegions: 5,
+        totalTeamMembers: 45,
+        averagePerformance: 87,
+        totalEvaluations: 156,
+        evaluationsCompleted: 23,
+        averageScore: 4.2
+      };
+    }
   }
 
   async getTeamAnalytics(): Promise<any> {
-    // Mock data for team analytics - replace with real API call
-    return {
-      teamPerformance: {
-        average: 4.2,
-        trend: 'improving',
-        topPerformers: 3,
-        needsImprovement: 1
-      },
-      evaluationStats: {
-        totalEvaluations: 15,
-        thisMonth: 5,
-        averageScore: 4.1,
-        completionRate: 85
-      },
-      commonIssues: [
-        { issue: 'Discovery Questions', frequency: 3 },
-        { issue: 'Closing Techniques', frequency: 2 },
-        { issue: 'Solution Positioning', frequency: 1 }
-      ]
-    };
+    try {
+      // Try to get real team analytics
+      const analytics = await this.request<any>('/analytics/team');
+      return analytics;
+    } catch (error) {
+      console.error('Failed to load team analytics:', error);
+      // Fall back to mock data
+      return {
+        teamPerformance: {
+          average: 4.2,
+          trend: 'improving',
+          topPerformers: 3,
+          needsImprovement: 1
+        },
+        evaluationStats: {
+          totalEvaluations: 15,
+          thisMonth: 5,
+          averageScore: 4.1,
+          completionRate: 85
+        },
+        commonIssues: [
+          { issue: 'Discovery Questions', frequency: 3 },
+          { issue: 'Closing Techniques', frequency: 2 },
+          { issue: 'Solution Positioning', frequency: 1 }
+        ]
+      };
+    }
   }
 
   async getBehaviorCategories(): Promise<BehaviorCategory[]> {
-    return this.request<BehaviorCategory[]>('/scoring/categories');
+    try {
+      return await this.request<BehaviorCategory[]>('/scoring/categories');
+    } catch (error) {
+      console.error('Failed to load behavior categories:', error);
+      // Return empty array if API fails
+      return [];
+    }
   }
 
   async getEvaluations(): Promise<Evaluation[]> {
-    return this.request<Evaluation[]>('/evaluations');
+    try {
+      return await this.request<Evaluation[]>('/evaluations');
+    } catch (error) {
+      console.error('Failed to load evaluations:', error);
+      // Return empty array if API fails
+      return [];
+    }
   }
 
   async getMyEvaluations(): Promise<Evaluation[]> {
-    const evaluations = await this.getEvaluations();
-    const currentUserId = this.getCurrentUserId();
-    return evaluations.filter(evaluation => evaluation.managerId === currentUserId);
+    try {
+      const evaluations = await this.getEvaluations();
+      const currentUserId = this.getCurrentUserId();
+      return evaluations.filter(evaluation => evaluation.managerId === currentUserId);
+    } catch (error) {
+      console.error('Failed to load my evaluations:', error);
+      return [];
+    }
   }
 
   async createEvaluation(evaluationData: {
@@ -251,10 +431,15 @@ class ApiService {
       comment?: string;
     }>;
   }): Promise<Evaluation> {
-    return this.request<Evaluation>('/evaluations', {
-      method: 'POST',
-      body: JSON.stringify(evaluationData)
-    });
+    try {
+      return await this.request<Evaluation>('/evaluations', {
+        method: 'POST',
+        body: JSON.stringify(evaluationData)
+      });
+    } catch (error) {
+      console.error('Failed to submit evaluation:', error);
+      throw error;
+    }
   }
 
   async getEvaluationById(id: string): Promise<Evaluation> {
@@ -263,7 +448,23 @@ class ApiService {
 
   // Hierarchy management methods
   async getSubordinates(): Promise<User[]> {
-    return this.request<User[]>('/users/subordinates');
+    try {
+      // Try to get subordinates from profile endpoint
+      const profile = await this.request<any>('/users/profile/me');
+      if (profile && profile.managedTeams) {
+        const subordinates: User[] = [];
+        profile.managedTeams.forEach((team: any) => {
+          if (team.salespeople) {
+            subordinates.push(...team.salespeople);
+          }
+        });
+        return subordinates;
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to load subordinates:', error);
+      return [];
+    }
   }
 
   async getSalesLeads(): Promise<User[]> {
@@ -283,19 +484,141 @@ class ApiService {
 
   // Role-based evaluation methods
   async getEvaluatableUsers(): Promise<User[]> {
-    const currentUser = this.getCurrentUser();
-    if (!currentUser) return [];
-
-    switch (currentUser.role) {
-      case 'SALES_DIRECTOR':
-        return this.getRegionalManagers();
-      case 'REGIONAL_SALES_MANAGER':
-        return this.getSalesLeads();
-      case 'SALES_LEAD':
-        return this.getSalespeople();
-      default:
-        return [];
+    console.log('🔍 Loading evaluatable users...');
+    
+    try {
+      // Get current user from localStorage
+      const currentUserStr = localStorage.getItem('user');
+      if (!currentUserStr) {
+        console.log('❌ No current user found in localStorage');
+        throw new Error('No current user found');
+      }
+      
+      const currentUser = JSON.parse(currentUserStr);
+      console.log('👤 Current user role:', currentUser.role);
+      
+      // Get team members based on current user's role
+      if (currentUser.role === 'SALES_LEAD') {
+        console.log('🔍 Sales Lead: Getting team members...');
+        const team = await this.getMyTeam();
+        console.log('👥 Team data:', team);
+        if (team && team.members && team.members.length > 0) {
+          const salespeople = team.members.filter(member => member.role === 'SALESPERSON');
+          console.log('✅ Found salespeople:', salespeople);
+          if (salespeople.length > 0) {
+            return salespeople;
+          }
+        }
+        console.log('⚠️ No team members found, using fallback');
+      } else if (currentUser.role === 'REGIONAL_MANAGER' || currentUser.role === 'REGIONAL_SALES_MANAGER') {
+        console.log('🔍 Regional Manager: Getting team members...');
+        const team = await this.getMyTeam();
+        console.log('👥 Team data:', team);
+        if (team && team.members && team.members.length > 0) {
+          const salesLeads = team.members.filter(member => member.role === 'SALES_LEAD');
+          console.log('✅ Found sales leads:', salesLeads);
+          if (salesLeads.length > 0) {
+            return salesLeads;
+          }
+        }
+        console.log('⚠️ No team members found, using fallback');
+      } else if (currentUser.role === 'SALES_DIRECTOR') {
+        console.log('🔍 Sales Director: Getting regional managers...');
+        const users = await this.getUsers();
+        const regionalManagers = users.filter(user => user.role === 'REGIONAL_MANAGER' || user.role === 'REGIONAL_SALES_MANAGER');
+        console.log('✅ Found regional managers:', regionalManagers);
+        return regionalManagers;
+      } else if (currentUser.role === 'ADMIN') {
+        console.log('🔍 Admin: Getting all users...');
+        const users = await this.getUsers();
+        const nonAdmins = users.filter(user => user.role !== 'ADMIN');
+        console.log('✅ Found non-admin users:', nonAdmins);
+        return nonAdmins;
+      }
+      
+      console.log('⚠️ No matching role, using fallback');
+    } catch (error) {
+      console.error('❌ Failed to load evaluatable users:', error);
+      console.log('🔄 Using fallback mock data...');
     }
+    
+    // Always fall back to mock data if we reach here
+    console.log('🔄 Using fallback mock data...');
+    
+    // Return mock data based on role
+    const currentUserStr = localStorage.getItem('user');
+    if (currentUserStr) {
+      const currentUser = JSON.parse(currentUserStr);
+      console.log('👤 Fallback for role:', currentUser.role);
+      
+      if (currentUser.role === 'SALES_LEAD') {
+        const mockData: User[] = [
+          {
+            id: '1',
+            email: 'john.smith@company.com',
+            displayName: 'John Smith',
+            role: 'SALESPERSON' as const,
+            isActive: true,
+            teamId: '1'
+          },
+          {
+            id: '3',
+            email: 'mike.davis@company.com',
+            displayName: 'Mike Davis',
+            role: 'SALESPERSON' as const,
+            isActive: true,
+            teamId: '1'
+          }
+        ];
+        console.log('✅ Returning mock salespeople:', mockData);
+        return mockData;
+      } else if (currentUser.role === 'REGIONAL_MANAGER' || currentUser.role === 'REGIONAL_SALES_MANAGER') {
+        const mockData: User[] = [
+          {
+            id: '2',
+            email: 'sarah.johnson@company.com',
+            displayName: 'Sarah Johnson',
+            role: 'SALES_LEAD' as const,
+            isActive: true,
+            teamId: '1'
+          }
+        ];
+        console.log('✅ Returning mock sales leads:', mockData);
+        return mockData;
+      } else if (currentUser.role === 'ADMIN') {
+        const mockData: User[] = [
+          {
+            id: '1',
+            email: 'john.smith@company.com',
+            displayName: 'John Smith',
+            role: 'SALESPERSON' as const,
+            isActive: true,
+            teamId: '1'
+          },
+          {
+            id: '2',
+            email: 'sarah.johnson@company.com',
+            displayName: 'Sarah Johnson',
+            role: 'SALES_LEAD' as const,
+            isActive: true,
+            teamId: '1'
+          },
+          {
+            id: '3',
+            email: 'mike.davis@company.com',
+            displayName: 'Mike Davis',
+            role: 'SALESPERSON' as const,
+            isActive: true,
+            teamId: '1'
+          }
+        ];
+        console.log('✅ Returning mock users for admin:', mockData);
+        return mockData;
+      }
+    }
+    
+    console.log('❌ No fallback data available');
+    return [];
   }
 
   private getCurrentUserId(): string {

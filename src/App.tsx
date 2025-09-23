@@ -1,4 +1,5 @@
 import React from 'react';
+import './App.css';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginForm from './components/LoginForm';
 import SalesApp from './components/SalesApp';
