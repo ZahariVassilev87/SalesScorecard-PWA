@@ -34,12 +34,12 @@ class ApiService {
 
   setToken(token: string) {
     this.token = token;
-    localStorage.setItem('adminToken', token);
+    localStorage.setItem('userToken', token);
   }
 
   getToken(): string | null {
     if (!this.token) {
-      this.token = localStorage.getItem('adminToken');
+      this.token = localStorage.getItem('userToken');
     }
     return this.token;
   }
@@ -81,7 +81,7 @@ class ApiService {
         id: data.user?.id || '1',
         email: data.user?.email || email,
         displayName: data.user?.displayName || email.split('@')[0],
-        role: data.user?.role || 'ADMIN',
+        role: data.user?.role || 'SALESPERSON',
         isActive: data.user?.isActive !== false
       }
     };
@@ -216,7 +216,8 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
   return (
     <div className="login-container">
       <div className="login-form">
-        <h2>🔐 Admin Login</h2>
+        <h2>🎯 Sales Scorecard</h2>
+        <p className="login-subtitle">Sign in to access your sales dashboard</p>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Email:</label>
@@ -225,7 +226,7 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="admin@example.com"
+              placeholder="your.email@company.com"
             />
           </div>
           <div className="form-group">
@@ -235,12 +236,12 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="Enter password"
+              placeholder="Enter your password"
             />
           </div>
           {error && <div className="error-message">{error}</div>}
           <button type="submit" disabled={loading} className="login-button">
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
       </div>
@@ -248,49 +249,30 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
   );
 };
 
-const TeamMembers: React.FC = () => {
+const MyTeam: React.FC = () => {
   const [teams, setTeams] = useState<Team[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const loadTeams = async () => {
+  const loadMyTeams = async () => {
     setLoading(true);
     setError('');
     try {
-      const [teamsData, usersData] = await Promise.all([
-        apiService.getTeams(),
-        apiService.getUsers()
-      ]);
+      const teamsData = await apiService.getTeams();
       setTeams(teamsData);
-      setUsers(usersData);
     } catch (err) {
-      setError('Failed to load data');
+      setError('Failed to load team data');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRemoveUser = async (userId: string, teamId: string, userName: string, teamName: string) => {
-    if (!window.confirm(`Are you sure you want to remove ${userName} from team "${teamName}"?`)) {
-      return;
-    }
-
-    try {
-      await apiService.removeUserFromTeam(userId, teamId);
-      alert('✅ User removed successfully!');
-      loadTeams();
-    } catch (err) {
-      alert('❌ Failed to remove user: ' + (err as Error).message);
-    }
-  };
-
   useEffect(() => {
-    loadTeams();
+    loadMyTeams();
   }, []);
 
   if (loading) {
-    return <div className="loading">Loading team data...</div>;
+    return <div className="loading">Loading your team...</div>;
   }
 
   if (error) {
@@ -298,50 +280,50 @@ const TeamMembers: React.FC = () => {
   }
 
   return (
-    <div className="team-members">
+    <div className="my-team">
       <div className="section-header">
-        <h3>🏢 Team Management</h3>
+        <h3>👥 My Team</h3>
         <div className="header-actions">
-          <button onClick={loadTeams} className="refresh-button">
+          <button onClick={loadMyTeams} className="refresh-button">
             🔄 Refresh
           </button>
         </div>
       </div>
 
       {teams.length === 0 ? (
-        <p>No teams found. Create your first team to get started.</p>
+        <div className="no-teams">
+          <p>You're not assigned to any teams yet.</p>
+          <p>Contact your manager to get added to a team.</p>
+        </div>
       ) : (
         teams.map(team => (
           <div key={team.id} className="team-section">
             <div className="team-header">
               <div className="team-info">
-                <h4>🏢 {team.name} ({team.region?.name || 'No region'})</h4>
+                <h4>🏢 {team.name}</h4>
+                {team.region?.name && (
+                  <p className="team-region">📍 {team.region.name}</p>
+                )}
               </div>
             </div>
             
             {team.userTeams.length === 0 ? (
-              <p className="no-members">No members assigned to this team.</p>
+              <p className="no-members">No team members yet.</p>
             ) : (
-              <ul className="team-members-list">
+              <div className="team-members-grid">
                 {team.userTeams.map(userTeam => (
-                  <li key={userTeam.user.id} className="team-member">
-                    <span className="member-info">
-                      👤 {userTeam.user.displayName} ({userTeam.user.email}) - {userTeam.user.role}
-                    </span>
-                    <button
-                      onClick={() => handleRemoveUser(
-                        userTeam.user.id,
-                        team.id,
-                        userTeam.user.displayName,
-                        team.name
-                      )}
-                      className="remove-button"
-                    >
-                      Remove
-                    </button>
-                  </li>
+                  <div key={userTeam.user.id} className="team-member-card">
+                    <div className="member-avatar">
+                      {userTeam.user.displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="member-details">
+                      <h5>{userTeam.user.displayName}</h5>
+                      <p className="member-role">{userTeam.user.role.replace('_', ' ')}</p>
+                      <p className="member-email">{userTeam.user.email}</p>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
         ))
@@ -350,30 +332,41 @@ const TeamMembers: React.FC = () => {
   );
 };
 
-const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([]);
+const Dashboard: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const loadUsers = async () => {
+  const loadUserProfile = async () => {
     setLoading(true);
     setError('');
     try {
-      const usersData = await apiService.getUsers();
-      setUsers(usersData);
+      // Get current user info from token
+      const token = localStorage.getItem('userToken');
+      if (token) {
+        // Decode token to get user info (simplified)
+        const userData = JSON.parse(atob(token.split('.')[1]));
+        setUser({
+          id: userData.id || '1',
+          email: userData.email || 'user@example.com',
+          displayName: userData.displayName || 'User',
+          role: userData.role || 'SALESPERSON',
+          isActive: true
+        });
+      }
     } catch (err) {
-      setError('Failed to load users');
+      setError('Failed to load profile');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadUsers();
+    loadUserProfile();
   }, []);
 
   if (loading) {
-    return <div className="loading">Loading users...</div>;
+    return <div className="loading">Loading dashboard...</div>;
   }
 
   if (error) {
@@ -381,56 +374,69 @@ const UserManagement: React.FC = () => {
   }
 
   return (
-    <div className="user-management">
-      <div className="section-header">
-        <h3>👤 User Management</h3>
-        <div className="header-actions">
-          <button onClick={loadUsers} className="refresh-button">
-            🔄 Refresh
-          </button>
+    <div className="dashboard">
+      <div className="welcome-section">
+        <h3>Welcome back, {user?.displayName || 'User'}!</h3>
+        <p className="welcome-subtitle">Here's your sales overview</p>
+      </div>
+
+      <div className="dashboard-grid">
+        <div className="dashboard-card">
+          <div className="card-icon">📊</div>
+          <h4>Sales Performance</h4>
+          <p className="card-value">$0</p>
+          <p className="card-label">This Month</p>
+        </div>
+
+        <div className="dashboard-card">
+          <div className="card-icon">🎯</div>
+          <h4>Goals</h4>
+          <p className="card-value">0/0</p>
+          <p className="card-label">Targets Met</p>
+        </div>
+
+        <div className="dashboard-card">
+          <div className="card-icon">👥</div>
+          <h4>Team</h4>
+          <p className="card-value">0</p>
+          <p className="card-label">Team Members</p>
+        </div>
+
+        <div className="dashboard-card">
+          <div className="card-icon">📈</div>
+          <h4>Growth</h4>
+          <p className="card-value">0%</p>
+          <p className="card-label">vs Last Month</p>
         </div>
       </div>
 
-      {users.length === 0 ? (
-        <p>No users found.</p>
-      ) : (
-        <div className="users-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(user => (
-                <tr key={user.id}>
-                  <td>{user.displayName}</td>
-                  <td>{user.email}</td>
-                  <td>
-                    <span className={`role-badge role-${user.role.toLowerCase()}`}>
-                      {user.role.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`status-badge ${user.isActive ? 'active' : 'inactive'}`}>
-                      {user.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="quick-actions">
+        <h4>Quick Actions</h4>
+        <div className="actions-grid">
+          <button className="action-card">
+            <span className="action-icon">📝</span>
+            <span>New Evaluation</span>
+          </button>
+          <button className="action-card">
+            <span className="action-icon">📊</span>
+            <span>View Reports</span>
+          </button>
+          <button className="action-card">
+            <span className="action-icon">👥</span>
+            <span>Team Chat</span>
+          </button>
+          <button className="action-card">
+            <span className="action-icon">⚙️</span>
+            <span>Settings</span>
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 };
 
-const AdminPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('teams');
+const SalesApp: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
@@ -442,7 +448,7 @@ const AdminPanel: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('adminToken');
+    localStorage.removeItem('userToken');
     window.location.reload();
   };
 
@@ -462,7 +468,7 @@ const AdminPanel: React.FC = () => {
   };
 
   return (
-    <div className="admin-panel">
+    <div className="sales-app">
       {showInstallPrompt && (
         <div className="install-prompt">
           <div className="install-content">
@@ -480,7 +486,7 @@ const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      <header className="admin-header">
+      <header className="app-header">
         <div className="header-left">
           <button 
             className="mobile-menu-toggle"
@@ -491,31 +497,31 @@ const AdminPanel: React.FC = () => {
             <span className="hamburger-line"></span>
             <span className="hamburger-line"></span>
           </button>
-          <h1>🎯 Sales Scorecard PWA</h1>
+          <h1>🎯 Sales Scorecard</h1>
         </div>
         <button onClick={handleLogout} className="logout-button">
-          🚪 Logout
+          🚪 Sign Out
         </button>
       </header>
 
-      <nav className={`admin-nav ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+      <nav className={`app-nav ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <button
-          className={activeTab === 'teams' ? 'nav-button active' : 'nav-button'}
+          className={activeTab === 'dashboard' ? 'nav-button active' : 'nav-button'}
           onClick={() => {
-            setActiveTab('teams');
+            setActiveTab('dashboard');
             closeMobileMenu();
           }}
         >
-          👥 Team Management
+          📊 Dashboard
         </button>
         <button
-          className={activeTab === 'users' ? 'nav-button active' : 'nav-button'}
+          className={activeTab === 'team' ? 'nav-button active' : 'nav-button'}
           onClick={() => {
-            setActiveTab('users');
+            setActiveTab('team');
             closeMobileMenu();
           }}
         >
-          👤 User Management
+          👥 My Team
         </button>
       </nav>
 
@@ -523,9 +529,9 @@ const AdminPanel: React.FC = () => {
         <div className="mobile-menu-overlay" onClick={closeMobileMenu}></div>
       )}
 
-      <main className="admin-content">
-        {activeTab === 'teams' && <TeamMembers />}
-        {activeTab === 'users' && <UserManagement />}
+      <main className="app-content">
+        {activeTab === 'dashboard' && <Dashboard />}
+        {activeTab === 'team' && <MyTeam />}
       </main>
     </div>
   );
@@ -536,7 +542,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Check if user is already logged in
-    const token = localStorage.getItem('adminToken');
+    const token = localStorage.getItem('userToken');
     if (token) {
       setIsLoggedIn(true);
     }
@@ -549,7 +555,7 @@ const App: React.FC = () => {
   return (
     <div className="App">
       {isLoggedIn ? (
-        <AdminPanel />
+        <SalesApp />
       ) : (
         <LoginForm onLogin={handleLogin} />
       )}
