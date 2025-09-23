@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-// Types
+// Types (matching iOS app models)
 interface User {
   id: string;
   email: string;
   displayName: string;
   role: string;
   isActive: boolean;
+}
+
+interface Evaluation {
+  id: string;
+  userId: string;
+  evaluatorId: string;
+  score: number;
+  feedback: string;
+  createdAt: string;
 }
 
 interface Team {
@@ -26,7 +35,7 @@ interface LoginResponse {
   user: User;
 }
 
-// API Service
+// API Service (matching iOS APIService)
 const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://api.instorm.io';
 
 class ApiService {
@@ -87,13 +96,13 @@ class ApiService {
     };
   }
 
-  async getUsers(): Promise<User[]> {
-    const response = await fetch(`${API_BASE}/public-admin/users`, {
+  async getEvaluations(): Promise<Evaluation[]> {
+    const response = await fetch(`${API_BASE}/api/evaluations`, {
       headers: this.getHeaders()
     });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch users');
+      throw new Error('Failed to fetch evaluations');
     }
 
     return response.json();
@@ -106,21 +115,6 @@ class ApiService {
 
     if (!response.ok) {
       throw new Error('Failed to fetch teams');
-    }
-
-    return response.json();
-  }
-
-  async removeUserFromTeam(userId: string, teamId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/remove-user-from-team`, {
-      method: 'DELETE',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ userId, teamId })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to remove user: ${response.status} ${errorText}`);
     }
 
     return response.json();
@@ -191,8 +185,71 @@ class PWAService {
 
 const pwaService = new PWAService();
 
-// Components
-const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) => {
+// Auth Manager (matching iOS AuthManager)
+class AuthManager {
+  private user: User | null = null;
+  private listeners: Array<() => void> = [];
+
+  constructor() {
+    this.loadUserFromStorage();
+  }
+
+  private loadUserFromStorage() {
+    const token = localStorage.getItem('userToken');
+    if (token) {
+      try {
+        const userData = JSON.parse(atob(token.split('.')[1]));
+        this.user = {
+          id: userData.id || '1',
+          email: userData.email || 'user@example.com',
+          displayName: userData.displayName || 'User',
+          role: userData.role || 'SALESPERSON',
+          isActive: true
+        };
+      } catch (error) {
+        console.error('Failed to parse user data from token');
+        this.user = null;
+      }
+    }
+  }
+
+  get isAuthenticated(): boolean {
+    return this.user !== null;
+  }
+
+  get currentUser(): User | null {
+    return this.user;
+  }
+
+  async login(email: string, password: string): Promise<void> {
+    const response = await apiService.login(email, password);
+    this.user = response.user;
+    this.notifyListeners();
+  }
+
+  logout() {
+    this.user = null;
+    localStorage.removeItem('userToken');
+    this.notifyListeners();
+  }
+
+  addListener(listener: () => void) {
+    this.listeners.push(listener);
+  }
+
+  removeListener(listener: () => void) {
+    this.listeners = this.listeners.filter(l => l !== listener);
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach(listener => listener());
+  }
+}
+
+// Components (matching iOS app structure)
+
+// Login View (matching iOS LoginView)
+const LoginView: React.FC<{ authManager: AuthManager }> = ({ authManager }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -204,8 +261,7 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
     setError('');
 
     try {
-      const response = await apiService.login(email, password);
-      onLogin(response.token);
+      await authManager.login(email, password);
     } catch (err) {
       setError('Login failed. Please check your credentials.');
     } finally {
@@ -249,315 +305,336 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
   );
 };
 
-const MyTeam: React.FC = () => {
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+// Role-Based View (matching iOS RoleBasedView)
+const RoleBasedView: React.FC<{ authManager: AuthManager }> = ({ authManager }) => {
+  const user = authManager.currentUser;
+  
+  if (!user) return null;
 
-  const loadMyTeams = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const teamsData = await apiService.getTeams();
-      setTeams(teamsData);
-    } catch (err) {
-      setError('Failed to load team data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadMyTeams();
-  }, []);
-
-  if (loading) {
-    return <div className="loading">Loading your team...</div>;
+  switch (user.role) {
+    case 'ADMIN':
+      return <AdminTabView />;
+    case 'SALES_DIRECTOR':
+      return <DirectorTabView />;
+    case 'REGIONAL_SALES_MANAGER':
+      return <ManagerTabView />;
+    case 'SALES_LEAD':
+      return <LeadTabView />;
+    case 'SALESPERSON':
+      return <SalespersonTabView />;
+    default:
+      return <DefaultTabView />;
   }
-
-  if (error) {
-    return <div className="error-message">{error}</div>;
-  }
-
-  return (
-    <div className="my-team">
-      <div className="section-header">
-        <h3>👥 My Team</h3>
-        <div className="header-actions">
-          <button onClick={loadMyTeams} className="refresh-button">
-            🔄 Refresh
-          </button>
-        </div>
-      </div>
-
-      {teams.length === 0 ? (
-        <div className="no-teams">
-          <p>You're not assigned to any teams yet.</p>
-          <p>Contact your manager to get added to a team.</p>
-        </div>
-      ) : (
-        teams.map(team => (
-          <div key={team.id} className="team-section">
-            <div className="team-header">
-              <div className="team-info">
-                <h4>🏢 {team.name}</h4>
-                {team.region?.name && (
-                  <p className="team-region">📍 {team.region.name}</p>
-                )}
-              </div>
-            </div>
-            
-            {team.userTeams.length === 0 ? (
-              <p className="no-members">No team members yet.</p>
-            ) : (
-              <div className="team-members-grid">
-                {team.userTeams.map(userTeam => (
-                  <div key={userTeam.user.id} className="team-member-card">
-                    <div className="member-avatar">
-                      {userTeam.user.displayName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="member-details">
-                      <h5>{userTeam.user.displayName}</h5>
-                      <p className="member-role">{userTeam.user.role.replace('_', ' ')}</p>
-                      <p className="member-email">{userTeam.user.email}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))
-      )}
-    </div>
-  );
 };
 
-const Dashboard: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+// Tab Views (matching iOS tab structure)
 
-  const loadUserProfile = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      // Get current user info from token
-      const token = localStorage.getItem('userToken');
-      if (token) {
-        // Decode token to get user info (simplified)
-        const userData = JSON.parse(atob(token.split('.')[1]));
-        setUser({
-          id: userData.id || '1',
-          email: userData.email || 'user@example.com',
-          displayName: userData.displayName || 'User',
-          role: userData.role || 'SALESPERSON',
-          isActive: true
-        });
-      }
-    } catch (err) {
-      setError('Failed to load profile');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadUserProfile();
-  }, []);
-
-  if (loading) {
-    return <div className="loading">Loading dashboard...</div>;
-  }
-
-  if (error) {
-    return <div className="error-message">{error}</div>;
-  }
+// Admin Tab View
+const AdminTabView: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('evaluations');
 
   return (
-    <div className="dashboard">
-      <div className="welcome-section">
-        <h3>Welcome back, {user?.displayName || 'User'}!</h3>
-        <p className="welcome-subtitle">Here's your sales overview</p>
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="dashboard-card">
-          <div className="card-icon">📊</div>
-          <h4>Sales Performance</h4>
-          <p className="card-value">$0</p>
-          <p className="card-label">This Month</p>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon">🎯</div>
-          <h4>Goals</h4>
-          <p className="card-value">0/0</p>
-          <p className="card-label">Targets Met</p>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon">👥</div>
-          <h4>Team</h4>
-          <p className="card-value">0</p>
-          <p className="card-label">Team Members</p>
-        </div>
-
-        <div className="dashboard-card">
-          <div className="card-icon">📈</div>
-          <h4>Growth</h4>
-          <p className="card-value">0%</p>
-          <p className="card-label">vs Last Month</p>
-        </div>
-      </div>
-
-      <div className="quick-actions">
-        <h4>Quick Actions</h4>
-        <div className="actions-grid">
-          <button className="action-card">
-            <span className="action-icon">📝</span>
-            <span>New Evaluation</span>
-          </button>
-          <button className="action-card">
-            <span className="action-icon">📊</span>
-            <span>View Reports</span>
-          </button>
-          <button className="action-card">
-            <span className="action-icon">👥</span>
-            <span>Team Chat</span>
-          </button>
-          <button className="action-card">
-            <span className="action-icon">⚙️</span>
-            <span>Settings</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SalesApp: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-
-  useEffect(() => {
-    // Check if app is installable and not already installed
-    if (pwaService.isInstallable() && !pwaService.isInstalled()) {
-      setShowInstallPrompt(true);
-    }
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('userToken');
-    window.location.reload();
-  };
-
-  const handleInstall = async () => {
-    const installed = await pwaService.installApp();
-    if (installed) {
-      setShowInstallPrompt(false);
-    }
-  };
-
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  const closeMobileMenu = () => {
-    setIsMobileMenuOpen(false);
-  };
-
-  return (
-    <div className="sales-app">
-      {showInstallPrompt && (
-        <div className="install-prompt">
-          <div className="install-content">
-            <h4>📱 Install Sales Scorecard</h4>
-            <p>Install this app on your device for a better experience!</p>
-            <div className="install-actions">
-              <button onClick={handleInstall} className="install-button">
-                Install App
-              </button>
-              <button onClick={() => setShowInstallPrompt(false)} className="dismiss-button">
-                Not Now
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <header className="app-header">
-        <div className="header-left">
-          <button 
-            className="mobile-menu-toggle"
-            onClick={toggleMobileMenu}
-            aria-label="Toggle mobile menu"
-          >
-            <span className="hamburger-line"></span>
-            <span className="hamburger-line"></span>
-            <span className="hamburger-line"></span>
-          </button>
-          <h1>🎯 Sales Scorecard</h1>
-        </div>
-        <button onClick={handleLogout} className="logout-button">
-          🚪 Sign Out
-        </button>
-      </header>
-
-      <nav className={`app-nav ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
-        <button
-          className={activeTab === 'dashboard' ? 'nav-button active' : 'nav-button'}
-          onClick={() => {
-            setActiveTab('dashboard');
-            closeMobileMenu();
-          }}
+    <div className="tab-view">
+      <div className="tab-navigation">
+        <button 
+          className={activeTab === 'evaluations' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('evaluations')}
         >
-          📊 Dashboard
+          📝 New Evaluation
         </button>
-        <button
-          className={activeTab === 'team' ? 'nav-button active' : 'nav-button'}
-          onClick={() => {
-            setActiveTab('team');
-            closeMobileMenu();
-          }}
+        <button 
+          className={activeTab === 'history' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('history')}
         >
-          👥 My Team
+          🕒 History
         </button>
-      </nav>
-
-      {isMobileMenuOpen && (
-        <div className="mobile-menu-overlay" onClick={closeMobileMenu}></div>
-      )}
-
-      <main className="app-content">
-        {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'team' && <MyTeam />}
-      </main>
+        <button 
+          className={activeTab === 'analytics' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('analytics')}
+        >
+          📊 Analytics
+        </button>
+        <button 
+          className={activeTab === 'export' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('export')}
+        >
+          📤 Export
+        </button>
+        <button 
+          className={activeTab === 'admin' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('admin')}
+        >
+          ⚙️ Admin
+        </button>
+      </div>
+      <div className="tab-content">
+        {activeTab === 'evaluations' && <NewEvaluationView />}
+        {activeTab === 'history' && <EvaluationsHistoryView />}
+        {activeTab === 'analytics' && <AnalyticsView />}
+        {activeTab === 'export' && <ExportView />}
+        {activeTab === 'admin' && <AdminSettingsView />}
+      </div>
     </div>
   );
 };
 
+// Sales Director Tab View
+const DirectorTabView: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('evaluations');
+
+  return (
+    <div className="tab-view">
+      <div className="tab-navigation">
+        <button 
+          className={activeTab === 'evaluations' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('evaluations')}
+        >
+          📝 New Evaluation
+        </button>
+        <button 
+          className={activeTab === 'analytics' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('analytics')}
+        >
+          📊 Analytics
+        </button>
+        <button 
+          className={activeTab === 'history' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('history')}
+        >
+          🕒 History
+        </button>
+        <button 
+          className={activeTab === 'export' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('export')}
+        >
+          📤 Export
+        </button>
+        <button 
+          className={activeTab === 'teams' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('teams')}
+        >
+          👥 Teams
+        </button>
+      </div>
+      <div className="tab-content">
+        {activeTab === 'evaluations' && <NewEvaluationView />}
+        {activeTab === 'analytics' && <AnalyticsView />}
+        {activeTab === 'history' && <EvaluationsHistoryView />}
+        {activeTab === 'export' && <ExportView />}
+        {activeTab === 'teams' && <TeamManagementView />}
+      </div>
+    </div>
+  );
+};
+
+// Sales Manager Tab View
+const ManagerTabView: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('evaluations');
+
+  return (
+    <div className="tab-view">
+      <div className="tab-navigation">
+        <button 
+          className={activeTab === 'evaluations' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('evaluations')}
+        >
+          📝 New Evaluation
+        </button>
+        <button 
+          className={activeTab === 'history' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('history')}
+        >
+          🕒 History
+        </button>
+        <button 
+          className={activeTab === 'analytics' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('analytics')}
+        >
+          📊 Analytics
+        </button>
+        <button 
+          className={activeTab === 'teams' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('teams')}
+        >
+          👥 Team
+        </button>
+      </div>
+      <div className="tab-content">
+        {activeTab === 'evaluations' && <NewEvaluationView />}
+        {activeTab === 'history' && <EvaluationsHistoryView />}
+        {activeTab === 'analytics' && <AnalyticsView />}
+        {activeTab === 'teams' && <TeamManagementView />}
+      </div>
+    </div>
+  );
+};
+
+// Sales Lead Tab View
+const LeadTabView: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('evaluations');
+
+  return (
+    <div className="tab-view">
+      <div className="tab-navigation">
+        <button 
+          className={activeTab === 'evaluations' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('evaluations')}
+        >
+          📝 New Evaluation
+        </button>
+        <button 
+          className={activeTab === 'history' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('history')}
+        >
+          🕒 History
+        </button>
+        <button 
+          className={activeTab === 'analytics' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('analytics')}
+        >
+          📊 Analytics
+        </button>
+      </div>
+      <div className="tab-content">
+        {activeTab === 'evaluations' && <NewEvaluationView />}
+        {activeTab === 'history' && <EvaluationsHistoryView />}
+        {activeTab === 'analytics' && <AnalyticsView />}
+      </div>
+    </div>
+  );
+};
+
+// Salesperson Tab View
+const SalespersonTabView: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('evaluations');
+
+  return (
+    <div className="tab-view">
+      <div className="tab-navigation">
+        <button 
+          className={activeTab === 'evaluations' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('evaluations')}
+        >
+          🕒 My Evaluations
+        </button>
+        <button 
+          className={activeTab === 'analytics' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('analytics')}
+        >
+          📊 My Performance
+        </button>
+        <button 
+          className={activeTab === 'profile' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('profile')}
+        >
+          👤 Profile
+        </button>
+      </div>
+      <div className="tab-content">
+        {activeTab === 'evaluations' && <EvaluationsHistoryView />}
+        {activeTab === 'analytics' && <AnalyticsView />}
+        {activeTab === 'profile' && <DashboardView />}
+      </div>
+    </div>
+  );
+};
+
+// Default Tab View
+const DefaultTabView: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('evaluations');
+
+  return (
+    <div className="tab-view">
+      <div className="tab-navigation">
+        <button 
+          className={activeTab === 'evaluations' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('evaluations')}
+        >
+          📝 New Evaluation
+        </button>
+        <button 
+          className={activeTab === 'history' ? 'tab-button active' : 'tab-button'}
+          onClick={() => setActiveTab('history')}
+        >
+          🕒 History
+        </button>
+      </div>
+      <div className="tab-content">
+        {activeTab === 'evaluations' && <NewEvaluationView />}
+        {activeTab === 'history' && <EvaluationsHistoryView />}
+      </div>
+    </div>
+  );
+};
+
+// View Components (matching iOS Views)
+
+const NewEvaluationView: React.FC = () => (
+  <div className="view-content">
+    <h3>📝 New Evaluation</h3>
+    <p>Create a new sales evaluation form will be implemented here.</p>
+  </div>
+);
+
+const EvaluationsHistoryView: React.FC = () => (
+  <div className="view-content">
+    <h3>🕒 Evaluations History</h3>
+    <p>View past evaluations - implementation coming soon.</p>
+  </div>
+);
+
+const AnalyticsView: React.FC = () => (
+  <div className="view-content">
+    <h3>📊 Analytics</h3>
+    <p>Performance analytics and charts will be displayed here.</p>
+  </div>
+);
+
+const ExportView: React.FC = () => (
+  <div className="view-content">
+    <h3>📤 Export Data</h3>
+    <p>Export evaluation data to various formats.</p>
+  </div>
+);
+
+const AdminSettingsView: React.FC = () => (
+  <div className="view-content">
+    <h3>⚙️ Admin Settings</h3>
+    <p>Administrative settings and user management.</p>
+  </div>
+);
+
+const TeamManagementView: React.FC = () => (
+  <div className="view-content">
+    <h3>👥 Team Management</h3>
+    <p>Manage team members and assignments.</p>
+  </div>
+);
+
+const DashboardView: React.FC = () => (
+  <div className="view-content">
+    <h3>👤 Profile Dashboard</h3>
+    <p>Personal profile and performance overview.</p>
+  </div>
+);
+
+// Main App Component (matching iOS App structure)
 const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authManager] = useState(() => new AuthManager());
+  const [, forceUpdate] = useState({});
 
   useEffect(() => {
-    // Check if user is already logged in
-    const token = localStorage.getItem('userToken');
-    if (token) {
-      setIsLoggedIn(true);
-    }
-  }, []);
-
-  const handleLogin = (token: string) => {
-    setIsLoggedIn(true);
-  };
+    const listener = () => forceUpdate({});
+    authManager.addListener(listener);
+    return () => authManager.removeListener(listener);
+  }, [authManager]);
 
   return (
     <div className="App">
-      {isLoggedIn ? (
-        <SalesApp />
+      {authManager.isAuthenticated ? (
+        <RoleBasedView authManager={authManager} />
       ) : (
-        <LoginForm onLogin={handleLogin} />
+        <LoginView authManager={authManager} />
       )}
     </div>
   );
