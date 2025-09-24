@@ -420,11 +420,10 @@ class ApiService {
 
   async getMyEvaluations(): Promise<Evaluation[]> {
     try {
-      const evaluations = await this.getEvaluations();
-      const currentUserId = this.getCurrentUserId();
-      return evaluations.filter(evaluation => evaluation.managerId === currentUserId);
+      return await this.request<Evaluation[]>('/evaluations/my');
     } catch (error) {
       console.error('Failed to load my evaluations:', error);
+      // Return empty array if API fails
       return [];
     }
   }
