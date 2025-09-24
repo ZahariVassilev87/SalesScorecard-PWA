@@ -63,7 +63,7 @@ export interface EvaluationItem {
   id: string;
   evaluationId: string;
   behaviorItemId: string;
-  score: number;
+  rating: number;
   comment?: string;
   behaviorItem: BehaviorItem;
 }
@@ -83,7 +83,17 @@ export interface Evaluation {
   version: number;
   createdAt: string;
   updatedAt: string;
-  salesperson: User;
+  salesperson: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    teamId: string;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+    displayName?: string; // For compatibility
+  };
   manager: User;
   items: EvaluationItem[];
 }

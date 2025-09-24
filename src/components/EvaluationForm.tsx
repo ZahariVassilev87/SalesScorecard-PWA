@@ -13,6 +13,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Form state
   const [selectedUser, setSelectedUser] = useState('');
@@ -136,6 +137,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
 
     setIsSubmitting(true);
     setError('');
+    setSuccessMessage('');
 
     try {
       const categories = getEvaluationCategories();
@@ -156,7 +158,23 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         items: evaluationItems
       });
 
-      onSuccess();
+      // Show success message
+      setSuccessMessage('✅ Evaluation submitted successfully!');
+      console.log('✅ Evaluation submitted successfully!');
+      
+      // Clear form
+      setSelectedUser('');
+      setCustomerName('');
+      setLocation('');
+      setOverallComment('');
+      setScores({});
+      setComments({});
+      
+      // Navigate to history after a longer delay to see the message
+      setTimeout(() => {
+        console.log('Navigating to history tab...');
+        onSuccess();
+      }, 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create evaluation');
     } finally {
@@ -302,6 +320,12 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         {error && (
           <div className="error-message">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="success-message">
+            {successMessage}
           </div>
         )}
 

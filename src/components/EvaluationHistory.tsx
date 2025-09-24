@@ -10,7 +10,9 @@ const EvaluationHistory: React.FC = () => {
   useEffect(() => {
     const loadEvaluations = async () => {
       try {
+        console.log('🔄 Loading evaluations...');
         const data = await apiService.getMyEvaluations();
+        console.log('📊 Loaded evaluations:', data);
         setEvaluations(data);
       } catch (err) {
         setError('Failed to load evaluations');
@@ -45,7 +47,7 @@ const EvaluationHistory: React.FC = () => {
     
     if (categoryItems.length === 0) return 0;
     
-    const totalScore = categoryItems.reduce((sum, item) => sum + item.score, 0);
+    const totalScore = categoryItems.reduce((sum, item) => sum + item.rating, 0);
     return totalScore / categoryItems.length;
   };
 
@@ -88,7 +90,7 @@ const EvaluationHistory: React.FC = () => {
           <div key={evaluation.id} className="evaluation-card">
             <div className="evaluation-header">
               <div className="evaluation-info">
-                <h3>{evaluation.salesperson.displayName}</h3>
+                <h3>{evaluation.salesperson.displayName || `${evaluation.salesperson.firstName} ${evaluation.salesperson.lastName}`}</h3>
                 <p className="evaluation-date">{formatDate(evaluation.visitDate)}</p>
                 {evaluation.customerName && (
                   <p className="customer-name">Customer: {evaluation.customerName}</p>
@@ -179,7 +181,7 @@ const EvaluationHistory: React.FC = () => {
             
             <div className="modal-body">
               <div className="evaluation-details">
-                <h4>{selectedEvaluation.salesperson.displayName}</h4>
+                <h4>{selectedEvaluation.salesperson.displayName || `${selectedEvaluation.salesperson.firstName} ${selectedEvaluation.salesperson.lastName}`}</h4>
                 <p><strong>Date:</strong> {formatDate(selectedEvaluation.visitDate)}</p>
                 {selectedEvaluation.customerName && (
                   <p><strong>Customer:</strong> {selectedEvaluation.customerName}</p>
@@ -204,7 +206,7 @@ const EvaluationHistory: React.FC = () => {
                         <div key={item.id} className="item-detail">
                           <div className="item-name">{item.behaviorItem.name}</div>
                           <div className="item-score">
-                            <span className="score">{item.score}/5</span>
+                            <span className="score">{item.rating}/5</span>
                             {item.comment && (
                               <div className="item-comment">{item.comment}</div>
                             )}

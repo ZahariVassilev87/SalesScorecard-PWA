@@ -24,11 +24,11 @@ const Dashboard: React.FC = () => {
             totalEvaluations: data.length,
             averageScore: data.length > 0 ? 
               (data.reduce((sum, evaluation) => {
-                const avgScore = evaluation.items.reduce((itemSum, item) => itemSum + item.score, 0) / evaluation.items.length;
+                const avgScore = evaluation.items.reduce((itemSum, item) => itemSum + item.rating, 0) / evaluation.items.length;
                 return sum + avgScore;
               }, 0) / data.length).toFixed(1) : 0,
             totalScore: data.reduce((sum, evaluation) => {
-              return sum + evaluation.items.reduce((itemSum, item) => itemSum + item.score, 0);
+              return sum + evaluation.items.reduce((itemSum, item) => itemSum + item.rating, 0);
             }, 0),
             thisMonth: data.filter(evaluation => {
               const evalDate = new Date(evaluation.visitDate);
