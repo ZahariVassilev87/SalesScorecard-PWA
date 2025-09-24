@@ -1,0 +1,1 @@
+arn:aws:acm:us-east-1:221855463690:certificate/b644130f-0237-4603-932a-e3464a198a4f
