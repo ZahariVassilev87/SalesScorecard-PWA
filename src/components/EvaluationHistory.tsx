@@ -8,6 +8,7 @@ const EvaluationHistory: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedEvaluation, setSelectedEvaluation] = useState<Evaluation | null>(null);
+  const [activeTab, setActiveTab] = useState<'created' | 'about'>('created');
 
   useEffect(() => {
     const loadEvaluations = async () => {
@@ -70,59 +71,16 @@ const EvaluationHistory: React.FC = () => {
 
   const { evaluationsICreated, evaluationsAboutMe } = separateEvaluations();
 
-  // Helper function to render evaluation section
-  const renderEvaluationSection = (title: string, evaluations: Evaluation[], icon: string, color: string) => {
-    if (evaluations.length === 0) return null;
-
-    return (
-      <div className="evaluation-section">
-        <div className="section-header" style={{ borderLeftColor: color }}>
-          <span className="section-icon">{icon}</span>
-          <h3>{title}</h3>
-          <span className="section-count">({evaluations.length})</span>
-        </div>
-        <div className="evaluation-list">
-          {evaluations.map((evaluation) => (
-            <div key={evaluation.id} className="evaluation-item">
-              <div className="evaluation-header">
-                <div className="evaluation-info">
-                  <h3>{evaluation.salesperson.displayName || `${evaluation.salesperson.firstName} ${evaluation.salesperson.lastName}`}</h3>
-                  <p className="evaluation-date">{formatDate(evaluation.visitDate)}</p>
-                  {evaluation.location && (
-                    <p className="evaluation-location">📍 {evaluation.location}</p>
-                  )}
-                </div>
-                <div className="evaluation-scores">
-                  <div className="category-scores">
-                    {['Discovery', 'Solution Positioning', 'Closing & Next Steps', 'Professionalism'].map(category => {
-                      const score = calculateCategoryScore(evaluation, category);
-                      return score > 0 ? (
-                        <div key={category} className="category-score">
-                          <span className="category-name">{category}</span>
-                          <span 
-                            className="score" 
-                            style={{ color: getScoreColor(score) }}
-                          >
-                            {score.toFixed(1)}
-                          </span>
-                        </div>
-                      ) : null;
-                    })}
-                  </div>
-                </div>
-              </div>
-              <button 
-                className="view-details-btn"
-                onClick={() => setSelectedEvaluation(evaluation)}
-              >
-                View Details
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+  // Get evaluations for the active tab
+  const getCurrentEvaluations = () => {
+    if (activeTab === 'created') {
+      return evaluationsICreated;
+    } else {
+      return evaluationsAboutMe;
+    }
   };
+
+  const currentEvaluations = getCurrentEvaluations();
 
   if (isLoading) {
     return (
@@ -158,21 +116,119 @@ const EvaluationHistory: React.FC = () => {
         <p>View and manage your past evaluations</p>
       </div>
 
-      <div className="evaluations-container">
-        {/* Evaluations I Created */}
-        {renderEvaluationSection(
-          "Evaluations I Created", 
-          evaluationsICreated, 
-          "📝", 
-          "#667eea"
-        )}
+      {/* Tab Navigation */}
+      <div className="tab-navigation">
+        <button 
+          className={`tab-button ${activeTab === 'created' ? 'active' : ''}`}
+          onClick={() => setActiveTab('created')}
+        >
+          <span className="tab-icon">📝</span>
+          <span className="tab-text">Evaluations I Created</span>
+          <span className="tab-count">({evaluationsICreated.length})</span>
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'about' ? 'active' : ''}`}
+          onClick={() => setActiveTab('about')}
+        >
+          <span className="tab-icon">👤</span>
+          <span className="tab-text">Evaluations About Me</span>
+          <span className="tab-count">({evaluationsAboutMe.length})</span>
+        </button>
+      </div>
 
-        {/* Evaluations About Me */}
-        {renderEvaluationSection(
-          "Evaluations About Me", 
-          evaluationsAboutMe, 
-          "👤", 
-          "#f093fb"
+      {/* Tab Content */}
+      <div className="tab-content">
+        {currentEvaluations.length === 0 ? (
+          <div className="no-evaluations">
+            <h3>No Evaluations Yet</h3>
+            <p>
+              {activeTab === 'created' 
+                ? "You haven't created any evaluations yet. Start by creating your first evaluation."
+                : "No evaluations have been created about you yet."
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="evaluations-grid">
+            {currentEvaluations.map(evaluation => (
+              <div key={evaluation.id} className="evaluation-card">
+                <div className="evaluation-header">
+                  <div className="evaluation-info">
+                    <h3>{evaluation.salesperson.displayName || `${evaluation.salesperson.firstName} ${evaluation.salesperson.lastName}`}</h3>
+                    <p className="evaluation-date">{formatDate(evaluation.visitDate)}</p>
+                    {evaluation.customerName && (
+                      <p className="customer-name">Customer: {evaluation.customerName}</p>
+                    )}
+                    {evaluation.location && (
+                      <p className="location">📍 {evaluation.location}</p>
+                    )}
+                  </div>
+                  <div className="overall-score">
+                    <span 
+                      className="score-value"
+                      style={{ color: getScoreColor(evaluation.overallScore) }}
+                    >
+                      {evaluation.overallScore ? evaluation.overallScore.toFixed(1) : 'N/A'}
+                    </span>
+                    <span className="score-label">Overall</span>
+                  </div>
+                </div>
+
+                <div className="category-scores">
+                  <div className="category-score">
+                    <span className="category-name">Discovery</span>
+                    <span 
+                      className="score" 
+                      style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Discovery')) }}
+                    >
+                      {calculateCategoryScore(evaluation, 'Discovery').toFixed(1)}
+                    </span>
+                  </div>
+                  <div className="category-score">
+                    <span className="category-name">Solution</span>
+                    <span 
+                      className="score" 
+                      style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Solution Positioning')) }}
+                    >
+                      {calculateCategoryScore(evaluation, 'Solution Positioning').toFixed(1)}
+                    </span>
+                  </div>
+                  <div className="category-score">
+                    <span className="category-name">Closing</span>
+                    <span 
+                      className="score" 
+                      style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Closing & Next Steps')) }}
+                    >
+                      {calculateCategoryScore(evaluation, 'Closing & Next Steps').toFixed(1)}
+                    </span>
+                  </div>
+                  <div className="category-score">
+                    <span className="category-name">Professional</span>
+                    <span 
+                      className="score" 
+                      style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Professionalism')) }}
+                    >
+                      {calculateCategoryScore(evaluation, 'Professionalism').toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+
+                {evaluation.overallComment && (
+                  <div className="overall-comment">
+                    <p><strong>Overall Comment:</strong></p>
+                    <p>{evaluation.overallComment}</p>
+                  </div>
+                )}
+
+                <button 
+                  className="view-details-button"
+                  onClick={() => setSelectedEvaluation(evaluation)}
+                >
+                  View Details
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
