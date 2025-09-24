@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { apiService, Evaluation } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const EvaluationHistory: React.FC = () => {
+  const { user } = useAuth();
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -51,6 +53,77 @@ const EvaluationHistory: React.FC = () => {
     return totalScore / categoryItems.length;
   };
 
+  // Separate evaluations into two categories
+  const separateEvaluations = () => {
+    if (!user) return { evaluationsICreated: [], evaluationsAboutMe: [] };
+
+    const evaluationsICreated = evaluations.filter(evaluation => 
+      evaluation.managerId === user.id
+    );
+
+    const evaluationsAboutMe = evaluations.filter(evaluation => 
+      evaluation.managerId !== user.id
+    );
+
+    return { evaluationsICreated, evaluationsAboutMe };
+  };
+
+  const { evaluationsICreated, evaluationsAboutMe } = separateEvaluations();
+
+  // Helper function to render evaluation section
+  const renderEvaluationSection = (title: string, evaluations: Evaluation[], icon: string, color: string) => {
+    if (evaluations.length === 0) return null;
+
+    return (
+      <div className="evaluation-section">
+        <div className="section-header" style={{ borderLeftColor: color }}>
+          <span className="section-icon">{icon}</span>
+          <h3>{title}</h3>
+          <span className="section-count">({evaluations.length})</span>
+        </div>
+        <div className="evaluation-list">
+          {evaluations.map((evaluation) => (
+            <div key={evaluation.id} className="evaluation-item">
+              <div className="evaluation-header">
+                <div className="evaluation-info">
+                  <h3>{evaluation.salesperson.displayName || `${evaluation.salesperson.firstName} ${evaluation.salesperson.lastName}`}</h3>
+                  <p className="evaluation-date">{formatDate(evaluation.visitDate)}</p>
+                  {evaluation.location && (
+                    <p className="evaluation-location">📍 {evaluation.location}</p>
+                  )}
+                </div>
+                <div className="evaluation-scores">
+                  <div className="category-scores">
+                    {['Discovery', 'Solution Positioning', 'Closing & Next Steps', 'Professionalism'].map(category => {
+                      const score = calculateCategoryScore(evaluation, category);
+                      return score > 0 ? (
+                        <div key={category} className="category-score">
+                          <span className="category-name">{category}</span>
+                          <span 
+                            className="score" 
+                            style={{ color: getScoreColor(score) }}
+                          >
+                            {score.toFixed(1)}
+                          </span>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              </div>
+              <button 
+                className="view-details-btn"
+                onClick={() => setSelectedEvaluation(evaluation)}
+              >
+                View Details
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="evaluation-history">
@@ -85,85 +158,22 @@ const EvaluationHistory: React.FC = () => {
         <p>View and manage your past evaluations</p>
       </div>
 
-      <div className="evaluations-grid">
-        {evaluations.map(evaluation => (
-          <div key={evaluation.id} className="evaluation-card">
-            <div className="evaluation-header">
-              <div className="evaluation-info">
-                <h3>{evaluation.salesperson.displayName || `${evaluation.salesperson.firstName} ${evaluation.salesperson.lastName}`}</h3>
-                <p className="evaluation-date">{formatDate(evaluation.visitDate)}</p>
-                {evaluation.customerName && (
-                  <p className="customer-name">Customer: {evaluation.customerName}</p>
-                )}
-                {evaluation.location && (
-                  <p className="location">📍 {evaluation.location}</p>
-                )}
-              </div>
-              <div className="overall-score">
-                <span 
-                  className="score-value"
-                  style={{ color: getScoreColor(evaluation.overallScore) }}
-                >
-                  {evaluation.overallScore ? evaluation.overallScore.toFixed(1) : 'N/A'}
-                </span>
-                <span className="score-label">Overall</span>
-              </div>
-            </div>
+      <div className="evaluations-container">
+        {/* Evaluations I Created */}
+        {renderEvaluationSection(
+          "Evaluations I Created", 
+          evaluationsICreated, 
+          "📝", 
+          "#667eea"
+        )}
 
-            <div className="category-scores">
-              <div className="category-score">
-                <span className="category-name">Discovery</span>
-                <span 
-                  className="score"
-                  style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Discovery')) }}
-                >
-                  {calculateCategoryScore(evaluation, 'Discovery').toFixed(1)}
-                </span>
-              </div>
-              <div className="category-score">
-                <span className="category-name">Solution</span>
-                <span 
-                  className="score"
-                  style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Solution Positioning')) }}
-                >
-                  {calculateCategoryScore(evaluation, 'Solution Positioning').toFixed(1)}
-                </span>
-              </div>
-              <div className="category-score">
-                <span className="category-name">Closing</span>
-                <span 
-                  className="score"
-                  style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Closing & Next Steps')) }}
-                >
-                  {calculateCategoryScore(evaluation, 'Closing & Next Steps').toFixed(1)}
-                </span>
-              </div>
-              <div className="category-score">
-                <span className="category-name">Professional</span>
-                <span 
-                  className="score"
-                  style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Professionalism')) }}
-                >
-                  {calculateCategoryScore(evaluation, 'Professionalism').toFixed(1)}
-                </span>
-              </div>
-            </div>
-
-            {evaluation.overallComment && (
-              <div className="overall-comment">
-                <p><strong>Overall Comment:</strong></p>
-                <p>{evaluation.overallComment}</p>
-              </div>
-            )}
-
-            <button 
-              className="view-details-button"
-              onClick={() => setSelectedEvaluation(evaluation)}
-            >
-              View Details
-            </button>
-          </div>
-        ))}
+        {/* Evaluations About Me */}
+        {renderEvaluationSection(
+          "Evaluations About Me", 
+          evaluationsAboutMe, 
+          "👤", 
+          "#f093fb"
+        )}
       </div>
 
       {selectedEvaluation && (
