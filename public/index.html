@@ -40,26 +40,40 @@
     <link rel="preconnect" href="https://api.instorm.io">
     
     <title>Sales Scorecard PWA</title>
+    
+    <!-- Force mobile cache refresh with version parameter -->
+    <script>
+      // Force cache refresh for mobile browsers
+      if (window.location.search.indexOf('v=') === -1) {
+        window.location.href = window.location.href + (window.location.search ? '&' : '?') + 'v=' + Date.now();
+      }
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     
-    <!-- Service Worker Registration - Temporarily Disabled -->
-    <!--
+    <!-- Service Worker Registration - Force Update for Mobile -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then((registration) => {
-              console.log('SW registered: ', registration);
-            })
-            .catch((registrationError) => {
-              console.log('SW registration failed: ', registrationError);
+          // Unregister any existing service workers to force fresh load
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+              registration.unregister();
+            }
+          });
+          
+          // Clear all caches
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              for (let name of names) {
+                caches.delete(name);
+              }
             });
+          }
         });
       }
     </script>
-    -->
   </body>
 </html>
