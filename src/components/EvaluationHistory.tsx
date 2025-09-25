@@ -98,16 +98,7 @@ const EvaluationHistory: React.FC = () => {
     );
   }
 
-  if (evaluations.length === 0) {
-    return (
-      <div className="evaluation-history">
-        <div className="no-evaluations">
-          <h3>No Evaluations Yet</h3>
-          <p>You haven't created any evaluations yet. Start by creating your first evaluation.</p>
-        </div>
-      </div>
-    );
-  }
+  // Always show the tabbed interface, even when there are no evaluations
 
   return (
     <div className="evaluation-history">

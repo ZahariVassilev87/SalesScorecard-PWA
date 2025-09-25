@@ -506,59 +506,75 @@ class ApiService {
     console.log('🔍 Loading evaluatable users...');
     
     try {
-      // Get current user from localStorage
-      const currentUserStr = localStorage.getItem('user');
-      if (!currentUserStr) {
-        console.log('❌ No current user found in localStorage');
-        throw new Error('No current user found');
-      }
-      
-      const currentUser = JSON.parse(currentUserStr);
-      console.log('👤 Current user role:', currentUser.role);
-      
-      // Get team members based on current user's role
-      if (currentUser.role === 'SALES_LEAD') {
-        console.log('🔍 Sales Lead: Getting team members...');
-        const team = await this.getMyTeam();
-        console.log('👥 Team data:', team);
-        if (team && team.members && team.members.length > 0) {
-          const salespeople = team.members.filter(member => member.role === 'SALESPERSON');
-          console.log('✅ Found salespeople:', salespeople);
-          if (salespeople.length > 0) {
-            return salespeople;
-          }
-        }
-        console.log('⚠️ No team members found, using fallback');
-      } else if (currentUser.role === 'REGIONAL_MANAGER' || currentUser.role === 'REGIONAL_SALES_MANAGER') {
-        console.log('🔍 Regional Manager: Getting team members...');
-        const team = await this.getMyTeam();
-        console.log('👥 Team data:', team);
-        if (team && team.members && team.members.length > 0) {
-          const salesLeads = team.members.filter(member => member.role === 'SALES_LEAD');
-          console.log('✅ Found sales leads:', salesLeads);
-          if (salesLeads.length > 0) {
-            return salesLeads;
-          }
-        }
-        console.log('⚠️ No team members found, using fallback');
-      } else if (currentUser.role === 'SALES_DIRECTOR') {
-        console.log('🔍 Sales Director: Getting regional managers...');
-        const users = await this.getUsers();
-        const regionalManagers = users.filter(user => user.role === 'REGIONAL_MANAGER' || user.role === 'REGIONAL_SALES_MANAGER');
-        console.log('✅ Found regional managers:', regionalManagers);
-        return regionalManagers;
-      } else if (currentUser.role === 'ADMIN') {
-        console.log('🔍 Admin: Getting all users...');
-        const users = await this.getUsers();
-        const nonAdmins = users.filter(user => user.role !== 'ADMIN');
-        console.log('✅ Found non-admin users:', nonAdmins);
-        return nonAdmins;
-      }
-      
-      console.log('⚠️ No matching role, using fallback');
+      // Use the new backend endpoint with proper RBAC
+      console.log('📡 Calling /organizations/salespeople...');
+      const salespeople = await this.request<User[]>('/organizations/salespeople');
+      console.log('✅ Found salespeople from backend:', salespeople);
+      return salespeople;
     } catch (error) {
-      console.error('❌ Failed to load evaluatable users:', error);
-      console.log('🔄 Using fallback mock data...');
+      console.error('❌ Error loading evaluatable users from backend:', error);
+      
+      // Fallback to old logic if backend fails
+      console.log('⚠️ Falling back to old logic...');
+      try {
+        const currentUserStr = localStorage.getItem('user');
+        if (!currentUserStr) {
+          console.log('❌ No current user found in localStorage');
+          throw new Error('No current user found');
+        }
+        
+        const currentUser = JSON.parse(currentUserStr);
+        console.log('👤 Current user role:', currentUser.role);
+        
+        // Get team members based on current user's role
+        if (currentUser.role === 'SALES_LEAD') {
+          console.log('🔍 Sales Lead: Getting team members...');
+          const team = await this.getMyTeam();
+          console.log('👥 Team data:', team);
+          if (team && team.members && team.members.length > 0) {
+            const salespeople = team.members.filter(member => member.role === 'SALESPERSON');
+            console.log('✅ Found salespeople:', salespeople);
+            if (salespeople.length > 0) {
+              return salespeople;
+            }
+          }
+          console.log('⚠️ No team members found, using fallback');
+        } else if (currentUser.role === 'REGIONAL_MANAGER' || currentUser.role === 'REGIONAL_SALES_MANAGER') {
+          console.log('🔍 Regional Manager: Getting team members...');
+          const team = await this.getMyTeam();
+          console.log('👥 Team data:', team);
+          if (team && team.members && team.members.length > 0) {
+            const salesLeads = team.members.filter(member => member.role === 'SALES_LEAD');
+            console.log('✅ Found sales leads:', salesLeads);
+            if (salesLeads.length > 0) {
+              return salesLeads;
+            }
+          }
+          console.log('⚠️ No team members found, using fallback');
+        } else if (currentUser.role === 'SALES_DIRECTOR') {
+          console.log('🔍 Sales Director: Getting regional managers...');
+          const users = await this.getUsers();
+          const regionalManagers = users.filter(user => user.role === 'REGIONAL_MANAGER' || user.role === 'REGIONAL_SALES_MANAGER');
+          console.log('✅ Found regional managers:', regionalManagers);
+          return regionalManagers;
+        } else if (currentUser.role === 'ADMIN') {
+          console.log('🔍 Admin: Getting all users...');
+          const users = await this.getUsers();
+          const nonAdmins = users.filter(user => user.role !== 'ADMIN');
+          console.log('✅ Found non-admin users:', nonAdmins);
+          return nonAdmins;
+        }
+        
+        console.log('⚠️ No matching role, using fallback');
+        
+        // Fallback: return all users (for admin or if no specific logic)
+        console.log('⚠️ Using fallback: returning all users');
+        const users = await this.getUsers();
+        return users.filter(user => user.role === 'SALESPERSON');
+      } catch (fallbackError) {
+        console.error('❌ Failed to load evaluatable users:', fallbackError);
+        console.log('🔄 Using fallback mock data...');
+      }
     }
     
     // Always fall back to mock data if we reach here
