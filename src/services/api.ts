@@ -212,18 +212,28 @@ class ApiService {
           const managedTeam = profile.managedTeams[0];
           console.log('🔍 Managed team structure:', JSON.stringify(managedTeam, null, 2));
           
-          // Try to get team members from the admin teams endpoint
+          // Try to get team members from the organizations endpoint first
           let members = [];
           try {
-            console.log('📡 Calling /public-admin/teams to get team members...');
-            const teams = await this.request<any[]>('/public-admin/teams');
-            const teamWithMembers = teams.find(team => team.id === managedTeam.id);
-            if (teamWithMembers && teamWithMembers.userTeams) {
-              members = teamWithMembers.userTeams.map((ut: any) => ut.user);
-              console.log('📋 Found team members from admin teams endpoint:', members);
+            console.log('📡 Calling /organizations/team-members to get team members...');
+            const teamMembers = await this.request<any[]>('/organizations/team-members');
+            console.log('📋 Team members from organizations endpoint:', teamMembers);
+            members = teamMembers;
+          } catch (orgError) {
+            console.log('⚠️ Failed to get team members from organizations endpoint:', orgError);
+            
+            // Fallback: try to get team members from the admin teams endpoint
+            try {
+              console.log('📡 Calling /public-admin/teams to get team members...');
+              const teams = await this.request<any[]>('/public-admin/teams');
+              const teamWithMembers = teams.find(team => team.id === managedTeam.id);
+              if (teamWithMembers && teamWithMembers.userTeams) {
+                members = teamWithMembers.userTeams.map((ut: any) => ut.user);
+                console.log('📋 Found team members from admin teams endpoint:', members);
+              }
+            } catch (teamError) {
+              console.log('⚠️ Failed to get team members from admin teams endpoint:', teamError);
             }
-          } catch (teamError) {
-            console.log('⚠️ Failed to get team members from admin teams endpoint:', teamError);
           }
           
           // Fallback to profile data if teams endpoint fails
