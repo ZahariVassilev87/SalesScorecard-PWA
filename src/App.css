@@ -501,6 +501,8 @@ body {
   background: var(--primary-50);
   border: 1px solid var(--primary-200);
   border-radius: var(--radius-lg);
+  display: block;
+  visibility: visible;
 }
 
 .example-label {
@@ -521,6 +523,8 @@ body {
   min-height: 60px;
   background: white;
   color: var(--gray-700);
+  display: block;
+  visibility: visible;
 }
 
 .item-example:focus {
@@ -679,11 +683,15 @@ body {
   .example-field {
     margin-top: var(--space-2);
     padding: var(--space-2);
+    display: block !important;
+    visibility: visible !important;
   }
 
   .item-example {
     min-height: 50px;
     font-size: var(--font-size-xs);
+    display: block !important;
+    visibility: visible !important;
   }
 
   .tab-navigation {
@@ -2029,17 +2037,23 @@ body {
   .example-field {
     margin-top: var(--space-2);
     padding: var(--space-2);
+    display: block !important;
+    visibility: visible !important;
   }
 
   .example-label {
     font-size: var(--font-size-xs);
     margin-bottom: var(--space-1);
+    display: block !important;
+    visibility: visible !important;
   }
 
   .item-example {
     min-height: 50px;
     font-size: var(--font-size-xs);
     padding: var(--space-2);
+    display: block !important;
+    visibility: visible !important;
   }
   
   .login-form {
