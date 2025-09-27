@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import Dashboard from './Dashboard';
-import MyTeam from './MyTeam';
-import EvaluationForm from './EvaluationForm';
-import EvaluationHistory from './EvaluationHistory';
-import AnalyticsView from './AnalyticsView';
-import TeamManagementView from './TeamManagementView';
 import LanguageSwitcher from './LanguageSwitcher';
+
+// Lazy load components for better performance
+const Dashboard = lazy(() => import('./Dashboard'));
+const MyTeam = lazy(() => import('./MyTeam'));
+const EvaluationForm = lazy(() => import('./EvaluationForm'));
+const EvaluationHistory = lazy(() => import('./EvaluationHistory'));
+const AnalyticsView = lazy(() => import('./AnalyticsView'));
+const TeamManagementView = lazy(() => import('./TeamManagementView'));
 
 const SalesApp: React.FC = () => {
   const { user, logout } = useAuth();
@@ -191,17 +193,23 @@ const SalesApp: React.FC = () => {
       )}
 
       <main className="app-content">
-        {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'team' && <MyTeam />}
-        {activeTab === 'evaluation' && (
-          <EvaluationForm 
-            onSuccess={handleEvaluationSuccess}
-            onCancel={() => setActiveTab('dashboard')}
-          />
-        )}
-        {activeTab === 'history' && <EvaluationHistory />}
-        {activeTab === 'analytics' && <AnalyticsView />}
-        {activeTab === 'teams' && <TeamManagementView />}
+        <Suspense fallback={
+          <div className="loading-container">
+            <div className="loading-spinner">{t('common.loading')}</div>
+          </div>
+        }>
+          {activeTab === 'dashboard' && <Dashboard />}
+          {activeTab === 'team' && <MyTeam />}
+          {activeTab === 'evaluation' && (
+            <EvaluationForm 
+              onSuccess={handleEvaluationSuccess}
+              onCancel={() => setActiveTab('dashboard')}
+            />
+          )}
+          {activeTab === 'history' && <EvaluationHistory />}
+          {activeTab === 'analytics' && <AnalyticsView />}
+          {activeTab === 'teams' && <TeamManagementView />}
+        </Suspense>
       </main>
     </div>
   );

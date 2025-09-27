@@ -127,17 +127,28 @@ class ApiService {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
+    console.log('🔍 [REQUEST DEBUG] Making request to:', url);
+    console.log('🔍 [REQUEST DEBUG] Method:', options.method || 'GET');
+    console.log('🔍 [REQUEST DEBUG] Headers:', headers);
+    console.log('🔍 [REQUEST DEBUG] Body:', options.body);
+
     const response = await fetch(url, {
       ...options,
       headers,
     });
 
+    console.log('🔍 [REQUEST DEBUG] Response status:', response.status);
+    console.log('🔍 [REQUEST DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('🔍 [REQUEST DEBUG] Error response body:', errorText);
       throw new Error(`API Error: ${response.status} ${errorText}`);
     }
 
-    return response.json();
+    const responseData = await response.json();
+    console.log('🔍 [REQUEST DEBUG] Success response:', responseData);
+    return responseData;
   }
 
   async login(email: string, password: string): Promise<LoginResponse> {
@@ -456,12 +467,20 @@ class ApiService {
     overallScore?: number;
   }): Promise<Evaluation> {
     try {
-      return await this.request<Evaluation>('/evaluations', {
+      console.log('🔍 [API DEBUG] createEvaluation called with:', JSON.stringify(evaluationData, null, 2));
+      console.log('🔍 [API DEBUG] Request URL:', `${API_BASE}/evaluations`);
+      console.log('🔍 [API DEBUG] Request method: POST');
+      
+      const result = await this.request<Evaluation>('/evaluations', {
         method: 'POST',
         body: JSON.stringify(evaluationData)
       });
+      
+      console.log('🔍 [API DEBUG] createEvaluation success:', result);
+      return result;
     } catch (error) {
-      console.error('Failed to submit evaluation:', error);
+      console.error('🔍 [API DEBUG] createEvaluation failed:', error);
+      console.error('🔍 [API DEBUG] Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
   }

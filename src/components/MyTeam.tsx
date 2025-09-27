@@ -24,7 +24,7 @@ const MyTeam: React.FC = () => {
     };
 
     loadTeam();
-  }, []);
+  }, [t]);
 
   const getRoleDisplayName = (role: string) => {
     return t(`roles.${role}`) || role;

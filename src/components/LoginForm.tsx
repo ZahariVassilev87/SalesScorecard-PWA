@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
+import { sanitizeEmail } from '../utils/sanitize';
 
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -17,7 +18,8 @@ const LoginForm: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      const sanitizedEmail = sanitizeEmail(email);
+      await login(sanitizedEmail, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('auth.loginError'));
     } finally {

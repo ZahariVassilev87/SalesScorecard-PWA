@@ -29,7 +29,7 @@ const AnalyticsView: React.FC = () => {
     };
 
     loadAnalytics();
-  }, []);
+  }, [t]);
 
   const calculateAverageScore = () => {
     if (evaluations.length === 0) return 0;

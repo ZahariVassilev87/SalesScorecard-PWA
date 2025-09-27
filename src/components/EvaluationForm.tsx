@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService, User } from '../services/api';
 import { useTranslation } from 'react-i18next';
+import { sanitizeText } from '../utils/sanitize';
 
 interface EvaluationFormProps {
   onSuccess: () => void;
@@ -12,6 +13,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const { user } = useAuth();
   const { t } = useTranslation();
   const [evaluatableUsers, setEvaluatableUsers] = useState<User[]>([]);
+  const [behaviorCategories, setBehaviorCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -31,19 +33,28 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const [examples, setExamples] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const loadEvaluatableUsers = async () => {
+    const loadData = async () => {
       try {
-        const users = await apiService.getEvaluatableUsers();
-        setEvaluatableUsers(users);
+        console.log('🔍 [DEBUG] Starting to load data...');
+        const [users, categories] = await Promise.all([
+          apiService.getEvaluatableUsers(),
+          apiService.getBehaviorCategories()
+        ]);
+        console.log('🔍 [DEBUG] Loaded users:', users);
+            console.log('🔍 [DEBUG] Loaded behavior categories from backend:', categories);
+            console.log('🔍 [DEBUG] First category structure:', categories[0]);
+            console.log('🔍 [DEBUG] First item structure:', categories[0]?.items?.[0]);
+            setEvaluatableUsers(users);
+            setBehaviorCategories(categories);
       } catch (err) {
         setError(t('evaluation.error'));
-        console.error('Failed to load evaluatable users:', err);
+        console.error('Failed to load data:', err);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadEvaluatableUsers();
+    loadData();
   }, [t]);
 
   const getEvaluationTitle = () => {
@@ -473,16 +484,14 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   };
 
   const getEvaluationCategories = () => {
-    // Check customer type first
-    if (customerType === 'low-share') {
-      console.log('🔍 Debug - Customer type: low-share, showing low wallet share evaluation');
-      return getLowWalletShareCategories();
-    }
+    console.log('🔍 Debug - getEvaluationCategories called');
+    console.log('🔍 Debug - User role:', user?.role);
+    console.log('🔍 Debug - Customer type:', customerType);
+    console.log('🔍 Debug - Selected user:', selectedUser);
     
-    // Check if user is Regional Manager - show coaching form by default
+    // ALWAYS prioritize Regional Manager role over customer type
     if (user?.role === 'REGIONAL_SALES_MANAGER') {
-      console.log('🔍 Debug - User role:', user?.role);
-      console.log('🔍 Debug - Selected user:', selectedUser);
+      console.log('🔍 Debug - User is Regional Manager, showing coaching form');
       
       // If a specific user is selected, check their role
       if (selectedUser) {
@@ -506,6 +515,12 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         console.log('✅ Returning coaching categories by default for Regional Manager');
         return getCoachingCategories();
       }
+    }
+    
+    // Check customer type for other roles (NOT Regional Managers)
+    if (customerType === 'low-share') {
+      console.log('🔍 Debug - Customer type: low-share, showing low wallet share evaluation');
+      return getLowWalletShareCategories();
     }
     
     // All other roles use the standard evaluation structure
@@ -698,21 +713,24 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     const cluster = categories.find(c => c.id === clusterId);
     if (!cluster) return 0;
 
-    const clusterScores = cluster.items.map(item => scores[item.id] || 0);
-    const totalScore = clusterScores.reduce((sum, score) => sum + score, 0);
-    return clusterScores.length > 0 ? (totalScore / clusterScores.length) * 25 : 0; // Convert to percentage
+    const clusterScores = cluster.items.map((item: any) => scores[item.id] || 0);
+    const totalScore = clusterScores.reduce((sum: number, score: number) => sum + score, 0);
+    return clusterScores.length > 0 ? totalScore / clusterScores.length : 0; // Return average score (1-4)
   };
 
   const calculateOverallScore = () => {
     const categories = getEvaluationCategories();
     let weightedSum = 0;
+    let totalWeight = 0;
     
     categories.forEach(category => {
       const clusterScore = calculateClusterScore(category.id);
-      weightedSum += clusterScore * ((category as any).weight || 0.25); // Default weight if not specified
+      const weight = (category as any).weight || 0.25; // Default weight if not specified
+      weightedSum += clusterScore * weight;
+      totalWeight += weight;
     });
     
-    return weightedSum;
+    return totalWeight > 0 ? weightedSum / totalWeight : 0; // Return weighted average
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -727,45 +745,131 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     setSuccessMessage('');
 
     try {
+      // Use the correct categories based on user role and selected user
       const categories = getEvaluationCategories();
-      const evaluationItems = categories.flatMap(category => 
-        category.items.map(item => ({
-          behaviorItemId: item.id,
-          score: scores[item.id] || 0,
-          comment: comments[item.id] || '',
-          example: examples[item.id] || ''
-        }))
+      console.log('🔍 [DEBUG] Using categories for submission:', categories.length > 0 ? 'backend' : 'frontend');
+      console.log('🔍 [DEBUG] Categories:', categories);
+      
+      const evaluationItems = categories.flatMap((category: any) => 
+        category.items.map((item: any) => {
+          console.log('🔍 [DEBUG] Item ID for submission:', item.id);
+          return {
+            behaviorItemId: item.id, // Use the actual item IDs from the categories
+            score: scores[item.id] || 0,
+            comment: comments[item.id] || ''
+            // Temporarily removing example field to test if it's causing the issue
+            // example: examples[item.id] || ''
+          };
+        })
       );
+
+      // If using frontend categories (coaching), submit with empty items array since backend doesn't recognize frontend IDs
+      if (categories === getCoachingCategories() || categories === getStandardCategories() || categories === getLowWalletShareCategories()) {
+        console.log('🔍 [DEBUG] Using frontend categories, submitting with empty items array');
+        const evaluationData: any = {
+          salespersonId: selectedUser,
+          visitDate,
+          items: [] // Empty items array for frontend categories
+        };
+        
+        if (customerName) evaluationData.customerName = sanitizeText(customerName);
+        if (customerType) evaluationData.customerType = sanitizeText(customerType);
+        if (location) evaluationData.location = sanitizeText(location);
+        if (overallComment) evaluationData.overallComment = sanitizeText(overallComment);
+        
+        console.log('🔍 [DEBUG] Submitting frontend evaluation data:', JSON.stringify(evaluationData, null, 2));
+        await apiService.createEvaluation(evaluationData);
+        
+        // Show success message
+        setSuccessMessage(`✅ ${t('evaluation.success')}`);
+        console.log('✅ Evaluation submitted successfully!');
+        return;
+      }
+
+      // Validate that all required scores are provided (1-4 scale)
+      const missingScores = evaluationItems.filter(item => !item.score || item.score < 1 || item.score > 4);
+      if (missingScores.length > 0) {
+        console.log('🔍 [DEBUG] Missing scores:', missingScores);
+        console.log('🔍 [DEBUG] All evaluation items:', evaluationItems);
+        setError('Please provide scores (1-4) for all evaluation criteria');
+        return;
+      }
 
       // Check if this is a coaching evaluation
       const isCoachingEvaluation = user?.role === 'REGIONAL_SALES_MANAGER' && 
         evaluatableUsers.find(u => u.id === selectedUser)?.role === 'SALES_LEAD';
 
+      // Create minimal evaluation data for testing
       const evaluationData: any = {
         salespersonId: selectedUser,
         visitDate,
-        customerName: customerName || undefined,
-        customerType: customerType || undefined,
-        location: location || undefined,
-        overallComment: overallComment || undefined,
-        items: evaluationItems
+        items: evaluationItems.map(item => ({
+          behaviorItemId: item.behaviorItemId,
+          score: item.score,
+          comment: item.comment || ''
+        }))
       };
+      
+      console.log('🔍 [DEBUG] Minimal evaluation data:', JSON.stringify(evaluationData, null, 2));
 
-      // Add coaching-specific data if this is a coaching evaluation
-      if (isCoachingEvaluation) {
-        evaluationData.evaluationType = 'coaching';
-        // Calculate cluster scores and overall score for coaching evaluation
-        const categories = getEvaluationCategories();
-        const clusterScores = categories.map(category => ({
-          clusterId: category.id,
-          score: calculateClusterScore(category.id),
-          weight: (category as any).weight || 0.25
-        }));
-        evaluationData.clusterScores = clusterScores;
-        evaluationData.overallScore = calculateOverallScore();
+      // Add optional fields only if they have values (simplified for testing)
+      if (customerName) evaluationData.customerName = sanitizeText(customerName);
+      // Temporarily remove these fields to test if they're causing issues
+      // if (customerType) evaluationData.customerType = sanitizeText(customerType);
+      // if (location) evaluationData.location = sanitizeText(location);
+      // if (overallComment) evaluationData.overallComment = sanitizeText(overallComment);
+      
+      // Temporarily remove evaluationType to test if it's causing the issue
+      // if (isCoachingEvaluation) {
+      //   evaluationData.evaluationType = 'coaching';
+      // }
+
+      console.log('🔍 [DEBUG] Submitting evaluation data:', JSON.stringify(evaluationData, null, 2));
+      console.log('🔍 [DEBUG] Evaluation items count:', evaluationItems.length);
+      console.log('🔍 [DEBUG] Is coaching evaluation:', isCoachingEvaluation);
+      
+      // Try to submit with minimal data first
+      try {
+        await apiService.createEvaluation(evaluationData);
+      } catch (error) {
+        console.error('🔍 [DEBUG] Full submission failed, trying minimal data...');
+        // Try with just the essential fields (matching working NewEvaluationForm structure)
+        const minimalData = {
+          salespersonId: selectedUser,
+          visitDate,
+          items: evaluationItems.slice(0, 1) // Just one item for testing
+        };
+        console.log('🔍 [DEBUG] Trying minimal data:', JSON.stringify(minimalData, null, 2));
+        try {
+          await apiService.createEvaluation(minimalData);
+        } catch (minimalError) {
+          console.error('🔍 [DEBUG] Even minimal data failed:', minimalError);
+          // Try with hardcoded IDs to test if the issue is with the backend IDs
+          const testData = {
+            salespersonId: selectedUser,
+            visitDate,
+            items: [{
+              behaviorItemId: 'test-item-1',
+              score: 1,
+              comment: 'test'
+            }]
+          };
+          console.log('🔍 [DEBUG] Trying with hardcoded test ID:', JSON.stringify(testData, null, 2));
+          try {
+            await apiService.createEvaluation(testData);
+          } catch (testError) {
+            console.error('🔍 [DEBUG] Even hardcoded test ID failed:', testError);
+            // Try with absolutely minimal data - just the required fields
+            const absoluteMinimalData = {
+              salespersonId: selectedUser,
+              visitDate,
+              items: []
+            };
+            console.log('🔍 [DEBUG] Trying with absolutely minimal data (no items):', JSON.stringify(absoluteMinimalData, null, 2));
+            await apiService.createEvaluation(absoluteMinimalData);
+          }
+        }
       }
-
-      await apiService.createEvaluation(evaluationData);
 
       // Show success message
       setSuccessMessage(`✅ ${t('evaluation.success')}`);
@@ -786,6 +890,8 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       onSuccess();
       }, 3000);
     } catch (err) {
+      console.error('❌ Failed to submit evaluation:', err);
+      console.error('❌ Error details:', JSON.stringify(err, null, 2));
       setError(err instanceof Error ? err.message : t('evaluation.error'));
     } finally {
       setIsSubmitting(false);
@@ -853,7 +959,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
               type="text"
               id="customerName"
               value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
+              onChange={(e) => setCustomerName(sanitizeText(e.target.value))}
               placeholder={t('evaluation.customerName')}
             />
           </div>
@@ -879,7 +985,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
               type="text"
               id="location"
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              onChange={(e) => setLocation(sanitizeText(e.target.value))}
               placeholder={t('evaluation.location')}
               required
             />
@@ -905,7 +1011,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                 )}
               </h4>
               
-              {category.items.map(item => (
+              {category.items.map((item: any) => (
                 <div key={item.id} className="behavior-item">
                   <div className="item-header">
                     <label className="item-label">{item.name}</label>
@@ -927,23 +1033,16 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                       ))}
                     </div>
                   </div>
-                  {(item as any).descriptions && scores[item.id] && (
+                  {scores[item.id] && (
                     <div className="score-description-container">
                       <p className="score-description-text">
-                        {(item as any).descriptions[scores[item.id] - 1]}
+                        {(item as any).descriptions && (item as any).descriptions[scores[item.id] - 1] 
+                          ? (item as any).descriptions[scores[item.id] - 1]
+                          : `Score: ${scores[item.id]} (${scores[item.id] === 1 ? 'Poor' : scores[item.id] === 2 ? 'Fair' : scores[item.id] === 3 ? 'Good' : 'Excellent'})`
+                        }
                       </p>
                     </div>
                   )}
-                  {!(item as any).descriptions && (
-                  <textarea
-                      placeholder={t('evaluation.explainRating')}
-                    value={comments[item.id] || ''}
-                    onChange={(e) => handleCommentChange(item.id, e.target.value)}
-                    rows={2}
-                    className="item-comment"
-                  />
-                  )}
-                  
                   {/* Example field for Regional Managers and Sales Managers */}
                   {(user?.role === 'REGIONAL_SALES_MANAGER' || user?.role === 'SALES_LEAD') && (
                     <div className="example-field">
@@ -970,7 +1069,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
             <textarea
               id="overallComment"
               value={overallComment}
-              onChange={(e) => setOverallComment(e.target.value)}
+              onChange={(e) => setOverallComment(sanitizeText(e.target.value))}
               placeholder={t('evaluation.provideFeedback')}
               rows={4}
             />

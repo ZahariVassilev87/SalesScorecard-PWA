@@ -28,7 +28,7 @@ const EvaluationHistory: React.FC = () => {
     };
 
     loadEvaluations();
-  }, []);
+  }, [t]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
