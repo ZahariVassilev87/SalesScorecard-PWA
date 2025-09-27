@@ -661,9 +661,9 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         <div className="form-section">
           <h3>{t('evaluation.form')}</h3>
           <p>
-            {user?.role === 'REGIONAL_SALES_MANAGER' && selectedUser && 
-             evaluatableUsers.find(u => u.id === selectedUser)?.role === 'SALES_LEAD'
-              ? "Rate each criterion on a scale of 1-4 (1 = Poor, 4 = Excellent)"
+            {user?.role === 'REGIONAL_SALES_MANAGER' && 
+             (!selectedUser || evaluatableUsers.find(u => u.id === selectedUser)?.role === 'SALES_LEAD')
+              ? "Rate each behavior on a scale of 1-4 (1 = Poor, 4 = Excellent)"
               : t('evaluation.rating')
             }
           </p>
