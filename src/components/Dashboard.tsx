@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [evaluationData, setEvaluationData] = useState<any>(null);
   const [directorateData, setDirectorateData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,14 +52,7 @@ const Dashboard: React.FC = () => {
   }, [user?.role]);
 
   const getRoleDisplayName = (role: string) => {
-    switch (role) {
-      case 'SALES_DIRECTOR': return 'Sales Director';
-      case 'REGIONAL_SALES_MANAGER': return 'Regional Manager';
-      case 'SALES_LEAD': return 'Sales Lead';
-      case 'SALESPERSON': return 'Salesperson';
-      case 'ADMIN': return 'Administrator';
-      default: return role;
-    }
+    return t(`roles.${role}`) || role;
   };
 
   const isSalesDirector = user?.role === 'SALES_DIRECTOR';
@@ -65,7 +60,7 @@ const Dashboard: React.FC = () => {
   if (isLoading) {
     return (
       <div className="dashboard">
-        <div className="loading">Loading dashboard...</div>
+        <div className="loading">{t('dashboard.loading')}</div>
       </div>
     );
   }
@@ -73,7 +68,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="dashboard">
       <div className="welcome-section">
-        <h2>Welcome back, {user?.displayName}!</h2>
+        <h2>{t('dashboard.welcome', { name: user?.displayName })}</h2>
         <p className="role-badge">{getRoleDisplayName(user?.role || '')}</p>
       </div>
 
@@ -83,37 +78,37 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-card">
             <div className="card-icon">🏢</div>
             <div className="card-value">{directorateData?.totalRegions || 0}</div>
-            <div className="card-label">Total Regions</div>
+            <div className="card-label">{t('dashboard.totalRegions')}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">👥</div>
             <div className="card-value">{directorateData?.totalTeamMembers || 0}</div>
-            <div className="card-label">Total Team Members</div>
+            <div className="card-label">{t('dashboard.totalTeamMembers')}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📊</div>
             <div className="card-value">{directorateData?.averagePerformance || 0}%</div>
-            <div className="card-label">Average Performance</div>
+            <div className="card-label">{t('dashboard.averagePerformance')}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📋</div>
             <div className="card-value">{directorateData?.totalEvaluations || 0}</div>
-            <div className="card-label">Total Evaluations</div>
+            <div className="card-label">{t('dashboard.totalEvaluations')}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📈</div>
             <div className="card-value">{directorateData?.evaluationsCompleted || 0}</div>
-            <div className="card-label">Evaluations Completed</div>
+            <div className="card-label">{t('dashboard.evaluationsCompleted')}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">⭐</div>
             <div className="card-value">{directorateData?.averageScore || 0}</div>
-            <div className="card-label">Average Score</div>
+            <div className="card-label">{t('dashboard.averageScore')}</div>
           </div>
         </div>
       ) : (
@@ -122,48 +117,48 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-card">
             <div className="card-icon">📋</div>
             <div className="card-value">{evaluationData?.totalEvaluations || 0}</div>
-            <div className="card-label">My Evaluations</div>
+            <div className="card-label">{t('dashboard.myEvaluations')}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">⭐</div>
             <div className="card-value">{evaluationData?.averageScore || 0}</div>
-            <div className="card-label">Average Score</div>
+            <div className="card-label">{t('dashboard.averageScore')}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📊</div>
             <div className="card-value">{evaluationData?.totalScore || 0}</div>
-            <div className="card-label">Total Score</div>
+            <div className="card-label">{t('dashboard.totalScore')}</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📈</div>
             <div className="card-value">{evaluationData?.thisMonth || 0}</div>
-            <div className="card-label">This Month</div>
+            <div className="card-label">{t('dashboard.thisMonth')}</div>
           </div>
         </div>
       )}
 
       {!isSalesDirector && (
         <div className="quick-actions">
-          <h3>Quick Actions</h3>
+          <h3>{t('dashboard.quickActions')}</h3>
           <div className="actions-grid">
             <div className="action-card">
               <div className="action-icon">👥</div>
-              <div className="action-label">View Team</div>
+              <div className="action-label">{t('dashboard.viewTeam')}</div>
             </div>
             <div className="action-card">
               <div className="action-icon">📋</div>
-              <div className="action-label">Reports</div>
+              <div className="action-label">{t('dashboard.reports')}</div>
             </div>
             <div className="action-card">
               <div className="action-icon">⚙️</div>
-              <div className="action-label">Settings</div>
+              <div className="action-label">{t('dashboard.settings')}</div>
             </div>
             <div className="action-card">
               <div className="action-icon">📞</div>
-              <div className="action-label">Support</div>
+              <div className="action-label">{t('dashboard.support')}</div>
             </div>
           </div>
         </div>

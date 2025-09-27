@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -7,6 +9,7 @@ const LoginForm: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const { t } = useTranslation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,7 +19,7 @@ const LoginForm: React.FC = () => {
     try {
       await login(email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : t('auth.loginError'));
     } finally {
       setIsLoading(false);
     }
@@ -27,31 +30,31 @@ const LoginForm: React.FC = () => {
       <div className="login-form">
         <div className="login-header">
           <h1>🎯 Sales Scorecard</h1>
-          <p className="login-subtitle">Sign in to your account</p>
+          <p className="login-subtitle">{t('auth.welcome')}</p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">{t('auth.email')}</label>
             <input
               type="email"
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="Enter your email"
+              placeholder={t('auth.email')}
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">{t('auth.password')}</label>
             <input
               type="password"
               id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="Enter your password"
+              placeholder={t('auth.password')}
             />
           </div>
 
@@ -66,12 +69,13 @@ const LoginForm: React.FC = () => {
             className="login-button"
             disabled={isLoading}
           >
-            {isLoading ? 'Signing in...' : 'Sign In'}
+            {isLoading ? t('auth.signingIn') : t('auth.loginButton')}
           </button>
         </form>
 
         <div className="login-footer">
-          <p>Sales management and evaluation platform</p>
+          <p>Performance Evaluation System</p>
+          <LanguageSwitcher />
         </div>
       </div>
     </div>

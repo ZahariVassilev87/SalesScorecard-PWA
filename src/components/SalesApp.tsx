@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import Dashboard from './Dashboard';
 import MyTeam from './MyTeam';
 import EvaluationForm from './EvaluationForm';
 import EvaluationHistory from './EvaluationHistory';
 import AnalyticsView from './AnalyticsView';
 import TeamManagementView from './TeamManagementView';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const SalesApp: React.FC = () => {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -25,15 +28,7 @@ const SalesApp: React.FC = () => {
   };
 
   const getRoleDisplayName = (role: string) => {
-    switch (role) {
-      case 'SALES_DIRECTOR': return 'Sales Director';
-      case 'REGIONAL_SALES_MANAGER': 
-      case 'REGIONAL_MANAGER': return 'Regional Manager';
-      case 'SALES_LEAD': return 'Sales Lead';
-      case 'SALESPERSON': return 'Salesperson';
-      case 'ADMIN': return 'Administrator';
-      default: return role;
-    }
+    return t(`roles.${role}`) || role;
   };
 
   const canEvaluate = (userRole: string) => {
@@ -86,13 +81,14 @@ const SalesApp: React.FC = () => {
           <h1>🎯 Sales Scorecard</h1>
         </div>
         <div className="header-right">
+          <LanguageSwitcher />
           <div className="user-info">
             <span className="user-name">{user?.displayName}</span>
             <span className="user-role">{getRoleDisplayName(user?.role || '')}</span>
           </div>
           <button onClick={handleLogout} className="logout-button">
             <span>🚪</span>
-            <span>Sign Out</span>
+            <span>{t('auth.logout')}</span>
           </button>
         </div>
       </header>
@@ -109,7 +105,7 @@ const SalesApp: React.FC = () => {
               }}
             >
               <span>🏢</span>
-              <span>Director Dashboard</span>
+              <span>{t('navigation.dashboard')}</span>
             </button>
           </>
         ) : (
@@ -124,7 +120,7 @@ const SalesApp: React.FC = () => {
                 }}
               >
                 <span>✏️</span>
-                <span>Evaluation Form</span>
+                <span>{t('navigation.evaluation')}</span>
               </button>
             )}
             
@@ -136,7 +132,7 @@ const SalesApp: React.FC = () => {
               }}
             >
               <span>📜</span>
-              <span>Evaluation History</span>
+              <span>{t('navigation.history')}</span>
             </button>
 
             {canViewAnalytics(user?.role || '') && (
@@ -148,7 +144,7 @@ const SalesApp: React.FC = () => {
                 }}
               >
                 <span>📈</span>
-                <span>Analytics</span>
+                <span>{t('navigation.analytics')}</span>
               </button>
             )}
             
@@ -160,7 +156,7 @@ const SalesApp: React.FC = () => {
               }}
             >
               <span>🏠</span>
-              <span>Dashboard</span>
+              <span>{t('navigation.dashboard')}</span>
             </button>
             
             <button
@@ -171,7 +167,7 @@ const SalesApp: React.FC = () => {
               }}
             >
               <span>👤</span>
-              <span>My Team</span>
+              <span>{t('navigation.team')}</span>
             </button>
 
             {canManageTeams(user?.role || '') && (
@@ -183,7 +179,7 @@ const SalesApp: React.FC = () => {
                 }}
               >
                 <span>👥</span>
-                <span>Teams</span>
+                <span>{t('navigation.teams')}</span>
               </button>
             )}
           </>

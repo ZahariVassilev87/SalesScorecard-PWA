@@ -1,0 +1,60 @@
+{
+  "categories": {
+    "discovery": "Discovery",
+    "presentation": "Presentation",
+    "objectionHandling": "Objection Handling",
+    "closing": "Closing",
+    "followUp": "Follow-up"
+  },
+  "behaviors": {
+    "discovery": {
+      "openQuestions": "Asks open-ended questions",
+      "listening": "Listens actively to customer responses",
+      "needsAnalysis": "Analyzes customer needs thoroughly",
+      "painPoints": "Identifies pain points and challenges",
+      "budgetTimeline": "Discusses budget and timeline"
+    },
+    "presentation": {
+      "clearStructure": "Presents solution with clear structure",
+      "benefitsFocus": "Focuses on customer benefits",
+      "visualAids": "Uses visual aids effectively",
+      "engagement": "Keeps customer engaged",
+      "objectives": "Addresses customer objectives"
+    },
+    "objectionHandling": {
+      "acknowledges": "Acknowledges objections respectfully",
+      "clarifies": "Clarifies the real concern",
+      "responds": "Responds with relevant information",
+      "confirms": "Confirms understanding",
+      "movesForward": "Moves conversation forward"
+    },
+    "closing": {
+      "asksForBusiness": "Asks for the business clearly",
+      "handlesObjections": "Handles final objections",
+      "createsUrgency": "Creates appropriate urgency",
+      "confirmsNextSteps": "Confirms next steps",
+      "followsUp": "Sets up follow-up meeting"
+    },
+    "followUp": {
+      "timely": "Follows up in timely manner",
+      "relevant": "Provides relevant information",
+      "persistent": "Maintains appropriate persistence",
+      "valueAdded": "Adds value to relationship",
+      "closesLoop": "Closes the loop effectively"
+    }
+  },
+  "ratings": {
+    "excellent": "Excellent",
+    "good": "Good",
+    "satisfactory": "Satisfactory",
+    "needsImprovement": "Needs Improvement",
+    "poor": "Poor"
+  },
+  "feedback": {
+    "strengths": "Strengths",
+    "areasForImprovement": "Areas for Improvement",
+    "specificExamples": "Specific Examples",
+    "actionPlan": "Action Plan",
+    "nextSteps": "Next Steps"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "categories": {
+    "discovery": "Откриване",
+    "presentation": "Презентация",
+    "objectionHandling": "Работа с Възражения",
+    "closing": "Затваряне",
+    "followUp": "Последващи Действия"
+  },
+  "behaviors": {
+    "discovery": {
+      "openQuestions": "Задава отворени въпроси",
+      "listening": "Слуша активно отговорите на клиента",
+      "needsAnalysis": "Анализира нуждите на клиента задълбочено",
+      "painPoints": "Идентифицира проблеми и предизвикателства",
+      "budgetTimeline": "Обсъжда бюджет и времеви рамки"
+    },
+    "presentation": {
+      "clearStructure": "Представя решението с ясна структура",
+      "benefitsFocus": "Фокусира се върху ползите за клиента",
+      "visualAids": "Използва визуални средства ефективно",
+      "engagement": "Поддържа клиента ангажиран",
+      "objectives": "Обсъжда целите на клиента"
+    },
+    "objectionHandling": {
+      "acknowledges": "Признава възраженията с уважение",
+      "clarifies": "Изяснява истинската загриженост",
+      "responds": "Отговаря с релевантна информация",
+      "confirms": "Потвърждава разбирането",
+      "movesForward": "Насочва разговора напред"
+    },
+    "closing": {
+      "asksForBusiness": "Ясно пита за бизнеса",
+      "handlesObjections": "Справя се с финалните възражения",
+      "createsUrgency": "Създава подходяща спешност",
+      "confirmsNextSteps": "Потвърждава следващите стъпки",
+      "followsUp": "Настройва последваща среща"
+    },
+    "followUp": {
+      "timely": "Последва навременно",
+      "relevant": "Предоставя релевантна информация",
+      "persistent": "Поддържа подходяща постоянност",
+      "valueAdded": "Добавя стойност към връзката",
+      "closesLoop": "Затваря цикъла ефективно"
+    }
+  },
+  "ratings": {
+    "excellent": "Отлично",
+    "good": "Добро",
+    "satisfactory": "Задоволително",
+    "needsImprovement": "Нуждае се от подобрение",
+    "poor": "Слабо"
+  },
+  "feedback": {
+    "strengths": "Силни Страни",
+    "areasForImprovement": "Области за Подобрение",
+    "specificExamples": "Конкретни Примери",
+    "actionPlan": "План за Действие",
+    "nextSteps": "Следващи Стъпки"
+  }
+}

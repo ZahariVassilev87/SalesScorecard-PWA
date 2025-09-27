@@ -28,12 +28,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const initAuth = async () => {
+    const initAuth = () => {
       const token = localStorage.getItem('userToken');
       if (token) {
         try {
-          const userData = await apiService.getCurrentUser();
-          setUser(userData);
+          const userData = apiService.getCurrentUser();
+          if (userData) {
+            setUser(userData);
+          } else {
+            apiService.logout();
+          }
         } catch (error) {
           console.error('Failed to get current user:', error);
           apiService.logout();

@@ -1,16 +1,19 @@
 import React from 'react';
 import './App.css';
+import './i18n';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginForm from './components/LoginForm';
 import SalesApp from './components/SalesApp';
+import { useTranslation } from 'react-i18next';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useTranslation();
 
   if (isLoading) {
     return (
       <div className="app-loading">
-        <div className="loading-spinner">Loading...</div>
+        <div className="loading-spinner">{t('common.loading')}</div>
       </div>
     );
   }

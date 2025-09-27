@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService, User } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 interface EvaluationFormProps {
   onSuccess: () => void;
@@ -9,6 +10,7 @@ interface EvaluationFormProps {
 
 const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [evaluatableUsers, setEvaluatableUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,7 +34,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         const users = await apiService.getEvaluatableUsers();
         setEvaluatableUsers(users);
       } catch (err) {
-        setError('Failed to load users for evaluation');
+        setError(t('evaluation.error'));
         console.error('Failed to load evaluatable users:', err);
       } finally {
         setIsLoading(false);
@@ -40,38 +42,14 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     };
 
     loadEvaluatableUsers();
-  }, []);
+  }, [t]);
 
   const getEvaluationTitle = () => {
-    if (!user) return 'New Evaluation';
-    
-    switch (user.role) {
-      case 'SALES_DIRECTOR':
-        return 'Regional Manager Evaluation';
-      case 'REGIONAL_SALES_MANAGER':
-      case 'REGIONAL_MANAGER':
-        return 'Sales Lead Coaching Evaluation';
-      case 'SALES_LEAD':
-        return 'Salesperson Evaluation';
-      default:
-        return 'New Evaluation';
-    }
+    return t('evaluation.title');
   };
 
   const getEvaluationDescription = () => {
-    if (!user) return 'Create a new evaluation';
-    
-    switch (user.role) {
-      case 'SALES_DIRECTOR':
-        return 'Evaluate Regional Manager performance and leadership';
-      case 'REGIONAL_SALES_MANAGER':
-      case 'REGIONAL_MANAGER':
-        return 'Evaluate Sales Lead coaching abilities in the field';
-      case 'SALES_LEAD':
-        return 'Evaluate Salesperson performance during sales meetings';
-      default:
-        return 'Create a new evaluation';
-    }
+    return t('evaluation.description');
   };
 
   const getEvaluationCategories = () => {
@@ -79,42 +57,42 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     return [
       {
         id: 'discovery',
-        name: 'Discovery',
+        name: t('evaluation.discovery'),
         color: '#3B82F6',
         items: [
-          { id: 'discovery-open-questions', name: 'Asks open-ended questions' },
-          { id: 'discovery-pain-points', name: 'Uncovers customer pain points' },
-          { id: 'discovery-decision-makers', name: 'Identifies decision makers' }
+          { id: 'discovery-open-questions', name: t('evaluation.openQuestions') },
+          { id: 'discovery-pain-points', name: t('evaluation.painPoints') },
+          { id: 'discovery-decision-makers', name: t('evaluation.decisionMakers') }
         ]
       },
       {
         id: 'solution',
-        name: 'Solution Positioning',
+        name: t('evaluation.solution'),
         color: '#10B981',
         items: [
-          { id: 'solution-tailors', name: 'Tailors solution to customer context' },
-          { id: 'solution-value-prop', name: 'Articulates clear value proposition' },
-          { id: 'solution-product-knowledge', name: 'Demonstrates product knowledge' }
+          { id: 'solution-tailors', name: t('evaluation.tailors') },
+          { id: 'solution-value-prop', name: t('evaluation.valueProp') },
+          { id: 'solution-product-knowledge', name: t('evaluation.productKnowledge') }
         ]
       },
       {
         id: 'closing',
-        name: 'Closing & Next Steps',
+        name: t('evaluation.closing'),
         color: '#F59E0B',
         items: [
-          { id: 'closing-clear-asks', name: 'Makes clear asks' },
-          { id: 'closing-next-steps', name: 'Identifies next steps' },
-          { id: 'closing-commitments', name: 'Sets mutual commitments' }
+          { id: 'closing-clear-asks', name: t('evaluation.clearAsks') },
+          { id: 'closing-next-steps', name: t('evaluation.nextSteps') },
+          { id: 'closing-commitments', name: t('evaluation.commitments') }
         ]
       },
       {
         id: 'professionalism',
-        name: 'Professionalism',
+        name: t('evaluation.professionalism'),
         color: '#8B5CF6',
         items: [
-          { id: 'professionalism-prepared', name: 'Arrives prepared' },
-          { id: 'professionalism-time', name: 'Manages time effectively' },
-          { id: 'professionalism-demeanor', name: 'Maintains professional demeanor' }
+          { id: 'professionalism-prepared', name: t('evaluation.prepared') },
+          { id: 'professionalism-time', name: t('evaluation.timeManagement') },
+          { id: 'professionalism-demeanor', name: t('evaluation.demeanor') }
         ]
       }
     ];
@@ -131,7 +109,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) {
-      setError('Please select a team member to evaluate');
+      setError(t('evaluation.selectTeamMember'));
       return;
     }
 
@@ -159,7 +137,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       });
 
       // Show success message
-      setSuccessMessage('✅ Evaluation submitted successfully!');
+      setSuccessMessage(`✅ ${t('evaluation.success')}`);
       console.log('✅ Evaluation submitted successfully!');
       
       // Clear form
@@ -176,7 +154,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         onSuccess();
       }, 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create evaluation');
+      setError(err instanceof Error ? err.message : t('evaluation.error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -185,7 +163,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   if (isLoading) {
     return (
       <div className="evaluation-form">
-        <div className="loading">Loading evaluation form...</div>
+        <div className="loading">{t('evaluation.loadingForm')}</div>
       </div>
     );
   }
@@ -193,7 +171,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   if (!user || !canEvaluate(user.role)) {
     return (
       <div className="evaluation-form">
-        <div className="error">You don't have permission to create evaluations.</div>
+        <div className="error">{t('evaluation.permissionError')}</div>
       </div>
     );
   }
@@ -207,17 +185,17 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
 
       <form onSubmit={handleSubmit}>
         <div className="form-section">
-          <h3>Evaluation Details</h3>
+          <h3>{t('evaluation.details')}</h3>
           
           <div className="form-group">
-            <label htmlFor="user">Select Team Member to Evaluate *</label>
+            <label htmlFor="user">{t('evaluation.selectPerson')} *</label>
             <select
               id="user"
               value={selectedUser}
               onChange={(e) => setSelectedUser(e.target.value)}
               required
             >
-              <option value="">Choose a team member...</option>
+              <option value="">{t('common.select')} {t('common.team')} {t('common.member')}...</option>
               {evaluatableUsers.map(user => (
                 <option key={user.id} value={user.id}>
                   {user.displayName} ({user.email})
@@ -227,7 +205,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
           </div>
 
           <div className="form-group">
-            <label htmlFor="visitDate">Evaluation Date *</label>
+            <label htmlFor="visitDate">{t('evaluation.visitDate')} *</label>
             <input
               type="date"
               id="visitDate"
@@ -238,32 +216,32 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
           </div>
 
           <div className="form-group">
-            <label htmlFor="customerName">Customer/Context</label>
+            <label htmlFor="customerName">{t('evaluation.customerName')}</label>
             <input
               type="text"
               id="customerName"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Enter customer name or context"
+              placeholder={t('evaluation.customerName')}
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="location">Location *</label>
+            <label htmlFor="location">{t('evaluation.location')} *</label>
             <input
               type="text"
               id="location"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="Enter where the sales meeting was conducted"
+              placeholder={t('evaluation.location')}
               required
             />
           </div>
         </div>
 
         <div className="form-section">
-          <h3>Evaluation Form</h3>
-          <p>Rate each behavior on a scale of 1-5 (1 = Poor, 5 = Excellent)</p>
+          <h3>{t('evaluation.form')}</h3>
+          <p>{t('evaluation.rating')}</p>
 
           {getEvaluationCategories().map(category => (
             <div key={category.id} className="evaluation-category" style={{ backgroundColor: `${category.color}10` }}>
@@ -291,7 +269,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                     </div>
                   </div>
                   <textarea
-                    placeholder="Explain your rating..."
+                    placeholder={t('evaluation.explainRating')}
                     value={comments[item.id] || ''}
                     onChange={(e) => handleCommentChange(item.id, e.target.value)}
                     rows={2}
@@ -304,14 +282,14 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         </div>
 
         <div className="form-section">
-          <h3>Overall Assessment</h3>
+          <h3>{t('evaluation.overallAssessment')}</h3>
           <div className="form-group">
-            <label htmlFor="overallComment">Overall Comment</label>
+            <label htmlFor="overallComment">{t('evaluation.overallComment')}</label>
             <textarea
               id="overallComment"
               value={overallComment}
               onChange={(e) => setOverallComment(e.target.value)}
-              placeholder="Provide overall feedback and recommendations"
+              placeholder={t('evaluation.provideFeedback')}
               rows={4}
             />
           </div>
@@ -331,10 +309,10 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
 
         <div className="form-actions">
           <button type="button" onClick={onCancel} className="cancel-button">
-            Cancel
+            {t('evaluation.cancel')}
           </button>
           <button type="submit" disabled={isSubmitting} className="submit-button">
-            {isSubmitting ? 'Submitting Evaluation...' : 'Complete Evaluation'}
+            {isSubmitting ? t('evaluation.submitting') : t('evaluation.submit')}
           </button>
         </div>
       </form>
