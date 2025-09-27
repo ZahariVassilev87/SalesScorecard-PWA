@@ -238,13 +238,18 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     // Check if user is Regional Manager evaluating Sales Lead - show coaching form
     if (user?.role === 'REGIONAL_SALES_MANAGER' && selectedUser) {
       const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+      console.log('🔍 Debug - User role:', user?.role);
+      console.log('🔍 Debug - Selected user data:', selectedUserData);
+      console.log('🔍 Debug - Selected user role:', selectedUserData?.role);
       if (selectedUserData?.role === 'SALES_LEAD') {
+        console.log('✅ Returning coaching categories');
         // Return coaching categories for Regional Manager evaluating Sales Lead
         return getCoachingCategories();
       }
     }
     
     // All other roles use the new evaluation structure with detailed descriptions
+    console.log('📋 Returning standard evaluation categories');
     return [
       {
         id: 'discovery',
