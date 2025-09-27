@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService, Evaluation } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const AnalyticsView: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [teamAnalytics, setTeamAnalytics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,7 +21,7 @@ const AnalyticsView: React.FC = () => {
         setEvaluations(evaluationsData);
         setTeamAnalytics(teamData);
       } catch (err) {
-        setError('Failed to load analytics data');
+        setError(t('analytics.loading'));
         console.error('Failed to load analytics:', err);
       } finally {
         setIsLoading(false);
@@ -66,7 +68,7 @@ const AnalyticsView: React.FC = () => {
   if (isLoading) {
     return (
       <div className="analytics-view">
-        <div className="loading">Loading analytics...</div>
+        <div className="loading">{t('analytics.loading')}</div>
       </div>
     );
   }
@@ -87,28 +89,28 @@ const AnalyticsView: React.FC = () => {
     <div className="analytics-view">
       <div className="analytics-header">
         <h2>
-          {user?.role === 'SALESPERSON' ? 'My Performance Analytics' : 'Performance Analytics'}
+          {user?.role === 'SALESPERSON' ? t('analytics.myPerformanceTitle') : t('analytics.title')}
         </h2>
-        <p>Insights and trends from evaluation data</p>
+        <p>{t('analytics.subtitle')}</p>
       </div>
 
       <div className="analytics-grid">
         <div className="analytics-card">
           <div className="card-header">
-            <h3>Overall Performance</h3>
+            <h3>{t('analytics.overallPerformance')}</h3>
             <span className="card-icon">📊</span>
           </div>
           <div className="card-content">
             <div className="score-display">
               <span className="score-value">{averageScore.toFixed(1)}</span>
-              <span className="score-label">Average Score</span>
+              <span className="score-label">{t('analytics.averageScore')}</span>
             </div>
             <div className="score-trend">
               <span className={`trend-indicator ${trend}`}>
-                {trend === 'improving' && '📈 Improving'}
-                {trend === 'declining' && '📉 Declining'}
-                {trend === 'stable' && '➡️ Stable'}
-                {trend === 'insufficient_data' && '📊 Insufficient Data'}
+                {trend === 'improving' && t('analytics.improving')}
+                {trend === 'declining' && t('analytics.declining')}
+                {trend === 'stable' && t('analytics.stable')}
+                {trend === 'insufficient_data' && t('analytics.insufficientData')}
               </span>
             </div>
           </div>
@@ -116,38 +118,38 @@ const AnalyticsView: React.FC = () => {
 
         <div className="analytics-card">
           <div className="card-header">
-            <h3>Evaluation Count</h3>
+            <h3>{t('analytics.evaluationCount')}</h3>
             <span className="card-icon">📋</span>
           </div>
           <div className="card-content">
             <div className="count-display">
               <span className="count-value">{evaluations.length}</span>
-              <span className="count-label">Total Evaluations</span>
+              <span className="count-label">{t('analytics.totalEvaluations')}</span>
             </div>
           </div>
         </div>
 
         <div className="analytics-card">
           <div className="card-header">
-            <h3>Score Distribution</h3>
+            <h3>{t('analytics.scoreDistribution')}</h3>
             <span className="card-icon">🎯</span>
           </div>
           <div className="card-content">
             <div className="distribution">
               <div className="distribution-item">
-                <span className="distribution-label">Excellent (4.5+)</span>
+                <span className="distribution-label">{t('analytics.excellent')}</span>
                 <span className="distribution-value">{distribution.excellent}</span>
               </div>
               <div className="distribution-item">
-                <span className="distribution-label">Good (3.5-4.4)</span>
+                <span className="distribution-label">{t('analytics.good')}</span>
                 <span className="distribution-value">{distribution.good}</span>
               </div>
               <div className="distribution-item">
-                <span className="distribution-label">Average (2.5-3.4)</span>
+                <span className="distribution-label">{t('analytics.average')}</span>
                 <span className="distribution-value">{distribution.average}</span>
               </div>
               <div className="distribution-item">
-                <span className="distribution-label">Poor (&lt;2.5)</span>
+                <span className="distribution-label">{t('analytics.poor')}</span>
                 <span className="distribution-value">{distribution.poor}</span>
               </div>
             </div>
@@ -157,21 +159,21 @@ const AnalyticsView: React.FC = () => {
         {teamAnalytics && (
           <div className="analytics-card">
             <div className="card-header">
-              <h3>Team Performance</h3>
+              <h3>{t('analytics.teamPerformance')}</h3>
               <span className="card-icon">👥</span>
             </div>
             <div className="card-content">
               <div className="team-stats">
                 <div className="stat-item">
-                  <span className="stat-label">Team Average</span>
+                  <span className="stat-label">{t('analytics.teamAverage')}</span>
                   <span className="stat-value">{teamAnalytics.teamPerformance.average}</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">Top Performers</span>
+                  <span className="stat-label">{t('analytics.topPerformers')}</span>
                   <span className="stat-value">{teamAnalytics.teamPerformance.topPerformers}</span>
                 </div>
                 <div className="stat-item">
-                  <span className="stat-label">Need Improvement</span>
+                  <span className="stat-label">{t('analytics.needsImprovement')}</span>
                   <span className="stat-value">{teamAnalytics.teamPerformance.needsImprovement}</span>
                 </div>
               </div>
@@ -181,7 +183,7 @@ const AnalyticsView: React.FC = () => {
 
         <div className="analytics-card">
           <div className="card-header">
-            <h3>Recent Evaluations</h3>
+            <h3>{t('analytics.recentEvaluations')}</h3>
             <span className="card-icon">🕒</span>
           </div>
           <div className="card-content">
@@ -202,7 +204,7 @@ const AnalyticsView: React.FC = () => {
                 </div>
               ))}
               {evaluations.length === 0 && (
-                <div className="no-data">No evaluations yet</div>
+                <div className="no-data">{t('analytics.noEvaluations')}</div>
               )}
             </div>
           </div>

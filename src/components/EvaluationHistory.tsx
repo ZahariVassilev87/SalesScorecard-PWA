@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { apiService, Evaluation } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const EvaluationHistory: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -18,7 +20,7 @@ const EvaluationHistory: React.FC = () => {
         console.log('📊 Loaded evaluations:', data);
         setEvaluations(data);
       } catch (err) {
-        setError('Failed to load evaluations');
+        setError(t('history.loading'));
         console.error('Failed to load evaluations:', err);
       } finally {
         setIsLoading(false);
@@ -85,7 +87,7 @@ const EvaluationHistory: React.FC = () => {
   if (isLoading) {
     return (
       <div className="evaluation-history">
-        <div className="loading">Loading evaluations...</div>
+        <div className="loading">{t('history.loading')}</div>
       </div>
     );
   }
@@ -103,8 +105,8 @@ const EvaluationHistory: React.FC = () => {
   return (
     <div className="evaluation-history">
       <div className="history-header">
-        <h2>Evaluation History</h2>
-        <p>View and manage your past evaluations</p>
+        <h2>{t('history.title')}</h2>
+        <p>{t('history.subtitle')}</p>
       </div>
 
       {/* Tab Navigation */}
@@ -114,7 +116,7 @@ const EvaluationHistory: React.FC = () => {
           onClick={() => setActiveTab('created')}
         >
           <span className="tab-icon">📝</span>
-          <span className="tab-text">Evaluations I Created</span>
+          <span className="tab-text">{t('history.evaluationsICreated')}</span>
           <span className="tab-count">({evaluationsICreated.length})</span>
         </button>
         <button 
@@ -122,7 +124,7 @@ const EvaluationHistory: React.FC = () => {
           onClick={() => setActiveTab('about')}
         >
           <span className="tab-icon">👤</span>
-          <span className="tab-text">Evaluations About Me</span>
+          <span className="tab-text">{t('history.evaluationsAboutMe')}</span>
           <span className="tab-count">({evaluationsAboutMe.length})</span>
         </button>
       </div>
@@ -131,11 +133,11 @@ const EvaluationHistory: React.FC = () => {
       <div className="tab-content">
         {currentEvaluations.length === 0 ? (
           <div className="no-evaluations">
-            <h3>No Evaluations Yet</h3>
+            <h3>{t('history.noEvaluations')}</h3>
             <p>
               {activeTab === 'created' 
-                ? "You haven't created any evaluations yet. Start by creating your first evaluation."
-                : "No evaluations have been created about you yet."
+                ? t('history.noEvaluationsCreated')
+                : t('history.noEvaluationsAboutMe')
               }
             </p>
           </div>
@@ -148,7 +150,7 @@ const EvaluationHistory: React.FC = () => {
                     <h3>{evaluation.salesperson.displayName || `${evaluation.salesperson.firstName} ${evaluation.salesperson.lastName}`}</h3>
                     <p className="evaluation-date">{formatDate(evaluation.visitDate)}</p>
                     {evaluation.customerName && (
-                      <p className="customer-name">Customer: {evaluation.customerName}</p>
+                      <p className="customer-name">{t('history.customer')}: {evaluation.customerName}</p>
                     )}
                     {evaluation.location && (
                       <p className="location">📍 {evaluation.location}</p>
@@ -161,13 +163,13 @@ const EvaluationHistory: React.FC = () => {
                     >
                       {evaluation.overallScore ? evaluation.overallScore.toFixed(1) : 'N/A'}
                     </span>
-                    <span className="score-label">Overall</span>
+                    <span className="score-label">{t('history.overall')}</span>
                   </div>
                 </div>
 
                 <div className="category-scores">
                   <div className="category-score">
-                    <span className="category-name">Discovery</span>
+                    <span className="category-name">{t('history.discovery')}</span>
                     <span 
                       className="score" 
                       style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Discovery')) }}
@@ -176,7 +178,7 @@ const EvaluationHistory: React.FC = () => {
                     </span>
                   </div>
                   <div className="category-score">
-                    <span className="category-name">Solution</span>
+                    <span className="category-name">{t('history.solution')}</span>
                     <span 
                       className="score" 
                       style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Solution Positioning')) }}
@@ -185,7 +187,7 @@ const EvaluationHistory: React.FC = () => {
                     </span>
                   </div>
                   <div className="category-score">
-                    <span className="category-name">Closing</span>
+                    <span className="category-name">{t('history.closing')}</span>
                     <span 
                       className="score" 
                       style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Closing & Next Steps')) }}
@@ -194,7 +196,7 @@ const EvaluationHistory: React.FC = () => {
                     </span>
                   </div>
                   <div className="category-score">
-                    <span className="category-name">Professional</span>
+                    <span className="category-name">{t('history.professional')}</span>
                     <span 
                       className="score" 
                       style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Professionalism')) }}
@@ -206,7 +208,7 @@ const EvaluationHistory: React.FC = () => {
 
                 {evaluation.overallComment && (
                   <div className="overall-comment">
-                    <p><strong>Overall Comment:</strong></p>
+                    <p><strong>{t('history.overallComment')}:</strong></p>
                     <p>{evaluation.overallComment}</p>
                   </div>
                 )}
@@ -215,7 +217,7 @@ const EvaluationHistory: React.FC = () => {
                   className="view-details-button"
                   onClick={() => setSelectedEvaluation(evaluation)}
                 >
-                  View Details
+                  {t('history.viewDetails')}
                 </button>
               </div>
             ))}
@@ -227,24 +229,24 @@ const EvaluationHistory: React.FC = () => {
         <div className="evaluation-modal">
           <div className="modal-content">
             <div className="modal-header">
-              <h3>Evaluation Details</h3>
+              <h3>{t('history.evaluationDetails')}</h3>
               <button 
                 className="close-button"
                 onClick={() => setSelectedEvaluation(null)}
               >
-                ×
+                {t('history.close')}
               </button>
             </div>
             
             <div className="modal-body">
               <div className="evaluation-details">
                 <h4>{selectedEvaluation.salesperson.displayName || `${selectedEvaluation.salesperson.firstName} ${selectedEvaluation.salesperson.lastName}`}</h4>
-                <p><strong>Date:</strong> {formatDate(selectedEvaluation.visitDate)}</p>
+                <p><strong>{t('history.date')}:</strong> {formatDate(selectedEvaluation.visitDate)}</p>
                 {selectedEvaluation.customerName && (
-                  <p><strong>Customer:</strong> {selectedEvaluation.customerName}</p>
+                  <p><strong>{t('history.customer')}:</strong> {selectedEvaluation.customerName}</p>
                 )}
                 {selectedEvaluation.location && (
-                  <p><strong>Location:</strong> {selectedEvaluation.location}</p>
+                  <p><strong>{t('history.location')}:</strong> {selectedEvaluation.location}</p>
                 )}
               </div>
 
@@ -277,7 +279,7 @@ const EvaluationHistory: React.FC = () => {
 
               {selectedEvaluation.overallComment && (
                 <div className="overall-comment-detail">
-                  <h5>Overall Comment</h5>
+                  <h5>{t('history.overallComment')}</h5>
                   <p>{selectedEvaluation.overallComment}</p>
                 </div>
               )}

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService, Team } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const MyTeam: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [team, setTeam] = useState<Team | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -14,7 +16,7 @@ const MyTeam: React.FC = () => {
         const teamData = await apiService.getMyTeam();
         setTeam(teamData);
       } catch (err) {
-        setError('Failed to load team data');
+        setError(t('team.loading'));
         console.error('Failed to load team:', err);
       } finally {
         setIsLoading(false);
@@ -25,14 +27,7 @@ const MyTeam: React.FC = () => {
   }, []);
 
   const getRoleDisplayName = (role: string) => {
-    switch (role) {
-      case 'SALES_DIRECTOR': return 'Sales Director';
-      case 'REGIONAL_SALES_MANAGER': return 'Regional Manager';
-      case 'SALES_LEAD': return 'Sales Lead';
-      case 'SALESPERSON': return 'Salesperson';
-      case 'ADMIN': return 'Administrator';
-      default: return role;
-    }
+    return t(`roles.${role}`) || role;
   };
 
   const getRoleIcon = (role: string) => {
@@ -49,7 +44,7 @@ const MyTeam: React.FC = () => {
   if (isLoading) {
     return (
       <div className="my-team">
-        <div className="loading">Loading team...</div>
+        <div className="loading">{t('team.loading')}</div>
       </div>
     );
   }
@@ -66,8 +61,8 @@ const MyTeam: React.FC = () => {
     return (
       <div className="my-team">
         <div className="no-teams">
-          <h3>No Team Found</h3>
-          <p>You are not currently assigned to any team.</p>
+          <h3>{t('team.noTeam')}</h3>
+          <p>{t('team.noTeamMessage')}</p>
         </div>
       </div>
     );
@@ -76,7 +71,7 @@ const MyTeam: React.FC = () => {
   return (
     <div className="my-team">
       <div className="team-header">
-        <h2>My Team</h2>
+        <h2>{t('team.title')}</h2>
         <div className="team-info">
           <h3>{team.name}</h3>
           {team.region && (
@@ -86,7 +81,7 @@ const MyTeam: React.FC = () => {
       </div>
 
       <div className="team-members">
-        <h4>Team Members ({team.members.length})</h4>
+        <h4>{t('team.teamMembers')} ({team.members.length})</h4>
         <div className="team-members-grid">
           {team.members.map((member) => (
             <div key={member.id} className="team-member-card">
@@ -98,7 +93,7 @@ const MyTeam: React.FC = () => {
                 <div className="member-role">{getRoleDisplayName(member.role)}</div>
                 <div className="member-email">{member.email}</div>
                 {member.id === user?.id && (
-                  <div className="member-badge">You</div>
+                  <div className="member-badge">{t('team.you')}</div>
                 )}
               </div>
             </div>
@@ -108,7 +103,7 @@ const MyTeam: React.FC = () => {
 
       {team.manager && (
         <div className="team-manager">
-          <h4>Team Manager</h4>
+          <h4>{t('team.manager')}</h4>
           <div className="manager-card">
             <div className="member-avatar">
               {getRoleIcon(team.manager.role)}
