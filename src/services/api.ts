@@ -446,6 +446,13 @@ class ApiService {
       score: number;
       comment?: string;
     }>;
+    evaluationType?: string;
+    clusterScores?: Array<{
+      clusterId: string;
+      score: number;
+      weight: number;
+    }>;
+    overallScore?: number;
   }): Promise<Evaluation> {
     try {
       return await this.request<Evaluation>('/evaluations', {

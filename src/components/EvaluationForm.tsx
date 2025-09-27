@@ -46,24 +46,244 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   }, [t]);
 
   const getEvaluationTitle = () => {
+    // Check if user is Regional Manager evaluating Sales Lead - show coaching title
+    if (user?.role === 'REGIONAL_SALES_MANAGER' && selectedUser) {
+      const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+      if (selectedUserData?.role === 'SALES_LEAD') {
+        return t('coaching.title');
+      }
+    }
     return t('evaluation.title');
   };
 
   const getEvaluationDescription = () => {
+    // Check if user is Regional Manager evaluating Sales Lead - show coaching description
+    if (user?.role === 'REGIONAL_SALES_MANAGER' && selectedUser) {
+      const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+      if (selectedUserData?.role === 'SALES_LEAD') {
+        return t('coaching.description');
+      }
+    }
     return t('evaluation.description');
   };
 
+  const getCoachingCategories = () => {
+    return [
+      {
+        id: 'cluster1',
+        name: t('coaching.cluster1'),
+        color: '#3B82F6',
+        weight: 0.35, // 35% weight
+        items: [
+          { 
+            id: 'let-salesperson-lead', 
+            name: t('coaching.letSalespersonLead'),
+            descriptions: [
+              t('coaching.score1'),
+              t('coaching.score2'),
+              t('coaching.score3'),
+              t('coaching.score4')
+            ]
+          },
+          { 
+            id: 'provided-support', 
+            name: t('coaching.providedSupport'),
+            descriptions: [
+              t('coaching.support1'),
+              t('coaching.support2'),
+              t('coaching.support3'),
+              t('coaching.support4')
+            ]
+          },
+          { 
+            id: 'stepped-in-value', 
+            name: t('coaching.steppedInValue'),
+            descriptions: [
+              t('coaching.value1'),
+              t('coaching.value2'),
+              t('coaching.value3'),
+              t('coaching.value4')
+            ]
+          },
+          { 
+            id: 'actively-listened', 
+            name: t('coaching.activelyListened'),
+            descriptions: [
+              t('coaching.listen1'),
+              t('coaching.listen2'),
+              t('coaching.listen3'),
+              t('coaching.listen4')
+            ]
+          }
+        ]
+      },
+      {
+        id: 'cluster2',
+        name: t('coaching.cluster2'),
+        color: '#10B981',
+        weight: 0.2167, // 65% / 3 = 21.67% each
+        items: [
+          { 
+            id: 'calm-atmosphere', 
+            name: t('coaching.calmAtmosphere'),
+            descriptions: [
+              t('coaching.atmosphere1'),
+              t('coaching.atmosphere2'),
+              t('coaching.atmosphere3'),
+              t('coaching.atmosphere4')
+            ]
+          },
+          { 
+            id: 'asked-self-assessment', 
+            name: t('coaching.askedSelfAssessment'),
+            descriptions: [
+              t('coaching.assessment1'),
+              t('coaching.assessment2'),
+              t('coaching.assessment3'),
+              t('coaching.assessment4')
+            ]
+          },
+          { 
+            id: 'listened-attentively', 
+            name: t('coaching.listenedAttentively'),
+            descriptions: [
+              t('coaching.attentive1'),
+              t('coaching.attentive2'),
+              t('coaching.attentive3'),
+              t('coaching.attentive4')
+            ]
+          }
+        ]
+      },
+      {
+        id: 'cluster3',
+        name: t('coaching.cluster3'),
+        color: '#F59E0B',
+        weight: 0.2167,
+        items: [
+          { 
+            id: 'started-positive', 
+            name: t('coaching.startedPositive'),
+            descriptions: [
+              t('coaching.positive1'),
+              t('coaching.positive2'),
+              t('coaching.positive3'),
+              t('coaching.positive4')
+            ]
+          },
+          { 
+            id: 'concrete-examples', 
+            name: t('coaching.concreteExamples'),
+            descriptions: [
+              t('coaching.examples1'),
+              t('coaching.examples2'),
+              t('coaching.examples3'),
+              t('coaching.examples4')
+            ]
+          },
+          { 
+            id: 'identified-improvement', 
+            name: t('coaching.identifiedImprovement'),
+            descriptions: [
+              t('coaching.improvement1'),
+              t('coaching.improvement2'),
+              t('coaching.improvement3'),
+              t('coaching.improvement4')
+            ]
+          }
+        ]
+      },
+      {
+        id: 'cluster4',
+        name: t('coaching.cluster4'),
+        color: '#8B5CF6',
+        weight: 0.2167,
+        items: [
+          { 
+            id: 'set-clear-tasks', 
+            name: t('coaching.setClearTasks'),
+            descriptions: [
+              t('coaching.tasks1'),
+              t('coaching.tasks2'),
+              t('coaching.tasks3'),
+              t('coaching.tasks4')
+            ]
+          },
+          { 
+            id: 'reached-agreement', 
+            name: t('coaching.reachedAgreement'),
+            descriptions: [
+              t('coaching.agreement1'),
+              t('coaching.agreement2'),
+              t('coaching.agreement3'),
+              t('coaching.agreement4')
+            ]
+          },
+          { 
+            id: 'encouraged-goal', 
+            name: t('coaching.encouragedGoal'),
+            descriptions: [
+              t('coaching.goal1'),
+              t('coaching.goal2'),
+              t('coaching.goal3'),
+              t('coaching.goal4')
+            ]
+          }
+        ]
+      }
+    ];
+  };
+
   const getEvaluationCategories = () => {
-    // All roles use the same evaluation structure as iOS app
+    // Check if user is Regional Manager evaluating Sales Lead - show coaching form
+    if (user?.role === 'REGIONAL_SALES_MANAGER' && selectedUser) {
+      const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+      if (selectedUserData?.role === 'SALES_LEAD') {
+        // Return coaching categories for Regional Manager evaluating Sales Lead
+        return getCoachingCategories();
+      }
+    }
+    
+    // All other roles use the new evaluation structure with detailed descriptions
     return [
       {
         id: 'discovery',
         name: t('evaluation.discovery'),
         color: '#3B82F6',
         items: [
-          { id: 'discovery-open-questions', name: t('evaluation.openQuestions') },
-          { id: 'discovery-pain-points', name: t('evaluation.painPoints') },
-          { id: 'discovery-decision-makers', name: t('evaluation.decisionMakers') }
+          { 
+            id: 'discovery-open-questions', 
+            name: t('evaluation.openQuestions'),
+            descriptions: [
+              t('evaluation.openQuestions1'),
+              t('evaluation.openQuestions2'),
+              t('evaluation.openQuestions3'),
+              t('evaluation.openQuestions4'),
+              t('evaluation.openQuestions5')
+            ]
+          },
+          { 
+            id: 'discovery-pain-points', 
+            name: t('evaluation.painPoints'),
+            descriptions: [
+              t('evaluation.painPoints1'),
+              t('evaluation.painPoints2'),
+              t('evaluation.painPoints3'),
+              t('evaluation.painPoints4'),
+              t('evaluation.painPoints5')
+            ]
+          },
+          { 
+            id: 'discovery-decision-makers', 
+            name: t('evaluation.decisionMakers'),
+            descriptions: [
+              t('evaluation.decisionMakers1'),
+              t('evaluation.decisionMakers2'),
+              t('evaluation.decisionMakers3'),
+              t('evaluation.decisionMakers4'),
+              t('evaluation.decisionMakers5')
+            ]
+          }
         ]
       },
       {
@@ -71,9 +291,39 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         name: t('evaluation.solution'),
         color: '#10B981',
         items: [
-          { id: 'solution-tailors', name: t('evaluation.tailors') },
-          { id: 'solution-value-prop', name: t('evaluation.valueProp') },
-          { id: 'solution-product-knowledge', name: t('evaluation.productKnowledge') }
+          { 
+            id: 'solution-tailors', 
+            name: t('evaluation.tailors'),
+            descriptions: [
+              t('evaluation.tailors1'),
+              t('evaluation.tailors2'),
+              t('evaluation.tailors3'),
+              t('evaluation.tailors4'),
+              t('evaluation.tailors5')
+            ]
+          },
+          { 
+            id: 'solution-value-prop', 
+            name: t('evaluation.valueProp'),
+            descriptions: [
+              t('evaluation.valueProp1'),
+              t('evaluation.valueProp2'),
+              t('evaluation.valueProp3'),
+              t('evaluation.valueProp4'),
+              t('evaluation.valueProp5')
+            ]
+          },
+          { 
+            id: 'solution-product-knowledge', 
+            name: t('evaluation.productKnowledge'),
+            descriptions: [
+              t('evaluation.productKnowledge1'),
+              t('evaluation.productKnowledge2'),
+              t('evaluation.productKnowledge3'),
+              t('evaluation.productKnowledge4'),
+              t('evaluation.productKnowledge5')
+            ]
+          }
         ]
       },
       {
@@ -81,9 +331,39 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         name: t('evaluation.closing'),
         color: '#F59E0B',
         items: [
-          { id: 'closing-clear-asks', name: t('evaluation.clearAsks') },
-          { id: 'closing-next-steps', name: t('evaluation.nextSteps') },
-          { id: 'closing-commitments', name: t('evaluation.commitments') }
+          { 
+            id: 'closing-clear-asks', 
+            name: t('evaluation.clearAsks'),
+            descriptions: [
+              t('evaluation.clearAsks1'),
+              t('evaluation.clearAsks2'),
+              t('evaluation.clearAsks3'),
+              t('evaluation.clearAsks4'),
+              t('evaluation.clearAsks5')
+            ]
+          },
+          { 
+            id: 'closing-next-steps', 
+            name: t('evaluation.nextSteps'),
+            descriptions: [
+              t('evaluation.nextSteps1'),
+              t('evaluation.nextSteps2'),
+              t('evaluation.nextSteps3'),
+              t('evaluation.nextSteps4'),
+              t('evaluation.nextSteps5')
+            ]
+          },
+          { 
+            id: 'closing-commitments', 
+            name: t('evaluation.commitments'),
+            descriptions: [
+              t('evaluation.commitments1'),
+              t('evaluation.commitments2'),
+              t('evaluation.commitments3'),
+              t('evaluation.commitments4'),
+              t('evaluation.commitments5')
+            ]
+          }
         ]
       },
       {
@@ -91,9 +371,39 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         name: t('evaluation.professionalism'),
         color: '#8B5CF6',
         items: [
-          { id: 'professionalism-prepared', name: t('evaluation.prepared') },
-          { id: 'professionalism-time', name: t('evaluation.timeManagement') },
-          { id: 'professionalism-demeanor', name: t('evaluation.demeanor') }
+          { 
+            id: 'professionalism-prepared', 
+            name: t('evaluation.prepared'),
+            descriptions: [
+              t('evaluation.prepared1'),
+              t('evaluation.prepared2'),
+              t('evaluation.prepared3'),
+              t('evaluation.prepared4'),
+              t('evaluation.prepared5')
+            ]
+          },
+          { 
+            id: 'professionalism-time', 
+            name: t('evaluation.timeManagement'),
+            descriptions: [
+              t('evaluation.timeManagement1'),
+              t('evaluation.timeManagement2'),
+              t('evaluation.timeManagement3'),
+              t('evaluation.timeManagement4'),
+              t('evaluation.timeManagement5')
+            ]
+          },
+          { 
+            id: 'professionalism-demeanor', 
+            name: t('evaluation.demeanor'),
+            descriptions: [
+              t('evaluation.demeanor1'),
+              t('evaluation.demeanor2'),
+              t('evaluation.demeanor3'),
+              t('evaluation.demeanor4'),
+              t('evaluation.demeanor5')
+            ]
+          }
         ]
       }
     ];
@@ -105,6 +415,28 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
 
   const handleCommentChange = (criteriaId: string, comment: string) => {
     setComments(prev => ({ ...prev, [criteriaId]: comment }));
+  };
+
+  const calculateClusterScore = (clusterId: string) => {
+    const categories = getEvaluationCategories();
+    const cluster = categories.find(c => c.id === clusterId);
+    if (!cluster) return 0;
+
+    const clusterScores = cluster.items.map(item => scores[item.id] || 0);
+    const totalScore = clusterScores.reduce((sum, score) => sum + score, 0);
+    return clusterScores.length > 0 ? (totalScore / clusterScores.length) * 25 : 0; // Convert to percentage
+  };
+
+  const calculateOverallScore = () => {
+    const categories = getEvaluationCategories();
+    let weightedSum = 0;
+    
+    categories.forEach(category => {
+      const clusterScore = calculateClusterScore(category.id);
+      weightedSum += clusterScore * ((category as any).weight || 0.25); // Default weight if not specified
+    });
+    
+    return weightedSum;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -128,7 +460,11 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         }))
       );
 
-      await apiService.createEvaluation({
+      // Check if this is a coaching evaluation
+      const isCoachingEvaluation = user?.role === 'REGIONAL_SALES_MANAGER' && 
+        evaluatableUsers.find(u => u.id === selectedUser)?.role === 'SALES_LEAD';
+
+      const evaluationData: any = {
         salespersonId: selectedUser,
         visitDate,
         customerName: customerName || undefined,
@@ -136,7 +472,23 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         location: location || undefined,
         overallComment: overallComment || undefined,
         items: evaluationItems
-      });
+      };
+
+      // Add coaching-specific data if this is a coaching evaluation
+      if (isCoachingEvaluation) {
+        evaluationData.evaluationType = 'coaching';
+        // Calculate cluster scores and overall score for coaching evaluation
+        const categories = getEvaluationCategories();
+        const clusterScores = categories.map(category => ({
+          clusterId: category.id,
+          score: calculateClusterScore(category.id),
+          weight: (category as any).weight || 0.25
+        }));
+        evaluationData.clusterScores = clusterScores;
+        evaluationData.overallScore = calculateOverallScore();
+      }
+
+      await apiService.createEvaluation(evaluationData);
 
       // Show success message
       setSuccessMessage(`✅ ${t('evaluation.success')}`);
@@ -259,12 +611,21 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
 
         <div className="form-section">
           <h3>{t('evaluation.form')}</h3>
-          <p>{t('evaluation.rating')}</p>
+          <p>
+            {user?.role === 'REGIONAL_SALES_MANAGER' && selectedUser && 
+             evaluatableUsers.find(u => u.id === selectedUser)?.role === 'SALES_LEAD'
+              ? "Rate each criterion on a scale of 1-4 (1 = Poor, 4 = Excellent)"
+              : t('evaluation.rating')
+            }
+          </p>
 
           {getEvaluationCategories().map(category => (
             <div key={category.id} className="evaluation-category" style={{ backgroundColor: `${category.color}10` }}>
               <h4 className="category-title" style={{ color: category.color }}>
                 {category.name}
+                {(category as any).weight && (
+                  <span className="category-weight"> (Weight: {((category as any).weight * 100).toFixed(1)}%)</span>
+                )}
               </h4>
               
               {category.items.map(item => (
@@ -272,8 +633,11 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                   <div className="item-header">
                     <label className="item-label">{item.name}</label>
                     <div className="score-input">
-                      {[1, 2, 3, 4, 5].map(score => (
-                        <label key={score} className="score-option">
+                      {((item as any).descriptions ? [1, 2, 3, 4] : [1, 2, 3, 4, 5]).map(score => (
+                        <label 
+                          key={score} 
+                          className={`score-option ${scores[item.id] === score ? 'checked' : ''}`}
+                        >
                           <input
                             type="radio"
                             name={`score-${item.id}`}
@@ -282,17 +646,22 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                             onChange={() => handleScoreChange(item.id, score)}
                           />
                           <span className="score-number">{score}</span>
+                          {(item as any).descriptions && (
+                            <span className="score-description">{(item as any).descriptions[score - 1]}</span>
+                          )}
                         </label>
                       ))}
                     </div>
                   </div>
-                  <textarea
-                    placeholder={t('evaluation.explainRating')}
-                    value={comments[item.id] || ''}
-                    onChange={(e) => handleCommentChange(item.id, e.target.value)}
-                    rows={2}
-                    className="item-comment"
-                  />
+                  {!(item as any).descriptions && (
+                    <textarea
+                      placeholder={t('evaluation.explainRating')}
+                      value={comments[item.id] || ''}
+                      onChange={(e) => handleCommentChange(item.id, e.target.value)}
+                      rows={2}
+                      className="item-comment"
+                    />
+                  )}
                 </div>
               ))}
             </div>

@@ -1278,24 +1278,26 @@ body {
 
 .behavior-item {
   background: white;
-  padding: var(--space-5);
+  padding: var(--space-6);
   border-radius: var(--radius-lg);
   margin-bottom: var(--space-4);
   border: 1px solid var(--gray-200);
   transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .behavior-item:hover {
   border-color: var(--primary-200);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
 }
 
 .item-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: var(--space-4);
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .item-header label {
@@ -1310,33 +1312,107 @@ body {
   display: flex;
   gap: var(--space-2);
   flex-shrink: 0;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+  width: 100%;
 }
 
 .score-option {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   cursor: pointer;
   transition: all 0.3s ease;
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--gray-200);
+  background: var(--gray-50);
+  min-width: 60px;
+  max-width: 80px;
+  text-align: center;
+  flex: 1;
+}
+
+.score-option:hover {
+  border-color: var(--primary-300);
+  background: var(--primary-50);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.15);
 }
 
 .score-option input[type="radio"] {
-  margin: 0 0 var(--space-1) 0;
-  width: auto;
-  transform: scale(1.2);
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.score-option span {
-  font-size: var(--font-size-xs);
-  color: var(--gray-600);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.score-option input[type="radio"]:checked + span {
-  color: var(--primary-600);
+.score-option .score-number {
+  font-size: var(--font-size-base);
+  color: var(--gray-700);
   font-weight: 700;
+  margin-bottom: var(--space-1);
+  display: block;
+}
+
+.score-option .score-description {
+  font-size: 10px;
+  color: var(--gray-600);
+  font-weight: 500;
+  line-height: 1.2;
+  display: block;
+  max-height: 0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  opacity: 0;
+  text-align: center;
+  word-wrap: break-word;
+}
+
+.score-option:hover .score-description {
+  max-height: 80px;
+  opacity: 1;
+  margin-top: var(--space-1);
+}
+
+.score-option input[type="radio"]:checked {
+  display: none;
+}
+
+.score-option input[type="radio"]:checked ~ .score-number,
+.score-option input[type="radio"]:checked ~ .score-description {
+  color: var(--primary-600);
+}
+
+.score-option input[type="radio"]:checked ~ .score-description {
+  max-height: 80px;
+  opacity: 1;
+  margin-top: var(--space-1);
+}
+
+.score-option:has(input[type="radio"]:checked) {
+  border-color: var(--primary-500);
+  background: var(--primary-100);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
+}
+
+/* Fallback for browsers that don't support :has() */
+.score-option.checked {
+  border-color: var(--primary-500);
+  background: var(--primary-100);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
+}
+
+.score-option.checked .score-number,
+.score-option.checked .score-description {
+  color: var(--primary-600);
+}
+
+.score-option.checked .score-description {
+  max-height: 80px;
+  opacity: 1;
+  margin-top: var(--space-1);
 }
 
 .form-actions {
