@@ -177,7 +177,10 @@ class ApiService {
 
   async getTeams(): Promise<Team[]> {
     try {
-      const teams = await this.request<any[]>('/public-admin/teams');
+      console.log('🔍 [DEBUG] Calling /organizations/teams endpoint...');
+      // Use the RBAC endpoint instead of the admin endpoint
+      const teams = await this.request<any[]>(`/organizations/teams?t=${Date.now()}`);
+      console.log('✅ [DEBUG] Successfully got teams from /organizations/teams:', teams.length, 'teams');
       // Transform the API response to match our Team interface
       return teams.map(team => ({
         id: team.id,
@@ -190,9 +193,25 @@ class ApiService {
         manager: team.manager
       }));
     } catch (error) {
-      console.error('Failed to load teams:', error);
-      // Return empty array if API fails
-      return [];
+      console.error('❌ [DEBUG] Failed to load teams from /organizations/teams:', error);
+      console.log('🔄 [DEBUG] Falling back to /public-admin/teams...');
+      try {
+        const fallbackTeams = await this.request<any[]>('/public-admin/teams');
+        console.log('✅ [DEBUG] Successfully got teams from fallback:', fallbackTeams.length, 'teams');
+        return fallbackTeams.map(team => ({
+          id: team.id,
+          name: team.name,
+          region: team.region ? {
+            id: team.region.id,
+            name: team.region.name
+          } : undefined,
+          members: team.userTeams ? team.userTeams.map((ut: any) => ut.user) : (team.salespeople || []),
+          manager: team.manager
+        }));
+      } catch (fallbackError) {
+        console.error('❌ [DEBUG] Fallback also failed:', fallbackError);
+        return [];
+      }
     }
   }
 
@@ -212,15 +231,26 @@ class ApiService {
           const managedTeam = profile.managedTeams[0];
           console.log('🔍 Managed team structure:', JSON.stringify(managedTeam, null, 2));
           
-          // Try to get team members from the organizations endpoint first
+          // Try to get team data from the RBAC-enabled organizations endpoint first
           let members = [];
           try {
-            console.log('📡 Calling /organizations/team-members to get team members...');
-            const teamMembers = await this.request<any[]>('/organizations/team-members');
-            console.log('📋 Team members from organizations endpoint:', teamMembers);
-            members = teamMembers;
+            console.log('📡 Calling /organizations/teams to get RBAC-filtered team data...');
+            const teams = await this.request<any[]>(`/organizations/teams?t=${Date.now()}`);
+            console.log('📋 Teams from organizations endpoint:', teams);
+            
+            // Find the team that matches the managed team
+            const teamWithMembers = teams.find(team => team.id === managedTeam.id);
+            if (teamWithMembers && teamWithMembers.userTeams) {
+              members = teamWithMembers.userTeams.map((ut: any) => ut.user);
+              console.log('✅ Found RBAC-filtered team members:', members.length);
+            } else {
+              console.log('⚠️ No matching team found in RBAC endpoint, using managed team data');
+              if (managedTeam.userTeams) {
+                members = managedTeam.userTeams.map((ut: any) => ut.user);
+              }
+            }
           } catch (orgError) {
-            console.log('⚠️ Failed to get team members from organizations endpoint:', orgError);
+            console.log('⚠️ Failed to get teams from organizations endpoint:', orgError);
             
             // Fallback: try to get team members from the admin teams endpoint
             try {
@@ -285,50 +315,15 @@ class ApiService {
         }
       }
       
-      console.log('⚠️ No team data found in profile, using fallback');
-      // Fall back to mock data if no real team found
-      throw new Error('No real team data available');
+      console.log('⚠️ No team data found in profile');
+      // If user has no managed teams and no user teams, return null
+      return null;
     } catch (error) {
       console.error('❌ Failed to load team data:', error);
-      console.log('🔄 Using mock team data...');
+      console.log('🔄 Returning null - user has no team data');
       
-      // Return mock team data for now
-      const mockTeam: Team = {
-        id: '1',
-        name: 'Sales Team Alpha',
-        region: {
-          id: '1',
-          name: 'North Region'
-        },
-        members: [
-          {
-            id: '1',
-            email: 'john.smith@company.com',
-            displayName: 'John Smith',
-            role: 'SALESPERSON' as const,
-            isActive: true,
-            teamId: '1'
-          },
-          {
-            id: '2',
-            email: 'sarah.johnson@company.com',
-            displayName: 'Sarah Johnson',
-            role: 'SALES_LEAD' as const,
-            isActive: true,
-            teamId: '1'
-          },
-          {
-            id: '3',
-            email: 'mike.davis@company.com',
-            displayName: 'Mike Davis',
-            role: 'SALESPERSON' as const,
-            isActive: true,
-            teamId: '1'
-          }
-        ]
-      };
-      console.log('✅ Returning mock team:', mockTeam);
-      return mockTeam;
+      // Return null instead of mock data when user has no teams
+      return null;
     }
   }
 
@@ -538,7 +533,8 @@ class ApiService {
               return salespeople;
             }
           }
-          console.log('⚠️ No team members found, using fallback');
+          console.log('⚠️ No team members found - Sales Lead has no managed teams');
+          return [];
         } else if (currentUser.role === 'REGIONAL_MANAGER' || currentUser.role === 'REGIONAL_SALES_MANAGER') {
           console.log('🔍 Regional Manager: Getting team members...');
           const team = await this.getMyTeam();
@@ -550,7 +546,8 @@ class ApiService {
               return salesLeads;
             }
           }
-          console.log('⚠️ No team members found, using fallback');
+          console.log('⚠️ No team members found - Regional Manager has no managed teams');
+          return [];
         } else if (currentUser.role === 'SALES_DIRECTOR') {
           console.log('🔍 Sales Director: Getting regional managers...');
           const users = await this.getUsers();
@@ -565,94 +562,17 @@ class ApiService {
           return nonAdmins;
         }
         
-        console.log('⚠️ No matching role, using fallback');
-        
-        // Fallback: return all users (for admin or if no specific logic)
-        console.log('⚠️ Using fallback: returning all users');
-        const users = await this.getUsers();
-        return users.filter(user => user.role === 'SALESPERSON');
+        console.log('⚠️ No matching role, returning empty array');
+        return [];
       } catch (fallbackError) {
         console.error('❌ Failed to load evaluatable users:', fallbackError);
         console.log('🔄 Using fallback mock data...');
       }
     }
     
-    // Always fall back to mock data if we reach here
-    console.log('🔄 Using fallback mock data...');
-    
-    // Return mock data based on role
-    const currentUserStr = localStorage.getItem('user');
-    if (currentUserStr) {
-      const currentUser = JSON.parse(currentUserStr);
-      console.log('👤 Fallback for role:', currentUser.role);
-      
-      if (currentUser.role === 'SALES_LEAD') {
-        const mockData: User[] = [
-          {
-            id: '1',
-            email: 'john.smith@company.com',
-            displayName: 'John Smith',
-            role: 'SALESPERSON' as const,
-            isActive: true,
-            teamId: '1'
-          },
-          {
-            id: '3',
-            email: 'mike.davis@company.com',
-            displayName: 'Mike Davis',
-            role: 'SALESPERSON' as const,
-            isActive: true,
-            teamId: '1'
-          }
-        ];
-        console.log('✅ Returning mock salespeople:', mockData);
-        return mockData;
-      } else if (currentUser.role === 'REGIONAL_MANAGER' || currentUser.role === 'REGIONAL_SALES_MANAGER') {
-        const mockData: User[] = [
-          {
-            id: '2',
-            email: 'sarah.johnson@company.com',
-            displayName: 'Sarah Johnson',
-            role: 'SALES_LEAD' as const,
-            isActive: true,
-            teamId: '1'
-          }
-        ];
-        console.log('✅ Returning mock sales leads:', mockData);
-        return mockData;
-      } else if (currentUser.role === 'ADMIN') {
-        const mockData: User[] = [
-          {
-            id: '1',
-            email: 'john.smith@company.com',
-            displayName: 'John Smith',
-            role: 'SALESPERSON' as const,
-            isActive: true,
-            teamId: '1'
-          },
-          {
-            id: '2',
-            email: 'sarah.johnson@company.com',
-            displayName: 'Sarah Johnson',
-            role: 'SALES_LEAD' as const,
-            isActive: true,
-            teamId: '1'
-          },
-          {
-            id: '3',
-            email: 'mike.davis@company.com',
-            displayName: 'Mike Davis',
-            role: 'SALESPERSON' as const,
-            isActive: true,
-            teamId: '1'
-          }
-        ];
-        console.log('✅ Returning mock users for admin:', mockData);
-        return mockData;
-      }
-    }
-    
-    console.log('❌ No fallback data available');
+    // If we reach here, the backend correctly returned an empty array
+    // This means the user has no teams they manage, so return empty array
+    console.log('✅ Backend correctly returned empty array - user has no managed teams');
     return [];
   }
 

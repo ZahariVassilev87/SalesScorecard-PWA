@@ -12,13 +12,53 @@ const TeamManagementView: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
+      console.log('🔍 [DEBUG] TeamManagementView: loadData called for user:', user?.email, 'role:', user?.role);
       try {
-        const [teamsData, usersData] = await Promise.all([
-          apiService.getTeams(),
-          apiService.getUsers()
-        ]);
-        setTeams(teamsData);
-        setAllUsers(usersData);
+        // For admins and sales directors, get all data
+        if (user?.role === 'ADMIN' || user?.role === 'SALES_DIRECTOR') {
+          console.log('🔍 [DEBUG] TeamManagementView: Loading all data for admin/sales director');
+          const [teamsData, usersData] = await Promise.all([
+            apiService.getTeams(),
+            apiService.getUsers()
+          ]);
+          setTeams(teamsData);
+          setAllUsers(usersData);
+        } else {
+          // For other roles, only get teams data and extract users from there
+          console.log('🔍 [DEBUG] TeamManagementView: Loading teams data for role:', user?.role);
+          console.log('🔍 [DEBUG] TeamManagementView: About to call apiService.getTeams()...');
+          let teamsData;
+          try {
+            teamsData = await apiService.getTeams();
+            console.log('🔍 [DEBUG] TeamManagementView: Got teams data:', teamsData.length, 'teams');
+          } catch (teamsError) {
+            console.error('❌ [DEBUG] TeamManagementView: Error calling getTeams():', teamsError);
+            throw teamsError;
+          }
+          setTeams(teamsData);
+          
+          // Extract all users from teams data
+          const usersFromTeams: User[] = [];
+          teamsData.forEach(team => {
+            if (team.members) {
+              team.members.forEach(member => {
+                if (!usersFromTeams.find(u => u.id === member.id)) {
+                  usersFromTeams.push(member);
+                }
+              });
+            }
+            if (team.manager && !usersFromTeams.find(u => u.id === team.manager!.id)) {
+              usersFromTeams.push(team.manager);
+            }
+          });
+          
+          // Add current user if not already included
+          if (user && !usersFromTeams.find(u => u.id === user.id)) {
+            usersFromTeams.push(user);
+          }
+          
+          setAllUsers(usersFromTeams);
+        }
       } catch (err) {
         setError('Failed to load team data');
         console.error('Failed to load team data:', err);
@@ -28,19 +68,81 @@ const TeamManagementView: React.FC = () => {
     };
 
     loadData();
-  }, []);
+  }, [user]);
 
   const getUsersByRole = (role: string) => {
     return allUsers.filter(user => user.role === role);
   };
 
   const getTeamHierarchy = () => {
-    const hierarchy = {
-      salesDirectors: getUsersByRole('SALES_DIRECTOR'),
-      regionalManagers: getUsersByRole('REGIONAL_SALES_MANAGER'),
-      salesLeads: getUsersByRole('SALES_LEAD'),
-      salespeople: getUsersByRole('SALESPERSON')
+    // Get role-based data based on current user's role
+    const currentUserRole = user?.role;
+    
+    let hierarchy = {
+      salesDirectors: [] as User[],
+      regionalManagers: [] as User[],
+      salesLeads: [] as User[],
+      salespeople: [] as User[]
     };
+
+    if (currentUserRole === 'ADMIN' || currentUserRole === 'SALES_DIRECTOR') {
+      // Admins and Sales Directors see the full hierarchy
+      hierarchy = {
+        salesDirectors: getUsersByRole('SALES_DIRECTOR'),
+        regionalManagers: getUsersByRole('REGIONAL_SALES_MANAGER'),
+        salesLeads: getUsersByRole('SALES_LEAD'),
+        salespeople: getUsersByRole('SALESPERSON')
+      };
+    } else if (currentUserRole === 'REGIONAL_SALES_MANAGER') {
+      // Regional Managers see their peers and their subordinates
+      hierarchy = {
+        salesDirectors: getUsersByRole('SALES_DIRECTOR'),
+        regionalManagers: getUsersByRole('REGIONAL_SALES_MANAGER'),
+        salesLeads: [], // Will be populated from team data
+        salespeople: [] // Will be populated from team data
+      };
+      
+      // Get sales leads and salespeople from their teams
+      teams.forEach(team => {
+        if (team.members) {
+          team.members.forEach(member => {
+            if (member.role === 'SALES_LEAD' && !hierarchy.salesLeads.find(sl => sl.id === member.id)) {
+              hierarchy.salesLeads.push(member);
+            } else if (member.role === 'SALESPERSON' && !hierarchy.salespeople.find(sp => sp.id === member.id)) {
+              hierarchy.salespeople.push(member);
+            }
+          });
+        }
+      });
+    } else if (currentUserRole === 'SALES_LEAD') {
+      // Sales Leads see their manager and their salespeople
+      hierarchy = {
+        salesDirectors: getUsersByRole('SALES_DIRECTOR'),
+        regionalManagers: getUsersByRole('REGIONAL_SALES_MANAGER'),
+        salesLeads: user ? [user] : [], // Just themselves
+        salespeople: [] // Will be populated from team data
+      };
+      
+      // Get salespeople from their team
+      teams.forEach(team => {
+        if (team.members) {
+          team.members.forEach(member => {
+            if (member.role === 'SALESPERSON' && !hierarchy.salespeople.find(sp => sp.id === member.id)) {
+              hierarchy.salespeople.push(member);
+            }
+          });
+        }
+      });
+    } else {
+      // Salespeople see minimal hierarchy
+      hierarchy = {
+        salesDirectors: getUsersByRole('SALES_DIRECTOR'),
+        regionalManagers: getUsersByRole('REGIONAL_SALES_MANAGER'),
+        salesLeads: getUsersByRole('SALES_LEAD'),
+        salespeople: user ? [user] : [] // Just themselves
+      };
+    }
+
     return hierarchy;
   };
 
