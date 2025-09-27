@@ -695,13 +695,17 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                             onChange={() => handleScoreChange(item.id, score)}
                           />
                           <span className="score-number">{score}</span>
-                          {(item as any).descriptions && (
-                            <span className="score-description">{(item as any).descriptions[score - 1]}</span>
-                          )}
                         </label>
                       ))}
                     </div>
                   </div>
+                  {(item as any).descriptions && scores[item.id] && (
+                    <div className="score-description-container">
+                      <p className="score-description-text">
+                        {(item as any).descriptions[scores[item.id] - 1]}
+                      </p>
+                    </div>
+                  )}
                   {!(item as any).descriptions && (
                     <textarea
                       placeholder={t('evaluation.explainRating')}

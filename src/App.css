@@ -1356,39 +1356,26 @@ body {
   display: block;
 }
 
-.score-option .score-description {
-  font-size: 10px;
-  color: var(--gray-600);
-  font-weight: 500;
-  line-height: 1.2;
-  display: block;
-  max-height: 0;
-  overflow: hidden;
-  transition: all 0.3s ease;
-  opacity: 0;
-  text-align: center;
-  word-wrap: break-word;
+.score-description-container {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: var(--primary-50);
+  border: 1px solid var(--primary-200);
+  border-radius: var(--radius-lg);
+  animation: fadeInUp 0.3s ease-out;
 }
 
-.score-option:hover .score-description {
-  max-height: 80px;
-  opacity: 1;
-  margin-top: var(--space-1);
+.score-description-text {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--gray-700);
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: left;
 }
 
 .score-option input[type="radio"]:checked {
   display: none;
-}
-
-.score-option input[type="radio"]:checked ~ .score-number,
-.score-option input[type="radio"]:checked ~ .score-description {
-  color: var(--primary-600);
-}
-
-.score-option input[type="radio"]:checked ~ .score-description {
-  max-height: 80px;
-  opacity: 1;
-  margin-top: var(--space-1);
 }
 
 .score-option:has(input[type="radio"]:checked) {
@@ -1404,15 +1391,8 @@ body {
   box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
 }
 
-.score-option.checked .score-number,
-.score-option.checked .score-description {
+.score-option.checked .score-number {
   color: var(--primary-600);
-}
-
-.score-option.checked .score-description {
-  max-height: 80px;
-  opacity: 1;
-  margin-top: var(--space-1);
 }
 
 .form-actions {
@@ -1988,17 +1968,14 @@ body {
     padding: var(--space-1) var(--space-1);
   }
 
-  .score-option .score-description {
-    font-size: 9px;
-    line-height: 1.1;
-    word-break: break-word;
-    hyphens: auto;
+  .score-description-container {
+    margin-top: var(--space-2);
+    padding: var(--space-2);
   }
 
-  .score-option:hover .score-description,
-  .score-option input[type="radio"]:checked ~ .score-description,
-  .score-option.checked .score-description {
-    max-height: 60px;
+  .score-description-text {
+    font-size: var(--font-size-xs);
+    line-height: 1.4;
   }
   
   .login-form {
