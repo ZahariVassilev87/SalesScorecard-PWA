@@ -21,6 +21,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const [selectedUser, setSelectedUser] = useState('');
   const [visitDate, setVisitDate] = useState(new Date().toISOString().split('T')[0]);
   const [customerName, setCustomerName] = useState('');
+  const [customerType, setCustomerType] = useState('');
   const [location, setLocation] = useState('');
   const [overallComment, setOverallComment] = useState('');
 
@@ -131,6 +132,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         salespersonId: selectedUser,
         visitDate,
         customerName: customerName || undefined,
+        customerType: customerType || undefined,
         location: location || undefined,
         overallComment: overallComment || undefined,
         items: evaluationItems
@@ -143,6 +145,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       // Clear form
       setSelectedUser('');
       setCustomerName('');
+      setCustomerType('');
       setLocation('');
       setOverallComment('');
       setScores({});
@@ -224,6 +227,21 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder={t('evaluation.customerName')}
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="customerType">{t('evaluation.customerType')} *</label>
+            <select
+              id="customerType"
+              value={customerType}
+              onChange={(e) => setCustomerType(e.target.value)}
+              required
+            >
+              <option value="">{t('common.select')} {t('evaluation.customerType')}...</option>
+              <option value="low-share">{t('customerTypes.lowShare')}</option>
+              <option value="mid-share">{t('customerTypes.midShare')}</option>
+              <option value="high-share">{t('customerTypes.highShare')}</option>
+            </select>
           </div>
 
           <div className="form-group">

@@ -37,9 +37,10 @@
     "form": "Assessment Form",
     "overallAssessment": "Overall Assessment",
     "overallComment": "Overall Comment",
-    "customerName": "Customer/Context",
-    "location": "Location",
-    "visitDate": "Assessment Date",
+        "customerName": "Customer/Context",
+        "customerType": "Customer Type",
+        "location": "Location",
+        "visitDate": "Assessment Date",
     "rating": "Rate each behavior on a scale of 1-5 (1 = Poor, 5 = Excellent)",
     "explainRating": "Explain your rating...",
     "provideFeedback": "Provide overall feedback and recommendations",
@@ -88,7 +89,7 @@
     "allTeams": "All Teams",
     "salesDirectorTeams": "Sales Director Teams",
     "regionalManagerTeams": "Regional Manager Teams",
-    "salesLeadTeams": "Sales Lead Teams",
+    "salesLeadTeams": "Sales Manager Teams",
     "noTeams": "No teams found",
     "loading": "Loading teams...",
     "createTeam": "Create Team",
@@ -104,7 +105,7 @@
     "admins": "Admins",
     "salesDirectors": "Sales Directors",
     "regionalManagers": "Regional Managers",
-    "salesLeads": "Sales Leads",
+    "salesLeads": "Sales Managers",
     "salespeople": "Salespeople",
     "noUsers": "No users found",
     "loading": "Loading users...",
@@ -120,7 +121,7 @@
     "ADMIN": "Administrator",
     "SALES_DIRECTOR": "Sales Director",
     "REGIONAL_SALES_MANAGER": "Regional Manager",
-    "SALES_LEAD": "Sales Lead",
+    "SALES_LEAD": "Sales Manager",
     "SALESPERSON": "Salesperson"
   },
   "common": {
@@ -256,9 +257,14 @@
     "totalScore": "Total Score",
     "thisMonth": "This Month"
   },
-  "language": {
-    "switch": "Switch Language",
-    "english": "English",
-    "bulgarian": "Български"
-  }
+      "language": {
+        "switch": "Switch Language",
+        "english": "English",
+        "bulgarian": "Български"
+      },
+      "customerTypes": {
+        "lowShare": "Low Share of Wallet",
+        "midShare": "Mid Share of Wallet",
+        "highShare": "High Share of Wallet"
+      }
 }

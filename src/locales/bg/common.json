@@ -37,9 +37,10 @@
     "form": "Форма за измерване",
     "overallAssessment": "Общо оценяване",
     "overallComment": "Общ коментар",
-    "customerName": "Клиент/Контекст",
-    "location": "Местоположение",
-    "visitDate": "Дата на измерването",
+        "customerName": "Клиент/Контекст",
+        "customerType": "Тип Клиент",
+        "location": "Местоположение",
+        "visitDate": "Дата на измерването",
     "rating": "Оцени всяко поведение по скала от 1-5 (1 = Слабо, 5 = Отлично)",
     "explainRating": "Обясни оценката си...",
     "provideFeedback": "Дай обща обратна връзка и препоръки",
@@ -88,7 +89,7 @@
     "allTeams": "Всички Екипи",
     "salesDirectorTeams": "Екипи на Директор по Продажби",
     "regionalManagerTeams": "Екипи на Регионален Мениджър",
-    "salesLeadTeams": "Екипи на Лидер по Продажби",
+    "salesLeadTeams": "Екипи на Търговски Мениджър",
     "noTeams": "Няма намерени екипи",
     "loading": "Зареждане на екипи...",
     "createTeam": "Създай Екип",
@@ -104,7 +105,7 @@
     "admins": "Администратори",
     "salesDirectors": "Директори по Продажби",
     "regionalManagers": "Регионални Мениджъри",
-    "salesLeads": "Лидери по Продажби",
+    "salesLeads": "Търговски Мениджъри",
     "salespeople": "Продажбени Представители",
     "noUsers": "Няма намерени потребители",
     "loading": "Зареждане на потребители...",
@@ -120,7 +121,7 @@
     "ADMIN": "Администратор",
     "SALES_DIRECTOR": "Директор по Продажби",
     "REGIONAL_SALES_MANAGER": "Регионален Мениджър",
-    "SALES_LEAD": "Лидер по Продажби",
+    "SALES_LEAD": "Търговски Мениджър",
     "SALESPERSON": "Продажбен Представител"
   },
   "common": {
@@ -256,9 +257,14 @@
     "totalScore": "Общо Точки",
     "thisMonth": "Този Месец"
   },
-  "language": {
-    "switch": "Смени Език",
-    "english": "English",
-    "bulgarian": "Български"
-  }
+      "language": {
+        "switch": "Смени Език",
+        "english": "English",
+        "bulgarian": "Български"
+      },
+      "customerTypes": {
+        "lowShare": "Нисък Дял от Портфейла",
+        "midShare": "Среден Дял от Портфейла",
+        "highShare": "Висок Дял от Портфейла"
+      }
 }

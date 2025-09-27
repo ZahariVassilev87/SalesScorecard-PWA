@@ -74,6 +74,7 @@ export interface Evaluation {
   managerId: string;
   visitDate: string;
   customerName?: string;
+  customerType?: string;
   location?: string;
   latitude?: number;
   longitude?: number;
@@ -437,6 +438,7 @@ class ApiService {
     salespersonId: string;
     visitDate: string;
     customerName?: string;
+    customerType?: string;
     location?: string;
     overallComment?: string;
     items: Array<{
