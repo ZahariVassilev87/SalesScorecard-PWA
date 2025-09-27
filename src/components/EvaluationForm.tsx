@@ -46,10 +46,22 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   }, [t]);
 
   const getEvaluationTitle = () => {
-    // Check if user is Regional Manager evaluating Sales Lead - show coaching title
-    if (user?.role === 'REGIONAL_SALES_MANAGER' && selectedUser) {
-      const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
-      if (selectedUserData?.role === 'SALES_LEAD') {
+    // Check if user is Regional Manager - show coaching title by default
+    if (user?.role === 'REGIONAL_SALES_MANAGER') {
+      // If a specific user is selected, check their role
+      if (selectedUser) {
+        const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+        // If evaluating a Sales Lead, show coaching title
+        if (selectedUserData?.role === 'SALES_LEAD') {
+          return t('coaching.title');
+        }
+        // If evaluating a Salesperson, show standard title
+        else {
+          return t('evaluation.title');
+        }
+      }
+      // If no user selected yet, show coaching title by default for Regional Managers
+      else {
         return t('coaching.title');
       }
     }
@@ -57,10 +69,22 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   };
 
   const getEvaluationDescription = () => {
-    // Check if user is Regional Manager evaluating Sales Lead - show coaching description
-    if (user?.role === 'REGIONAL_SALES_MANAGER' && selectedUser) {
-      const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
-      if (selectedUserData?.role === 'SALES_LEAD') {
+    // Check if user is Regional Manager - show coaching description by default
+    if (user?.role === 'REGIONAL_SALES_MANAGER') {
+      // If a specific user is selected, check their role
+      if (selectedUser) {
+        const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+        // If evaluating a Sales Lead, show coaching description
+        if (selectedUserData?.role === 'SALES_LEAD') {
+          return t('coaching.description');
+        }
+        // If evaluating a Salesperson, show standard description
+        else {
+          return t('evaluation.description');
+        }
+      }
+      // If no user selected yet, show coaching description by default for Regional Managers
+      else {
         return t('coaching.description');
       }
     }
@@ -235,21 +259,41 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   };
 
   const getEvaluationCategories = () => {
-    // Check if user is Regional Manager evaluating Sales Lead - show coaching form
-    if (user?.role === 'REGIONAL_SALES_MANAGER' && selectedUser) {
-      const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+    // Check if user is Regional Manager - show coaching form by default
+    if (user?.role === 'REGIONAL_SALES_MANAGER') {
       console.log('🔍 Debug - User role:', user?.role);
-      console.log('🔍 Debug - Selected user data:', selectedUserData);
-      console.log('🔍 Debug - Selected user role:', selectedUserData?.role);
-      if (selectedUserData?.role === 'SALES_LEAD') {
-        console.log('✅ Returning coaching categories');
-        // Return coaching categories for Regional Manager evaluating Sales Lead
+      console.log('🔍 Debug - Selected user:', selectedUser);
+      
+      // If a specific user is selected, check their role
+      if (selectedUser) {
+        const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+        console.log('🔍 Debug - Selected user data:', selectedUserData);
+        console.log('🔍 Debug - Selected user role:', selectedUserData?.role);
+        
+        // If evaluating a Sales Lead, show coaching form
+        if (selectedUserData?.role === 'SALES_LEAD') {
+          console.log('✅ Returning coaching categories for Sales Lead');
+          return getCoachingCategories();
+        }
+        // If evaluating a Salesperson, show standard form
+        else {
+          console.log('📋 Returning standard evaluation categories for Salesperson');
+          return getStandardCategories();
+        }
+      }
+      // If no user selected yet, show coaching form by default for Regional Managers
+      else {
+        console.log('✅ Returning coaching categories by default for Regional Manager');
         return getCoachingCategories();
       }
     }
     
-    // All other roles use the new evaluation structure with detailed descriptions
-    console.log('📋 Returning standard evaluation categories');
+    // All other roles use the standard evaluation structure
+    console.log('📋 Returning standard evaluation categories for other roles');
+    return getStandardCategories();
+  };
+
+  const getStandardCategories = () => {
     return [
       {
         id: 'discovery',
