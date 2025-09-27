@@ -91,174 +91,393 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     return t('evaluation.description');
   };
 
-  const getCoachingCategories = () => {
-    return [
-      {
-        id: 'cluster1',
-        name: t('coaching.cluster1'),
-        color: '#3B82F6',
-        weight: 0.35, // 35% weight
-        items: [
-          { 
-            id: 'let-salesperson-lead', 
-            name: t('coaching.letSalespersonLead'),
-            descriptions: [
-              t('coaching.score1'),
-              t('coaching.score2'),
-              t('coaching.score3'),
-              t('coaching.score4')
-            ]
-          },
-          { 
-            id: 'provided-support', 
-            name: t('coaching.providedSupport'),
-            descriptions: [
-              t('coaching.support1'),
-              t('coaching.support2'),
-              t('coaching.support3'),
-              t('coaching.support4')
-            ]
-          },
-          { 
-            id: 'stepped-in-value', 
-            name: t('coaching.steppedInValue'),
-            descriptions: [
-              t('coaching.value1'),
-              t('coaching.value2'),
-              t('coaching.value3'),
-              t('coaching.value4')
-            ]
-          },
-          { 
-            id: 'actively-listened', 
-            name: t('coaching.activelyListened'),
-            descriptions: [
-              t('coaching.listen1'),
-              t('coaching.listen2'),
-              t('coaching.listen3'),
-              t('coaching.listen4')
-            ]
-          }
-        ]
-      },
-      {
-        id: 'cluster2',
-        name: t('coaching.cluster2'),
-        color: '#10B981',
-        weight: 0.2167, // 65% / 3 = 21.67% each
-        items: [
-          { 
-            id: 'calm-atmosphere', 
-            name: t('coaching.calmAtmosphere'),
-            descriptions: [
-              t('coaching.atmosphere1'),
-              t('coaching.atmosphere2'),
-              t('coaching.atmosphere3'),
-              t('coaching.atmosphere4')
-            ]
-          },
-          { 
-            id: 'asked-self-assessment', 
-            name: t('coaching.askedSelfAssessment'),
-            descriptions: [
-              t('coaching.assessment1'),
-              t('coaching.assessment2'),
-              t('coaching.assessment3'),
-              t('coaching.assessment4')
-            ]
-          },
-          { 
-            id: 'listened-attentively', 
-            name: t('coaching.listenedAttentively'),
-            descriptions: [
-              t('coaching.attentive1'),
-              t('coaching.attentive2'),
-              t('coaching.attentive3'),
-              t('coaching.attentive4')
-            ]
-          }
-        ]
-      },
-      {
-        id: 'cluster3',
-        name: t('coaching.cluster3'),
-        color: '#F59E0B',
-        weight: 0.2167,
-        items: [
-          { 
-            id: 'started-positive', 
-            name: t('coaching.startedPositive'),
-            descriptions: [
-              t('coaching.positive1'),
-              t('coaching.positive2'),
-              t('coaching.positive3'),
-              t('coaching.positive4')
-            ]
-          },
-          { 
-            id: 'concrete-examples', 
-            name: t('coaching.concreteExamples'),
-            descriptions: [
-              t('coaching.examples1'),
-              t('coaching.examples2'),
-              t('coaching.examples3'),
-              t('coaching.examples4')
-            ]
-          },
-          { 
-            id: 'identified-improvement', 
-            name: t('coaching.identifiedImprovement'),
-            descriptions: [
-              t('coaching.improvement1'),
-              t('coaching.improvement2'),
-              t('coaching.improvement3'),
-              t('coaching.improvement4')
-            ]
-          }
-        ]
-      },
-      {
-        id: 'cluster4',
-        name: t('coaching.cluster4'),
-        color: '#8B5CF6',
-        weight: 0.2167,
-        items: [
-          { 
-            id: 'set-clear-tasks', 
-            name: t('coaching.setClearTasks'),
-            descriptions: [
-              t('coaching.tasks1'),
-              t('coaching.tasks2'),
-              t('coaching.tasks3'),
-              t('coaching.tasks4')
-            ]
-          },
-          { 
-            id: 'reached-agreement', 
-            name: t('coaching.reachedAgreement'),
-            descriptions: [
-              t('coaching.agreement1'),
-              t('coaching.agreement2'),
-              t('coaching.agreement3'),
-              t('coaching.agreement4')
-            ]
-          },
-          { 
-            id: 'encouraged-goal', 
-            name: t('coaching.encouragedGoal'),
-            descriptions: [
-              t('coaching.goal1'),
-              t('coaching.goal2'),
-              t('coaching.goal3'),
-              t('coaching.goal4')
-            ]
-          }
-        ]
-      }
-    ];
-  };
+    const getCoachingCategories = () => {
+      return [
+        {
+          id: 'cluster1',
+          name: t('coaching.cluster1'),
+          color: '#3B82F6',
+          weight: 0.35, // 35% weight
+          items: [
+            { 
+              id: 'let-salesperson-lead', 
+              name: t('coaching.letSalespersonLead'),
+              descriptions: [
+                t('coaching.score1'),
+                t('coaching.score2'),
+                t('coaching.score3'),
+                t('coaching.score4')
+              ]
+            },
+            { 
+              id: 'provided-support', 
+              name: t('coaching.providedSupport'),
+              descriptions: [
+                t('coaching.support1'),
+                t('coaching.support2'),
+                t('coaching.support3'),
+                t('coaching.support4')
+              ]
+            },
+            { 
+              id: 'stepped-in-value', 
+              name: t('coaching.steppedInValue'),
+              descriptions: [
+                t('coaching.value1'),
+                t('coaching.value2'),
+                t('coaching.value3'),
+                t('coaching.value4')
+              ]
+            },
+            { 
+              id: 'actively-listened', 
+              name: t('coaching.activelyListened'),
+              descriptions: [
+                t('coaching.listen1'),
+                t('coaching.listen2'),
+                t('coaching.listen3'),
+                t('coaching.listen4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'cluster2',
+          name: t('coaching.cluster2'),
+          color: '#10B981',
+          weight: 0.2167, // 65% / 3 = 21.67% each
+          items: [
+            { 
+              id: 'calm-atmosphere', 
+              name: t('coaching.calmAtmosphere'),
+              descriptions: [
+                t('coaching.atmosphere1'),
+                t('coaching.atmosphere2'),
+                t('coaching.atmosphere3'),
+                t('coaching.atmosphere4')
+              ]
+            },
+            { 
+              id: 'asked-self-assessment', 
+              name: t('coaching.askedSelfAssessment'),
+              descriptions: [
+                t('coaching.assessment1'),
+                t('coaching.assessment2'),
+                t('coaching.assessment3'),
+                t('coaching.assessment4')
+              ]
+            },
+            { 
+              id: 'listened-attentively', 
+              name: t('coaching.listenedAttentively'),
+              descriptions: [
+                t('coaching.attentive1'),
+                t('coaching.attentive2'),
+                t('coaching.attentive3'),
+                t('coaching.attentive4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'cluster3',
+          name: t('coaching.cluster3'),
+          color: '#F59E0B',
+          weight: 0.2167,
+          items: [
+            { 
+              id: 'started-positive', 
+              name: t('coaching.startedPositive'),
+              descriptions: [
+                t('coaching.positive1'),
+                t('coaching.positive2'),
+                t('coaching.positive3'),
+                t('coaching.positive4')
+              ]
+            },
+            { 
+              id: 'concrete-examples', 
+              name: t('coaching.concreteExamples'),
+              descriptions: [
+                t('coaching.examples1'),
+                t('coaching.examples2'),
+                t('coaching.examples3'),
+                t('coaching.examples4')
+              ]
+            },
+            { 
+              id: 'identified-improvement', 
+              name: t('coaching.identifiedImprovement'),
+              descriptions: [
+                t('coaching.improvement1'),
+                t('coaching.improvement2'),
+                t('coaching.improvement3'),
+                t('coaching.improvement4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'cluster4',
+          name: t('coaching.cluster4'),
+          color: '#8B5CF6',
+          weight: 0.2167,
+          items: [
+            { 
+              id: 'set-clear-tasks', 
+              name: t('coaching.setClearTasks'),
+              descriptions: [
+                t('coaching.tasks1'),
+                t('coaching.tasks2'),
+                t('coaching.tasks3'),
+                t('coaching.tasks4')
+              ]
+            },
+            { 
+              id: 'reached-agreement', 
+              name: t('coaching.reachedAgreement'),
+              descriptions: [
+                t('coaching.agreement1'),
+                t('coaching.agreement2'),
+                t('coaching.agreement3'),
+                t('coaching.agreement4')
+              ]
+            },
+            { 
+              id: 'encouraged-goal', 
+              name: t('coaching.encouragedGoal'),
+              descriptions: [
+                t('coaching.goal1'),
+                t('coaching.goal2'),
+                t('coaching.goal3'),
+                t('coaching.goal4')
+              ]
+            }
+          ]
+        }
+      ];
+    };
+
+    const getLowWalletShareCategories = () => {
+      return [
+        {
+          id: 'preparation',
+          name: t('lowWalletShare.preparation'),
+          color: '#3B82F6',
+          items: [
+            { 
+              id: 'criteria1', 
+              name: t('lowWalletShare.criteria1'),
+              descriptions: [
+                t('lowWalletShare.score1_1'),
+                t('lowWalletShare.score1_2'),
+                t('lowWalletShare.score1_3'),
+                t('lowWalletShare.score1_4')
+              ]
+            },
+            { 
+              id: 'criteria2', 
+              name: t('lowWalletShare.criteria2'),
+              descriptions: [
+                t('lowWalletShare.score2_1'),
+                t('lowWalletShare.score2_2'),
+                t('lowWalletShare.score2_3'),
+                t('lowWalletShare.score2_4')
+              ]
+            },
+            { 
+              id: 'criteria3', 
+              name: t('lowWalletShare.criteria3'),
+              descriptions: [
+                t('lowWalletShare.score3_1'),
+                t('lowWalletShare.score3_2'),
+                t('lowWalletShare.score3_3'),
+                t('lowWalletShare.score3_4')
+              ]
+            },
+            { 
+              id: 'criteria4', 
+              name: t('lowWalletShare.criteria4'),
+              descriptions: [
+                t('lowWalletShare.score4_1'),
+                t('lowWalletShare.score4_2'),
+                t('lowWalletShare.score4_3'),
+                t('lowWalletShare.score4_4')
+              ]
+            },
+            { 
+              id: 'criteria5', 
+              name: t('lowWalletShare.criteria5'),
+              descriptions: [
+                t('lowWalletShare.score5_1'),
+                t('lowWalletShare.score5_2'),
+                t('lowWalletShare.score5_3'),
+                t('lowWalletShare.score5_4')
+              ]
+            },
+            { 
+              id: 'criteria6', 
+              name: t('lowWalletShare.criteria6'),
+              descriptions: [
+                t('lowWalletShare.score6_1'),
+                t('lowWalletShare.score6_2'),
+                t('lowWalletShare.score6_3'),
+                t('lowWalletShare.score6_4')
+              ]
+            },
+            { 
+              id: 'criteria7', 
+              name: t('lowWalletShare.criteria7'),
+              descriptions: [
+                t('lowWalletShare.score7_1'),
+                t('lowWalletShare.score7_2'),
+                t('lowWalletShare.score7_3'),
+                t('lowWalletShare.score7_4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'problemDefinition',
+          name: t('lowWalletShare.problemDefinition'),
+          color: '#10B981',
+          items: [
+            { 
+              id: 'criteria8', 
+              name: t('lowWalletShare.criteria8'),
+              descriptions: [
+                t('lowWalletShare.score8_1'),
+                t('lowWalletShare.score8_2'),
+                t('lowWalletShare.score8_3'),
+                t('lowWalletShare.score8_4')
+              ]
+            },
+            { 
+              id: 'criteria9', 
+              name: t('lowWalletShare.criteria9'),
+              descriptions: [
+                t('lowWalletShare.score9_1'),
+                t('lowWalletShare.score9_2'),
+                t('lowWalletShare.score9_3'),
+                t('lowWalletShare.score9_4')
+              ]
+            },
+            { 
+              id: 'criteria10', 
+              name: t('lowWalletShare.criteria10'),
+              descriptions: [
+                t('lowWalletShare.score10_1'),
+                t('lowWalletShare.score10_2'),
+                t('lowWalletShare.score10_3'),
+                t('lowWalletShare.score10_4')
+              ]
+            },
+            { 
+              id: 'criteria11', 
+              name: t('lowWalletShare.criteria11'),
+              descriptions: [
+                t('lowWalletShare.score11_1'),
+                t('lowWalletShare.score11_2'),
+                t('lowWalletShare.score11_3'),
+                t('lowWalletShare.score11_4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'objections',
+          name: t('lowWalletShare.objections'),
+          color: '#F59E0B',
+          items: [
+            { 
+              id: 'criteria12', 
+              name: t('lowWalletShare.criteria12'),
+              descriptions: [
+                t('lowWalletShare.score12_1'),
+                t('lowWalletShare.score12_2'),
+                t('lowWalletShare.score12_3'),
+                t('lowWalletShare.score12_4')
+              ]
+            },
+            { 
+              id: 'criteria13', 
+              name: t('lowWalletShare.criteria13'),
+              descriptions: [
+                t('lowWalletShare.score13_1'),
+                t('lowWalletShare.score13_2'),
+                t('lowWalletShare.score13_3'),
+                t('lowWalletShare.score13_4')
+              ]
+            },
+            { 
+              id: 'criteria14', 
+              name: t('lowWalletShare.criteria14'),
+              descriptions: [
+                t('lowWalletShare.score14_1'),
+                t('lowWalletShare.score14_2'),
+                t('lowWalletShare.score14_3'),
+                t('lowWalletShare.score14_4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'commercialProposal',
+          name: t('lowWalletShare.commercialProposal'),
+          color: '#8B5CF6',
+          items: [
+            { 
+              id: 'criteria15', 
+              name: t('lowWalletShare.criteria15'),
+              descriptions: [
+                t('lowWalletShare.score15_1'),
+                t('lowWalletShare.score15_2'),
+                t('lowWalletShare.score15_3'),
+                t('lowWalletShare.score15_4')
+              ]
+            },
+            { 
+              id: 'criteria16', 
+              name: t('lowWalletShare.criteria16'),
+              descriptions: [
+                t('lowWalletShare.score16_1'),
+                t('lowWalletShare.score16_2'),
+                t('lowWalletShare.score16_3'),
+                t('lowWalletShare.score16_4')
+              ]
+            },
+            { 
+              id: 'criteria17', 
+              name: t('lowWalletShare.criteria17'),
+              descriptions: [
+                t('lowWalletShare.score17_1'),
+                t('lowWalletShare.score17_2'),
+                t('lowWalletShare.score17_3'),
+                t('lowWalletShare.score17_4')
+              ]
+            },
+            { 
+              id: 'criteria18', 
+              name: t('lowWalletShare.criteria18'),
+              descriptions: [
+                t('lowWalletShare.score18_1'),
+                t('lowWalletShare.score18_2'),
+                t('lowWalletShare.score18_3'),
+                t('lowWalletShare.score18_4')
+              ]
+            }
+          ]
+        }
+      ];
+    };
 
   const getEvaluationCategories = () => {
+    // Check customer type first
+    if (customerType === 'low-share') {
+      console.log('🔍 Debug - Customer type: low-share, showing low wallet share evaluation');
+      return getLowWalletShareCategories();
+    }
+    
     // Check if user is Regional Manager - show coaching form by default
     if (user?.role === 'REGIONAL_SALES_MANAGER') {
       console.log('🔍 Debug - User role:', user?.role);
