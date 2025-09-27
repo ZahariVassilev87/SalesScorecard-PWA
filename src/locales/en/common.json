@@ -41,7 +41,7 @@
         "customerType": "Customer Type",
         "location": "Location",
         "visitDate": "Assessment Date",
-    "rating": "Rate each behavior on a scale of 1-5 (1 = Poor, 5 = Excellent)",
+    "rating": "Rate each behavior on a scale of 1-4 (1 = Poor, 4 = Excellent)",
     "explainRating": "Explain your rating...",
     "provideFeedback": "Provide overall feedback and recommendations",
     "submitting": "Submitting Assessment...",

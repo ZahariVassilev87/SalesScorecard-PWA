@@ -901,7 +901,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                   <div className="item-header">
                     <label className="item-label">{item.name}</label>
                     <div className="score-input">
-                      {((item as any).descriptions ? [1, 2, 3, 4] : [1, 2, 3, 4, 5]).map(score => (
+                      {[1, 2, 3, 4].map(score => (
                         <label 
                           key={score} 
                           className={`score-option ${scores[item.id] === score ? 'checked' : ''}`}

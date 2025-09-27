@@ -229,7 +229,7 @@ const RoleBasedEvaluationForm: React.FC<RoleBasedEvaluationFormProps> = ({ onSuc
 
         <div className="form-section">
           <h3>Evaluation Criteria</h3>
-          <p>Rate each criterion on a scale of 1-5 (1 = Poor, 5 = Excellent)</p>
+          <p>Rate each criterion on a scale of 1-4 (1 = Poor, 4 = Excellent)</p>
 
           {criteria.map(criterion => (
             <div key={criterion.id} className="behavior-item">
@@ -237,7 +237,7 @@ const RoleBasedEvaluationForm: React.FC<RoleBasedEvaluationFormProps> = ({ onSuc
                 <label>{criterion.name}</label>
                 <span className="criterion-weight">Weight: {(criterion.weight * 100).toFixed(0)}%</span>
                 <div className="score-input">
-                  {[1, 2, 3, 4, 5].map(score => (
+                  {[1, 2, 3, 4].map(score => (
                     <label key={score} className="score-option">
                       <input
                         type="radio"
