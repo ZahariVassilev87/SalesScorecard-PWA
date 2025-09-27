@@ -445,6 +445,7 @@ class ApiService {
       behaviorItemId: string;
       score: number;
       comment?: string;
+      example?: string;
     }>;
     evaluationType?: string;
     clusterScores?: Array<{

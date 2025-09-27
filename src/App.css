@@ -495,6 +495,40 @@ body {
   font-style: italic;
 }
 
+.example-field {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: var(--primary-50);
+  border: 1px solid var(--primary-200);
+  border-radius: var(--radius-lg);
+}
+
+.example-label {
+  display: block;
+  font-weight: 600;
+  color: var(--primary-700);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.item-example {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--primary-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  resize: vertical;
+  min-height: 60px;
+  background: white;
+  color: var(--gray-700);
+}
+
+.item-example:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+
 .overall-comment-detail {
   background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
   border: 1px solid var(--primary-200);
@@ -640,6 +674,16 @@ body {
   .item-comment {
     max-width: 100%;
     text-align: left;
+  }
+
+  .example-field {
+    margin-top: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .item-example {
+    min-height: 50px;
+    font-size: var(--font-size-xs);
   }
 
   .tab-navigation {

@@ -28,6 +28,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   // Evaluation scores and comments
   const [scores, setScores] = useState<Record<string, number>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
+  const [examples, setExamples] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const loadEvaluatableUsers = async () => {
@@ -469,7 +470,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
           ]
         }
       ];
-    };
+  };
 
   const getEvaluationCategories = () => {
     // Check customer type first
@@ -685,6 +686,13 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     setComments(prev => ({ ...prev, [criteriaId]: comment }));
   };
 
+  const handleExampleChange = (itemId: string, value: string) => {
+    setExamples(prev => ({
+      ...prev,
+      [itemId]: value
+    }));
+  };
+
   const calculateClusterScore = (clusterId: string) => {
     const categories = getEvaluationCategories();
     const cluster = categories.find(c => c.id === clusterId);
@@ -724,7 +732,8 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         category.items.map(item => ({
           behaviorItemId: item.id,
           score: scores[item.id] || 0,
-          comment: comments[item.id] || ''
+          comment: comments[item.id] || '',
+          example: examples[item.id] || ''
         }))
       );
 
@@ -774,7 +783,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       // Navigate to history after a longer delay to see the message
       setTimeout(() => {
         console.log('Navigating to history tab...');
-        onSuccess();
+      onSuccess();
       }, 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('evaluation.error'));
@@ -926,13 +935,27 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                     </div>
                   )}
                   {!(item as any).descriptions && (
-                    <textarea
+                  <textarea
                       placeholder={t('evaluation.explainRating')}
-                      value={comments[item.id] || ''}
-                      onChange={(e) => handleCommentChange(item.id, e.target.value)}
-                      rows={2}
-                      className="item-comment"
-                    />
+                    value={comments[item.id] || ''}
+                    onChange={(e) => handleCommentChange(item.id, e.target.value)}
+                    rows={2}
+                    className="item-comment"
+                  />
+                  )}
+                  
+                  {/* Example field for Regional Managers and Sales Managers */}
+                  {(user?.role === 'REGIONAL_SALES_MANAGER' || user?.role === 'SALES_LEAD') && (
+                    <div className="example-field">
+                      <label className="example-label">{t('evaluation.provideExample')}</label>
+                      <textarea
+                        placeholder={t('evaluation.examplePlaceholder')}
+                        value={examples[item.id] || ''}
+                        onChange={(e) => handleExampleChange(item.id, e.target.value)}
+                        rows={2}
+                        className="item-example"
+                      />
+                    </div>
                   )}
                 </div>
               ))}
