@@ -2021,6 +2021,26 @@ body {
     font-size: var(--font-size-xs);
     line-height: 1.4;
   }
+
+  .behavior-item {
+    padding: var(--space-4);
+  }
+
+  .example-field {
+    margin-top: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .example-label {
+    font-size: var(--font-size-xs);
+    margin-bottom: var(--space-1);
+  }
+
+  .item-example {
+    min-height: 50px;
+    font-size: var(--font-size-xs);
+    padding: var(--space-2);
+  }
   
   .login-form {
     padding: var(--space-8) var(--space-5);
