@@ -85,13 +85,16 @@ const SalesApp: React.FC = () => {
           <h1>🎯 Sales Scorecard</h1>
         </div>
         <div className="header-right">
-          <button 
-            onClick={() => setShowPerformanceDashboard(true)} 
-            className="performance-button"
-            title="Performance Dashboard"
-          >
-            🚀
-          </button>
+          {/* Performance Dashboard - Admin Only */}
+          {user?.role === 'ADMIN' && (
+            <button 
+              onClick={() => setShowPerformanceDashboard(true)} 
+              className="performance-button"
+              title="Performance Dashboard (Admin Only)"
+            >
+              🚀
+            </button>
+          )}
           <LanguageSwitcher />
           <div className="user-info">
             <span className="user-name">{user?.displayName}</span>
