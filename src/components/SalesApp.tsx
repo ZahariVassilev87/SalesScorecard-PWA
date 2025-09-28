@@ -23,6 +23,11 @@ const SalesApp: React.FC = () => {
   console.log('SalesApp rendered, user:', user);
   console.log('showPerformanceDashboard:', showPerformanceDashboard);
   console.log('PerformanceDashboard component:', PerformanceDashboard);
+  
+  // Alert to confirm component is loading
+  if (typeof window !== 'undefined') {
+    console.log('🚨 SALESAPP COMPONENT LOADED - DEBUG MODE ACTIVE');
+  }
 
   const handleLogout = () => {
     logout();
@@ -292,6 +297,23 @@ const SalesApp: React.FC = () => {
         zIndex: 10000
       }}>
         Debug: showPerformanceDashboard = {showPerformanceDashboard.toString()}
+      </div>
+
+      {/* HUGE RED DEBUG BANNER */}
+      <div style={{
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        right: '0',
+        background: 'red',
+        color: 'white',
+        padding: '10px',
+        textAlign: 'center',
+        fontSize: '16px',
+        fontWeight: 'bold',
+        zIndex: 99999
+      }}>
+        🚨 DEBUG MODE ACTIVE - Performance Dashboard Available 🚨
       </div>
     </div>
   );
