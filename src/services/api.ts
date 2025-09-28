@@ -1,4 +1,7 @@
 // API Service for Sales Scorecard PWA
+import { tokenStorage, userStorage } from '../utils/secureStorage';
+import { handleApiError, logError } from '../utils/errorHandler';
+
 const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://api.instorm.io';
 
 export interface User {
@@ -103,52 +106,83 @@ class ApiService {
   private token: string | null = null;
 
   constructor() {
-    this.token = localStorage.getItem('userToken');
+    this.token = tokenStorage.getToken();
   }
 
   setToken(token: string) {
     this.token = token;
-    localStorage.setItem('userToken', token);
+    tokenStorage.setToken(token);
   }
 
   clearToken() {
     this.token = null;
-    localStorage.removeItem('userToken');
+    tokenStorage.removeToken();
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE}${endpoint}`;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string>),
-    };
+    try {
+      const url = `${API_BASE}${endpoint}`;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string>),
+      };
 
-    if (this.token) {
-      headers.Authorization = `Bearer ${this.token}`;
+      if (this.token) {
+        headers.Authorization = `Bearer ${this.token}`;
+      }
+
+      console.log('🔍 [REQUEST DEBUG] Making request to:', url);
+      console.log('🔍 [REQUEST DEBUG] Method:', options.method || 'GET');
+      console.log('🔍 [REQUEST DEBUG] Headers:', headers);
+      console.log('🔍 [REQUEST DEBUG] Body:', options.body);
+
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
+
+      console.log('🔍 [REQUEST DEBUG] Response status:', response.status);
+      console.log('🔍 [REQUEST DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 [REQUEST DEBUG] Error response body:', errorText);
+        
+        // Create a structured error object for better handling
+        const error = {
+          response: {
+            status: response.status,
+            data: errorText
+          },
+          message: `API Error: ${response.status} ${errorText}`
+        };
+        
+        const appError = handleApiError(error, `API request to ${endpoint}`);
+        logError(appError, error);
+        throw appError;
+      }
+
+      const responseData = await response.json();
+      console.log('🔍 [REQUEST DEBUG] Success response:', responseData);
+      return responseData;
+    } catch (error) {
+      // Handle network errors and other exceptions
+      if (error instanceof Error && error.name === 'TypeError' && error.message.includes('fetch')) {
+        const networkError = handleApiError(error, `Network error for ${endpoint}`);
+        logError(networkError, error);
+        throw networkError;
+      }
+      
+      // Re-throw if it's already an AppError
+      if (error && typeof error === 'object' && 'code' in error) {
+        throw error;
+      }
+      
+      // Handle other errors
+      const appError = handleApiError(error, `Unexpected error for ${endpoint}`);
+      logError(appError, error);
+      throw appError;
     }
-
-    console.log('🔍 [REQUEST DEBUG] Making request to:', url);
-    console.log('🔍 [REQUEST DEBUG] Method:', options.method || 'GET');
-    console.log('🔍 [REQUEST DEBUG] Headers:', headers);
-    console.log('🔍 [REQUEST DEBUG] Body:', options.body);
-
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    console.log('🔍 [REQUEST DEBUG] Response status:', response.status);
-    console.log('🔍 [REQUEST DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('🔍 [REQUEST DEBUG] Error response body:', errorText);
-      throw new Error(`API Error: ${response.status} ${errorText}`);
-    }
-
-    const responseData = await response.json();
-    console.log('🔍 [REQUEST DEBUG] Success response:', responseData);
-    return responseData;
   }
 
   async login(email: string, password: string): Promise<LoginResponse> {
@@ -541,13 +575,11 @@ class ApiService {
       // Fallback to old logic if backend fails
       console.log('⚠️ Falling back to old logic...');
       try {
-        const currentUserStr = localStorage.getItem('user');
-        if (!currentUserStr) {
-          console.log('❌ No current user found in localStorage');
+        const currentUser = userStorage.getUser();
+        if (!currentUser) {
+          console.log('❌ No current user found in secure storage');
           throw new Error('No current user found');
         }
-        
-        const currentUser = JSON.parse(currentUserStr);
         console.log('👤 Current user role:', currentUser.role);
         
         // Get team members based on current user's role
@@ -606,25 +638,20 @@ class ApiService {
   }
 
   private getCurrentUserId(): string {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
+    const user = userStorage.getUser();
+    if (user) {
       return user.id;
     }
     return '';
   }
 
   getCurrentUser(): User | null {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      return JSON.parse(userStr);
-    }
-    return null;
+    return userStorage.getUser();
   }
 
   logout() {
     this.clearToken();
-    localStorage.removeItem('user');
+    userStorage.removeUser();
   }
 }
 

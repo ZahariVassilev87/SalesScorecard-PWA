@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, apiService } from '../services/api';
+import { userStorage, tokenStorage, securityUtils } from '../utils/secureStorage';
 
 interface AuthContextType {
   user: User | null;
@@ -29,8 +30,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const initAuth = () => {
-      const token = localStorage.getItem('userToken');
-      if (token) {
+      const token = tokenStorage.getToken();
+      if (token && securityUtils.isValidToken(token) && !securityUtils.isTokenExpired(token)) {
         try {
           const userData = apiService.getCurrentUser();
           if (userData) {
@@ -42,6 +43,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.error('Failed to get current user:', error);
           apiService.logout();
         }
+      } else if (token) {
+        // Token exists but is invalid/expired, clear it
+        tokenStorage.removeToken();
+        userStorage.removeUser();
       }
       setIsLoading(false);
     };
@@ -53,7 +58,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const response = await apiService.login(email, password);
       setUser(response.user);
-      localStorage.setItem('user', JSON.stringify(response.user));
+      userStorage.setUser(response.user);
     } catch (error) {
       throw error;
     }
@@ -62,7 +67,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = () => {
     apiService.logout();
     setUser(null);
-    localStorage.removeItem('user');
+    userStorage.removeUser();
   };
 
   const value: AuthContextType = {
