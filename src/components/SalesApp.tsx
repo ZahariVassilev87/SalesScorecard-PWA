@@ -19,6 +19,10 @@ const SalesApp: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(false);
 
+  // Debug logging
+  console.log('SalesApp rendered, user:', user);
+  console.log('showPerformanceDashboard:', showPerformanceDashboard);
+
   const handleLogout = () => {
     logout();
   };
@@ -85,16 +89,33 @@ const SalesApp: React.FC = () => {
           <h1>🎯 Sales Scorecard</h1>
         </div>
         <div className="header-right">
-          {/* Performance Dashboard - Admin Only */}
-          {user?.role === 'ADMIN' && (
-            <button 
-              onClick={() => setShowPerformanceDashboard(true)} 
-              className="performance-button"
-              title="Performance Dashboard (Admin Only)"
-            >
-              🚀
-            </button>
-          )}
+          {/* Performance Dashboard - Debug Mode (All Users) */}
+          <button 
+            onClick={() => {
+              console.log('Performance button clicked!');
+              setShowPerformanceDashboard(true);
+            }} 
+            className="performance-button"
+            title="Performance Dashboard (Debug Mode)"
+            style={{
+              background: '#ff6b6b',
+              color: 'white',
+              border: '2px solid #ff0000',
+              fontSize: '18px',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '50px',
+              height: '50px',
+              zIndex: 9999,
+              position: 'relative'
+            }}
+          >
+            🚀
+          </button>
           <LanguageSwitcher />
           <div className="user-info">
             <span className="user-name">{user?.displayName}</span>
@@ -229,6 +250,30 @@ const SalesApp: React.FC = () => {
         isVisible={showPerformanceDashboard}
         onClose={() => setShowPerformanceDashboard(false)}
       />
+
+      {/* Debug Test Button - Always Visible */}
+      <button 
+        onClick={() => {
+          console.log('Test button clicked!');
+          setShowPerformanceDashboard(true);
+        }}
+        style={{
+          position: 'fixed',
+          top: '10px',
+          left: '10px',
+          background: '#00ff00',
+          color: 'black',
+          border: '2px solid #000000',
+          padding: '10px',
+          borderRadius: '5px',
+          cursor: 'pointer',
+          zIndex: 10000,
+          fontSize: '14px',
+          fontWeight: 'bold'
+        }}
+      >
+        🧪 TEST PERFORMANCE
+      </button>
     </div>
   );
 };
