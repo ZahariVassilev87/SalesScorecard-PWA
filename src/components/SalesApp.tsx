@@ -22,6 +22,7 @@ const SalesApp: React.FC = () => {
   // Debug logging
   console.log('SalesApp rendered, user:', user);
   console.log('showPerformanceDashboard:', showPerformanceDashboard);
+  console.log('PerformanceDashboard component:', PerformanceDashboard);
 
   const handleLogout = () => {
     logout();
@@ -269,11 +270,29 @@ const SalesApp: React.FC = () => {
           cursor: 'pointer',
           zIndex: 10000,
           fontSize: '14px',
-          fontWeight: 'bold'
+          fontWeight: 'bold',
+          display: 'block',
+          visibility: 'visible',
+          opacity: '1'
         }}
       >
         🧪 TEST PERFORMANCE
       </button>
+
+      {/* Additional Debug Info */}
+      <div style={{
+        position: 'fixed',
+        top: '60px',
+        left: '10px',
+        background: 'yellow',
+        color: 'black',
+        padding: '5px',
+        border: '1px solid black',
+        fontSize: '12px',
+        zIndex: 10000
+      }}>
+        Debug: showPerformanceDashboard = {showPerformanceDashboard.toString()}
+      </div>
     </div>
   );
 };
