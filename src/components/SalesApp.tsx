@@ -2,6 +2,7 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
+import PerformanceDashboard from './PerformanceDashboard';
 
 // Lazy load components for better performance
 const Dashboard = lazy(() => import('./Dashboard'));
@@ -16,6 +17,7 @@ const SalesApp: React.FC = () => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -83,6 +85,13 @@ const SalesApp: React.FC = () => {
           <h1>🎯 Sales Scorecard</h1>
         </div>
         <div className="header-right">
+          <button 
+            onClick={() => setShowPerformanceDashboard(true)} 
+            className="performance-button"
+            title="Performance Dashboard"
+          >
+            🚀
+          </button>
           <LanguageSwitcher />
           <div className="user-info">
             <span className="user-name">{user?.displayName}</span>
@@ -211,6 +220,12 @@ const SalesApp: React.FC = () => {
           {activeTab === 'teams' && <TeamManagementView />}
         </Suspense>
       </main>
+
+      {/* Performance Dashboard */}
+      <PerformanceDashboard 
+        isVisible={showPerformanceDashboard}
+        onClose={() => setShowPerformanceDashboard(false)}
+      />
     </div>
   );
 };

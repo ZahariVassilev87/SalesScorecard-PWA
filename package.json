@@ -54,7 +54,7 @@
   },
   "devDependencies": {
     "lighthouse": "^12.8.2",
-    "webpack-bundle-analyzer": "^4.7.0"
+    "webpack-bundle-analyzer": "^4.10.2"
   },
   "keywords": [
     "pwa",

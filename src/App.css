@@ -2135,3 +2135,311 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--gray-400);
 }
+
+/* Performance Dashboard Styles */
+.performance-dashboard-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  padding: var(--space-4);
+}
+
+.performance-dashboard {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  max-width: 900px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.performance-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-6);
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.performance-dashboard-header h2 {
+  margin: 0;
+  color: var(--gray-900);
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: var(--text-2xl);
+  color: var(--gray-500);
+  cursor: pointer;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background: var(--gray-200);
+  color: var(--gray-700);
+}
+
+.performance-dashboard-content {
+  padding: var(--space-6);
+}
+
+.performance-score-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-8);
+}
+
+.score-circle {
+  width: 120px;
+  height: 120px;
+  border: 4px solid var(--primary-500);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: var(--gray-50);
+  transition: all 0.3s ease;
+}
+
+.score-value {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: var(--space-1);
+}
+
+.score-label {
+  font-size: var(--text-sm);
+  color: var(--gray-600);
+  text-align: center;
+  font-weight: 500;
+}
+
+.metrics-section {
+  margin-bottom: var(--space-8);
+}
+
+.metrics-section h3 {
+  margin: 0 0 var(--space-4) 0;
+  color: var(--gray-900);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.metric-card {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.metric-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.metric-label {
+  font-size: var(--text-sm);
+  color: var(--gray-600);
+  margin-bottom: var(--space-2);
+  font-weight: 500;
+}
+
+.metric-value {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  margin-bottom: var(--space-1);
+}
+
+.metric-description {
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+}
+
+.recommendations-section {
+  margin-bottom: var(--space-8);
+}
+
+.recommendations-section h3 {
+  margin: 0 0 var(--space-4) 0;
+  color: var(--gray-900);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.recommendations-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.recommendation-item {
+  background: var(--blue-50);
+  border-left: 4px solid var(--blue-500);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-2);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  font-size: var(--text-sm);
+  color: var(--gray-700);
+  line-height: 1.5;
+}
+
+.recommendation-item:last-child {
+  margin-bottom: 0;
+}
+
+.performance-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.action-button {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.action-button.primary {
+  background: var(--primary-500);
+  color: white;
+}
+
+.action-button.primary:hover {
+  background: var(--primary-600);
+  transform: translateY(-1px);
+}
+
+.action-button.secondary {
+  background: var(--gray-100);
+  color: var(--gray-700);
+  border: 1px solid var(--gray-300);
+}
+
+.action-button.secondary:hover {
+  background: var(--gray-200);
+  transform: translateY(-1px);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .performance-dashboard-overlay {
+    padding: var(--space-2);
+  }
+  
+  .performance-dashboard {
+    max-height: 95vh;
+  }
+  
+  .performance-dashboard-header {
+    padding: var(--space-4);
+  }
+  
+  .performance-dashboard-content {
+    padding: var(--space-4);
+  }
+  
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+  
+  .score-circle {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .score-value {
+    font-size: var(--text-2xl);
+  }
+  
+  .performance-actions {
+    flex-direction: column;
+  }
+  
+  .action-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Performance Button Styles */
+.performance-button {
+  background: var(--primary-500);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+}
+
+.performance-button:hover {
+  background: var(--primary-600);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.performance-button:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .performance-button {
+    margin-right: var(--space-1);
+    min-width: 36px;
+    height: 36px;
+    font-size: var(--text-base);
+  }
+}
