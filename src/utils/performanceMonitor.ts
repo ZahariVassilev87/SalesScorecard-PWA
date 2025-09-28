@@ -238,10 +238,24 @@ class PerformanceMonitor {
   public sendReport(report?: PerformanceReport): void {
     const reportToSend = report || this.generateReport();
     
+    // Store report locally for analytics
+    this.storeReportLocally(reportToSend);
+    
     if (this.isOnline) {
       this.sendReportToServer(reportToSend);
     } else {
       this.reportQueue.push(reportToSend);
+    }
+  }
+
+  private storeReportLocally(report: PerformanceReport): void {
+    try {
+      // Import analytics service dynamically to avoid circular dependencies
+      import('../services/performanceAnalytics').then(({ performanceAnalytics }) => {
+        performanceAnalytics.storeReport(report);
+      });
+    } catch (error) {
+      console.error('Failed to store report locally:', error);
     }
   }
 

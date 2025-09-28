@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import './App.css';
 import './i18n';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+// import { ThemeProvider } from './contexts/ThemeContext'; // Dark mode disabled
 import { useTranslation } from 'react-i18next';
 
 // Lazy load components for better performance

@@ -1,7 +1,9 @@
 {
   "short_name": "SalesScorecard",
   "name": "Sales Scorecard - Sales Management Platform",
-  "description": "Progressive Web Application for sales management and evaluation",
+  "description": "Progressive Web Application for sales management and evaluation with offline support",
+  "id": "sales-scorecard-pwa",
+  "version": "1.2.0",
   "icons": [
     {
       "src": "icons/icon-72x72.png",
@@ -52,20 +54,29 @@
       "purpose": "maskable any"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "theme_color": "#667eea",
   "background_color": "#ffffff",
   "orientation": "portrait-primary",
   "scope": "/",
   "lang": "en",
+  "dir": "ltr",
   "categories": ["business", "productivity", "utilities"],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "shortcuts": [
     {
       "name": "Dashboard",
       "short_name": "Dashboard",
       "description": "View sales dashboard",
-      "url": "/dashboard",
+      "url": "/#dashboard",
       "icons": [
         {
           "src": "icons/icon-96x96.png",
@@ -77,13 +88,60 @@
       "name": "New Evaluation",
       "short_name": "New Eval",
       "description": "Create new evaluation",
-      "url": "/evaluations/new",
+      "url": "/#evaluation",
       "icons": [
         {
           "src": "icons/icon-96x96.png",
           "sizes": "96x96"
         }
       ]
+    },
+    {
+      "name": "My Team",
+      "short_name": "Team",
+      "description": "View team members",
+      "url": "/#team",
+      "icons": [
+        {
+          "src": "icons/icon-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "History",
+      "short_name": "History",
+      "description": "View evaluation history",
+      "url": "/#history",
+      "icons": [
+        {
+          "src": "icons/icon-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/desktop-dashboard.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Sales Dashboard"
+    },
+    {
+      "src": "screenshots/mobile-evaluation.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile Evaluation Form"
+    }
+  ],
+  "related_applications": [],
+  "protocol_handlers": [
+    {
+      "protocol": "web+salescorecard",
+      "url": "/?action=%s"
     }
   ]
 }

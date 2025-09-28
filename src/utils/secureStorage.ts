@@ -99,6 +99,40 @@ export const tokenStorage = {
 
   hasToken: (): boolean => {
     return secureStorage.hasItem('userToken');
+  },
+
+  // Refresh token methods
+  setRefreshToken: (refreshToken: string): void => {
+    secureStorage.setItem('refreshToken', refreshToken);
+  },
+
+  getRefreshToken: (): string | null => {
+    return secureStorage.getItem('refreshToken');
+  },
+
+  removeRefreshToken: (): void => {
+    secureStorage.removeItem('refreshToken');
+  },
+
+  // Token expiry methods
+  setTokenExpiry: (expiry: number): void => {
+    localStorage.setItem('tokenExpiry', expiry.toString());
+  },
+
+  getTokenExpiry: (): number | null => {
+    const expiry = localStorage.getItem('tokenExpiry');
+    return expiry ? parseInt(expiry, 10) : null;
+  },
+
+  removeTokenExpiry: (): void => {
+    localStorage.removeItem('tokenExpiry');
+  },
+
+  // Clear all token data
+  clearAll: (): void => {
+    tokenStorage.removeToken();
+    tokenStorage.removeRefreshToken();
+    tokenStorage.removeTokenExpiry();
   }
 };
 

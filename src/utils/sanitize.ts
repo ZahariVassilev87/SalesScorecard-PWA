@@ -182,5 +182,87 @@ export const sanitizeUserInput = (data: any): any => {
   return sanitized;
 };
 
+// Advanced XSS protection - detect and block malicious patterns
+export const detectXSS = (input: string): boolean => {
+  if (!input || typeof input !== 'string') {
+    return false;
+  }
+  
+  const xssPatterns = [
+    /<script[^>]*>.*?<\/script>/gi,
+    /javascript:/gi,
+    /on\w+\s*=/gi,
+    /<iframe[^>]*>.*?<\/iframe>/gi,
+    /<object[^>]*>.*?<\/object>/gi,
+    /<embed[^>]*>/gi,
+    /<link[^>]*>/gi,
+    /<meta[^>]*>/gi,
+    /<style[^>]*>.*?<\/style>/gi,
+    /expression\s*\(/gi,
+    /vbscript:/gi,
+    /data:text\/html/gi,
+    /data:application\/javascript/gi,
+    /&#x?[0-9a-f]+;/gi, // HTML entities that could be malicious
+    /%3Cscript/gi, // URL encoded script tags
+    /%3Ciframe/gi,
+    /%3Cobject/gi,
+    /%3Cembed/gi
+  ];
+  
+  return xssPatterns.some(pattern => pattern.test(input));
+};
+
+// Enhanced sanitization with XSS detection
+export const sanitizeWithXSSDetection = (input: string): string => {
+  if (!input || typeof input !== 'string') {
+    return '';
+  }
+  
+  // First check for XSS patterns
+  if (detectXSS(input)) {
+    console.warn('🚨 Potential XSS attack detected and blocked:', input.substring(0, 100));
+    // Return a safe version by removing all HTML
+    return DOMPurify.sanitize(input, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] }).trim();
+  }
+  
+  // If no XSS detected, use normal sanitization
+  return sanitizeText(input);
+};
+
+// Validate input length and content
+export const validateInput = (input: string, maxLength: number = 1000): { isValid: boolean; sanitized: string; errors: string[] } => {
+  const errors: string[] = [];
+  let sanitized = '';
+  
+  if (!input || typeof input !== 'string') {
+    errors.push('Input is required and must be a string');
+    return { isValid: false, sanitized: '', errors };
+  }
+  
+  // Check length
+  if (input.length > maxLength) {
+    errors.push(`Input exceeds maximum length of ${maxLength} characters`);
+  }
+  
+  // Check for XSS
+  if (detectXSS(input)) {
+    errors.push('Input contains potentially malicious content');
+  }
+  
+  // Sanitize
+  sanitized = sanitizeWithXSSDetection(input);
+  
+  // Check if sanitization removed too much content (indicates malicious input)
+  if (input.length > 10 && sanitized.length < input.length * 0.5) {
+    errors.push('Input contained suspicious content that was removed');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    sanitized,
+    errors
+  };
+};
+
 // Export DOMPurify instance for advanced usage
 export { DOMPurify };

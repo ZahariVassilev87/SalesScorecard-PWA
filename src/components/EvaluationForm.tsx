@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService, User } from '../services/api';
 import { useTranslation } from 'react-i18next';
-import { sanitizeText } from '../utils/sanitize';
+import { sanitizeText, sanitizeWithXSSDetection, validateInput } from '../utils/sanitize';
+import { offlineService } from '../utils/offlineService';
+import { notificationService } from '../utils/notificationService';
 
 interface EvaluationFormProps {
   onSuccess: () => void;
@@ -18,6 +20,8 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [pendingOfflineItems, setPendingOfflineItems] = useState(0);
 
   // Form state
   const [selectedUser, setSelectedUser] = useState('');
@@ -56,6 +60,31 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
 
     loadData();
   }, [t]);
+
+  // Monitor offline status and pending items
+  useEffect(() => {
+    const updateOfflineStatus = () => {
+      setIsOffline(!navigator.onLine);
+      const status = offlineService.getOfflineStatus();
+      setPendingOfflineItems(status.totalPending);
+    };
+
+    // Initial status
+    updateOfflineStatus();
+
+    // Listen for online/offline events
+    window.addEventListener('online', updateOfflineStatus);
+    window.addEventListener('offline', updateOfflineStatus);
+
+    // Check for pending items periodically - DISABLED TO FIX CONSTANT REFRESH
+    // const interval = setInterval(updateOfflineStatus, 5000);
+
+    return () => {
+      window.removeEventListener('online', updateOfflineStatus);
+      window.removeEventListener('offline', updateOfflineStatus);
+      // clearInterval(interval);
+    };
+  }, []);
 
   const getEvaluationTitle = () => {
     // Check if user is Regional Manager - show coaching title by default
@@ -698,14 +727,29 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   };
 
   const handleCommentChange = (criteriaId: string, comment: string) => {
-    setComments(prev => ({ ...prev, [criteriaId]: comment }));
+    const validation = validateInput(comment, 500);
+    if (validation.isValid) {
+      setComments(prev => ({ ...prev, [criteriaId]: validation.sanitized }));
+    } else {
+      console.warn('Invalid comment input detected:', validation.errors);
+      setComments(prev => ({ ...prev, [criteriaId]: validation.sanitized }));
+    }
   };
 
   const handleExampleChange = (itemId: string, value: string) => {
-    setExamples(prev => ({
-      ...prev,
-      [itemId]: value
-    }));
+    const validation = validateInput(value, 1000);
+    if (validation.isValid) {
+      setExamples(prev => ({
+        ...prev,
+        [itemId]: validation.sanitized
+      }));
+    } else {
+      console.warn('Invalid example input detected:', validation.errors);
+      setExamples(prev => ({
+        ...prev,
+        [itemId]: validation.sanitized
+      }));
+    }
   };
 
   const calculateClusterScore = (clusterId: string) => {
@@ -744,6 +788,9 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     setError('');
     setSuccessMessage('');
 
+    // Prepare evaluation data (moved outside try block for catch block access)
+    let evaluationData: any = null;
+
     try {
       // Use the correct categories based on user role and selected user
       const categories = getEvaluationCategories();
@@ -757,123 +804,85 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
             behaviorItemId: item.id, // Use the actual item IDs from the categories
             score: scores[item.id] || 0,
             comment: comments[item.id] || ''
-            // Temporarily removing example field to test if it's causing the issue
-            // example: examples[item.id] || ''
           };
         })
       );
 
-      // If using frontend categories (coaching), submit with empty items array since backend doesn't recognize frontend IDs
-      if (categories === getCoachingCategories() || categories === getStandardCategories() || categories === getLowWalletShareCategories()) {
-        console.log('🔍 [DEBUG] Using frontend categories, submitting with empty items array');
-        const evaluationData: any = {
-          salespersonId: selectedUser,
-          visitDate,
-          items: [] // Empty items array for frontend categories
-        };
-        
-        if (customerName) evaluationData.customerName = sanitizeText(customerName);
-        if (customerType) evaluationData.customerType = sanitizeText(customerType);
-        if (location) evaluationData.location = sanitizeText(location);
-        if (overallComment) evaluationData.overallComment = sanitizeText(overallComment);
-        
-        console.log('🔍 [DEBUG] Submitting frontend evaluation data:', JSON.stringify(evaluationData, null, 2));
-        await apiService.createEvaluation(evaluationData);
-        
-        // Show success message
-        setSuccessMessage(`✅ ${t('evaluation.success')}`);
-        console.log('✅ Evaluation submitted successfully!');
-        return;
-      }
-
-      // Validate that all required scores are provided (1-4 scale)
-      const missingScores = evaluationItems.filter(item => !item.score || item.score < 1 || item.score > 4);
-      if (missingScores.length > 0) {
-        console.log('🔍 [DEBUG] Missing scores:', missingScores);
-        console.log('🔍 [DEBUG] All evaluation items:', evaluationItems);
-        setError('Please provide scores (1-4) for all evaluation criteria');
-        return;
-      }
-
-      // Check if this is a coaching evaluation
-      const isCoachingEvaluation = user?.role === 'REGIONAL_SALES_MANAGER' && 
-        evaluatableUsers.find(u => u.id === selectedUser)?.role === 'SALES_LEAD';
-
-      // Create minimal evaluation data for testing
-      const evaluationData: any = {
+      // Prepare evaluation data
+      evaluationData = {
         salespersonId: selectedUser,
         visitDate,
-        items: evaluationItems.map(item => ({
-          behaviorItemId: item.behaviorItemId,
-          score: item.score,
-          comment: item.comment || ''
-        }))
+        items: categories === getCoachingCategories() || categories === getStandardCategories() || categories === getLowWalletShareCategories() 
+          ? [] // Empty items array for frontend categories
+          : evaluationItems.map(item => ({
+              behaviorItemId: item.behaviorItemId,
+              score: item.score,
+              comment: item.comment || ''
+            }))
       };
       
-      console.log('🔍 [DEBUG] Minimal evaluation data:', JSON.stringify(evaluationData, null, 2));
-
-      // Add optional fields only if they have values (simplified for testing)
       if (customerName) evaluationData.customerName = sanitizeText(customerName);
-      // Temporarily remove these fields to test if they're causing issues
-      // if (customerType) evaluationData.customerType = sanitizeText(customerType);
-      // if (location) evaluationData.location = sanitizeText(location);
-      // if (overallComment) evaluationData.overallComment = sanitizeText(overallComment);
-      
-      // Temporarily remove evaluationType to test if it's causing the issue
-      // if (isCoachingEvaluation) {
-      //   evaluationData.evaluationType = 'coaching';
-      // }
+      if (customerType) evaluationData.customerType = sanitizeText(customerType);
+      if (location) evaluationData.location = sanitizeText(location);
+      if (overallComment) evaluationData.overallComment = sanitizeText(overallComment);
 
-      console.log('🔍 [DEBUG] Submitting evaluation data:', JSON.stringify(evaluationData, null, 2));
-      console.log('🔍 [DEBUG] Evaluation items count:', evaluationItems.length);
-      console.log('🔍 [DEBUG] Is coaching evaluation:', isCoachingEvaluation);
-      
-      // Try to submit with minimal data first
-      try {
-        await apiService.createEvaluation(evaluationData);
-      } catch (error) {
-        console.error('🔍 [DEBUG] Full submission failed, trying minimal data...');
-        // Try with just the essential fields (matching working NewEvaluationForm structure)
-        const minimalData = {
-          salespersonId: selectedUser,
-          visitDate,
-          items: evaluationItems.slice(0, 1) // Just one item for testing
-        };
-        console.log('🔍 [DEBUG] Trying minimal data:', JSON.stringify(minimalData, null, 2));
-        try {
-          await apiService.createEvaluation(minimalData);
-        } catch (minimalError) {
-          console.error('🔍 [DEBUG] Even minimal data failed:', minimalError);
-          // Try with hardcoded IDs to test if the issue is with the backend IDs
-          const testData = {
-            salespersonId: selectedUser,
-            visitDate,
-            items: [{
-              behaviorItemId: 'test-item-1',
-              score: 1,
-              comment: 'test'
-            }]
-          };
-          console.log('🔍 [DEBUG] Trying with hardcoded test ID:', JSON.stringify(testData, null, 2));
-          try {
-            await apiService.createEvaluation(testData);
-          } catch (testError) {
-            console.error('🔍 [DEBUG] Even hardcoded test ID failed:', testError);
-            // Try with absolutely minimal data - just the required fields
-            const absoluteMinimalData = {
-              salespersonId: selectedUser,
-              visitDate,
-              items: []
-            };
-            console.log('🔍 [DEBUG] Trying with absolutely minimal data (no items):', JSON.stringify(absoluteMinimalData, null, 2));
-            await apiService.createEvaluation(absoluteMinimalData);
-          }
+      // Check if we're offline
+      if (!navigator.onLine || isOffline) {
+        console.log('📴 App is offline - storing evaluation for later sync');
+        
+        // Store evaluation offline
+        const token = localStorage.getItem('userToken');
+        if (token) {
+          await offlineService.storeEvaluationOffline(evaluationData, token);
+          setSuccessMessage(`📴 ${t('evaluation.offlineStored')} - Will sync when online`);
+        } else {
+          setError('Cannot store offline - no authentication token');
         }
+        return;
       }
 
+      // Online submission
+      console.log('🌐 App is online - submitting evaluation');
+      console.log('🔍 [DEBUG] Submitting evaluation data:', JSON.stringify(evaluationData, null, 2));
+      
+      await apiService.createEvaluation(evaluationData);
+      
       // Show success message
       setSuccessMessage(`✅ ${t('evaluation.success')}`);
       console.log('✅ Evaluation submitted successfully!');
+      
+      // Send push notifications based on user roles
+      try {
+        const assessorName = user?.displayName || 'Unknown';
+        const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+        const assesseeName = selectedUserData?.displayName || selectedUser;
+        
+        // Notify the assessee that they received an assessment
+        if (selectedUserData?.id !== user?.id) {
+          // This would typically be sent to the assessee's device
+          // For now, we'll show a local notification
+          notificationService.showNotification('📝 Assessment Received', {
+            body: `You have received a new assessment from ${assessorName}`,
+            tag: 'assessment-received',
+            icon: '/icons/icon-192x192.png'
+          });
+        }
+        
+        // Notify relevant managers based on roles
+        if (user?.role === 'SALES_LEAD') {
+          // Notify regional managers when sales leads complete assessments
+          notificationService.showSalesLeadAssessmentNotification(assessorName);
+        } else if (user?.role === 'REGIONAL_SALES_MANAGER') {
+          // Notify sales directors when regional managers complete assessments
+          notificationService.showTeamAssessmentNotification(assessorName);
+        } else if (user?.role === 'SALES_DIRECTOR') {
+          // Sales directors get notified about all assessments
+          notificationService.showNewAssessmentNotification(assessorName, assesseeName);
+        }
+      } catch (notificationError) {
+        console.warn('Failed to send notifications:', notificationError);
+        // Don't fail the submission if notifications fail
+      }
       
       // Clear form
       setSelectedUser('');
@@ -884,14 +893,29 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       setScores({});
       setComments({});
       
-      // Navigate to history after a longer delay to see the message
+      // Navigate to history after a delay
       setTimeout(() => {
         console.log('Navigating to history tab...');
-      onSuccess();
+        onSuccess();
       }, 3000);
     } catch (err) {
       console.error('❌ Failed to submit evaluation:', err);
-      console.error('❌ Error details:', JSON.stringify(err, null, 2));
+      
+      // If online submission fails, try to store offline
+      if (navigator.onLine && !isOffline) {
+        console.log('🔄 Online submission failed - attempting offline storage');
+        try {
+          const token = localStorage.getItem('userToken');
+          if (token && evaluationData) {
+            await offlineService.storeEvaluationOffline(evaluationData, token);
+            setSuccessMessage(`📴 ${t('evaluation.offlineStored')} - Will sync when online`);
+            return;
+          }
+        } catch (offlineError) {
+          console.error('❌ Failed to store offline:', offlineError);
+        }
+      }
+      
       setError(err instanceof Error ? err.message : t('evaluation.error'));
     } finally {
       setIsSubmitting(false);
@@ -919,6 +943,35 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       <div className="form-header">
         <h2>{getEvaluationTitle()}</h2>
         <p>{getEvaluationDescription()}</p>
+        
+        {/* Offline Status Indicator */}
+        <div className="offline-status">
+          {isOffline ? (
+            <div className="offline-indicator">
+              <span className="offline-icon">📴</span>
+              <span className="offline-text">Offline Mode - Data will sync when online</span>
+            </div>
+          ) : (
+            <div className="online-indicator">
+              <span className="online-icon">🌐</span>
+              <span className="online-text">Online</span>
+            </div>
+          )}
+          
+          {pendingOfflineItems > 0 && (
+            <div className="pending-sync">
+              <span className="sync-icon">🔄</span>
+              <span className="sync-text">{pendingOfflineItems} items pending sync</span>
+              <button 
+                className="sync-button"
+                onClick={() => offlineService.triggerSync()}
+                disabled={isOffline}
+              >
+                Sync Now
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -959,7 +1012,15 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
               type="text"
               id="customerName"
               value={customerName}
-              onChange={(e) => setCustomerName(sanitizeText(e.target.value))}
+              onChange={(e) => {
+                const validation = validateInput(e.target.value, 100);
+                if (validation.isValid) {
+                  setCustomerName(validation.sanitized);
+                } else {
+                  console.warn('Invalid input detected:', validation.errors);
+                  setCustomerName(validation.sanitized); // Still set the sanitized version
+                }
+              }}
               placeholder={t('evaluation.customerName')}
             />
           </div>
@@ -1069,7 +1130,15 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
             <textarea
               id="overallComment"
               value={overallComment}
-              onChange={(e) => setOverallComment(sanitizeText(e.target.value))}
+              onChange={(e) => {
+                const validation = validateInput(e.target.value, 2000);
+                if (validation.isValid) {
+                  setOverallComment(validation.sanitized);
+                } else {
+                  console.warn('Invalid overall comment input detected:', validation.errors);
+                  setOverallComment(validation.sanitized);
+                }
+              }}
               placeholder={t('evaluation.provideFeedback')}
               rows={4}
             />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { performanceMonitor, PerformanceMetrics } from '../utils/performanceMonitor';
 import { useTranslation } from 'react-i18next';
+import PerformanceStatistics from './PerformanceStatistics';
 
 interface PerformanceDashboardProps {
   isVisible: boolean;
@@ -12,6 +13,7 @@ const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({ isVisible, 
   const [metrics, setMetrics] = useState<PerformanceMetrics>({});
   const [score, setScore] = useState<number>(0);
   const [recommendations, setRecommendations] = useState<string[]>([]);
+  const [showStatistics, setShowStatistics] = useState<boolean>(false);
 
   useEffect(() => {
     if (isVisible) {
@@ -182,19 +184,18 @@ const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({ isVisible, 
           <div className="performance-actions">
             <button 
               className="action-button primary"
-              onClick={() => performanceMonitor.sendReport()}
+              onClick={() => {
+                performanceMonitor.sendReport();
+                alert('Performance report sent and stored successfully!');
+              }}
             >
               📊 Send Report
             </button>
             <button 
               className="action-button secondary"
-              onClick={() => {
-                const report = performanceMonitor.generateReport();
-                console.log('Performance Report:', report);
-                alert('Performance report logged to console');
-              }}
+              onClick={() => setShowStatistics(true)}
             >
-              📋 View Report
+              📋 View Statistics
             </button>
             <button 
               className="action-button secondary"
@@ -208,6 +209,12 @@ const PerformanceDashboard: React.FC<PerformanceDashboardProps> = ({ isVisible, 
           </div>
         </div>
       </div>
+      
+      {/* Statistics Modal */}
+      <PerformanceStatistics 
+        isVisible={showStatistics}
+        onClose={() => setShowStatistics(false)}
+      />
     </div>
   );
 };

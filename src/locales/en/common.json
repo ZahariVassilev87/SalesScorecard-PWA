@@ -50,6 +50,7 @@
     "submitting": "Submitting Assessment...",
     "permissionError": "You don't have permission to create assessments.",
     "selectTeamMember": "Please select a team member to evaluate",
+    "offlineStored": "Assessment saved offline",
     "loadingForm": "Loading assessment form...",
     "discovery": "Discovery",
     "solution": "Solution Positioning",

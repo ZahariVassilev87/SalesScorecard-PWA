@@ -26,7 +26,15 @@ export interface Team {
 
 export interface LoginResponse {
   token: string;
+  refreshToken?: string;
   user: User;
+  expiresIn?: number;
+}
+
+export interface RefreshTokenResponse {
+  token: string;
+  refreshToken?: string;
+  expiresIn?: number;
 }
 
 export interface SalesData {
@@ -117,10 +125,73 @@ class ApiService {
   clearToken() {
     this.token = null;
     tokenStorage.removeToken();
+    userStorage.removeUser();
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  // Token refresh mechanism
+  async refreshToken(): Promise<boolean> {
     try {
+      const refreshToken = tokenStorage.getRefreshToken();
+      if (!refreshToken) {
+        console.warn('No refresh token available');
+        return false;
+      }
+
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        console.warn('Token refresh failed:', response.status);
+        return false;
+      }
+
+      const data: RefreshTokenResponse = await response.json();
+      
+      // Update tokens
+      this.setToken(data.token);
+      if (data.refreshToken) {
+        tokenStorage.setRefreshToken(data.refreshToken);
+      }
+      if (data.expiresIn) {
+        tokenStorage.setTokenExpiry(Date.now() + (data.expiresIn * 1000));
+      }
+
+      console.log('✅ Token refreshed successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Token refresh error:', error);
+      return false;
+    }
+  }
+
+  // Check if token is expired or about to expire
+  isTokenExpired(): boolean {
+    const expiry = tokenStorage.getTokenExpiry();
+    if (!expiry) return false;
+    
+    // Consider token expired if it expires within the next 5 minutes
+    const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
+    return expiry < fiveMinutesFromNow;
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
+    try {
+      // Check if token is expired and refresh if needed
+      if (this.token && this.isTokenExpired() && retryCount === 0) {
+        console.log('🔄 Token expired, attempting refresh...');
+        const refreshed = await this.refreshToken();
+        if (!refreshed) {
+          console.warn('⚠️ Token refresh failed, clearing auth data');
+          this.clearToken();
+          throw new Error('Authentication expired. Please log in again.');
+        }
+      }
+
       const url = `${API_BASE}${endpoint}`;
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -143,6 +214,20 @@ class ApiService {
 
       console.log('🔍 [REQUEST DEBUG] Response status:', response.status);
       console.log('🔍 [REQUEST DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
+
+      // Handle 401 Unauthorized - try token refresh once
+      if (response.status === 401 && retryCount === 0 && this.token) {
+        console.log('🔄 Received 401, attempting token refresh...');
+        const refreshed = await this.refreshToken();
+        if (refreshed) {
+          console.log('✅ Token refreshed, retrying request...');
+          return this.request<T>(endpoint, options, retryCount + 1);
+        } else {
+          console.warn('⚠️ Token refresh failed, clearing auth data');
+          this.clearToken();
+          throw new Error('Authentication expired. Please log in again.');
+        }
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -208,15 +293,30 @@ class ApiService {
     
     this.setToken(token);
     
+    // Store refresh token and expiry if provided
+    if (data.refreshToken || data.refresh_token) {
+      tokenStorage.setRefreshToken(data.refreshToken || data.refresh_token);
+    }
+    if (data.expiresIn || data.expires_in) {
+      const expiresIn = data.expiresIn || data.expires_in;
+      tokenStorage.setTokenExpiry(Date.now() + (expiresIn * 1000));
+    }
+    
+    const userData = {
+      id: data.user?.id || '1',
+      email: data.user?.email || email,
+      displayName: data.user?.displayName || email.split('@')[0],
+      role: data.user?.role || 'SALESPERSON',
+      isActive: data.user?.isActive !== false
+    };
+    
+    userStorage.setUser(userData);
+    
     return {
       token: token,
-      user: {
-        id: data.user?.id || '1',
-        email: data.user?.email || email,
-        displayName: data.user?.displayName || email.split('@')[0],
-        role: data.user?.role || 'SALESPERSON',
-        isActive: data.user?.isActive !== false
-      }
+      refreshToken: data.refreshToken || data.refresh_token,
+      expiresIn: data.expiresIn || data.expires_in,
+      user: userData
     };
   }
 
