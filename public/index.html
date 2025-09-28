@@ -70,7 +70,7 @@
     <link rel="preload" href="/static/js/bundle.js" as="script">
     <link rel="preload" href="/manifest.json" as="manifest">
     
-    <title>Sales Scorecard PWA - Notifications Fixed v1.2.0</title>
+    <title>Sales Scorecard PWA - Push Notifications Enabled v1.2.1</title>
     
     <!-- Force mobile cache refresh with version parameter -->
     <script>
@@ -95,7 +95,9 @@
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
             .then((registration) => {
-              console.log('SW registered: ', registration);
+              console.log('🔍 [DEBUG] SW registered: ', registration);
+              console.log('🔍 [DEBUG] SW scope: ', registration.scope);
+              console.log('🔍 [DEBUG] SW active: ', registration.active);
               
               // Check for updates
               registration.addEventListener('updatefound', () => {
@@ -111,7 +113,7 @@
               });
             })
             .catch((registrationError) => {
-              console.log('SW registration failed: ', registrationError);
+              console.log('🔍 [DEBUG] SW registration failed: ', registrationError);
             });
         });
       }

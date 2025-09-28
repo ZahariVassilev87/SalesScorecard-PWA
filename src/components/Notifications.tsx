@@ -13,11 +13,14 @@ const Notifications: React.FC = () => {
     const checkNotificationStatus = async () => {
       try {
         const supported = notificationService.isSupported();
+        console.log('🔍 [DEBUG] Notifications component - isSupported:', supported);
         setIsPushSupported(supported);
         
         if (supported) {
-          // Push notifications are disabled, so always set to false
-          setIsSubscribed(false);
+          // Check if user is subscribed to push notifications
+          const subscription = await notificationService.getSubscription();
+          console.log('🔍 [DEBUG] Notifications component - subscription:', subscription);
+          setIsSubscribed(!!subscription);
           setPermission(Notification.permission);
         }
       } catch (error) {
@@ -32,10 +35,23 @@ const Notifications: React.FC = () => {
 
   const handleToggleNotifications = async () => {
     try {
-      // Push notifications are disabled, just show a message
-      notificationService.showNotification('🔔 Notifications', {
-        body: 'Push notifications are currently disabled. Local notifications are still active for assessment events.'
-      });
+      if (isSubscribed) {
+        // Unsubscribe from push notifications
+        await notificationService.unsubscribeFromPush();
+        setIsSubscribed(false);
+        notificationService.showNotification('🔔 Notifications Disabled', {
+          body: 'You have been unsubscribed from push notifications.'
+        });
+      } else {
+        // Subscribe to push notifications
+        const subscription = await notificationService.subscribeToPush();
+        if (subscription) {
+          setIsSubscribed(true);
+          notificationService.showNotification('🔔 Notifications Enabled', {
+            body: 'You will now receive push notifications for important updates.'
+          });
+        }
+      }
     } catch (error) {
       console.error('Failed to toggle notifications:', error);
     }
@@ -46,10 +62,14 @@ const Notifications: React.FC = () => {
       const newPermission = await Notification.requestPermission();
       setPermission(newPermission);
       if (newPermission === 'granted') {
-        // Push notifications are disabled, just show a message
-        notificationService.showNotification('🔔 Notifications', {
-          body: 'Push notifications are currently disabled. Local notifications are still active for assessment events.'
-        });
+        // Automatically subscribe to push notifications after permission granted
+        const subscription = await notificationService.subscribeToPush();
+        if (subscription) {
+          setIsSubscribed(true);
+          notificationService.showNotification('🔔 Notifications Enabled', {
+            body: 'You will now receive push notifications for important updates.'
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to request permission:', error);
@@ -81,14 +101,14 @@ const Notifications: React.FC = () => {
           </div>
           
           <div className="setting-content">
-            <p>
-              {!isPushSupported 
-                ? 'Push notifications are not supported in this browser or require a valid VAPID key to be configured. For now, you can still receive local notifications when assessments are completed.'
-                : isSubscribed 
-                  ? 'You will receive push notifications for important updates and events.'
-                  : 'Enable push notifications to stay updated with important information.'
-              }
-            </p>
+                    <p>
+                      {!isPushSupported
+                        ? 'Push notifications are not supported in this browser.'
+                        : isSubscribed
+                          ? 'You will receive push notifications for important updates and events.'
+                          : 'Enable push notifications to stay updated with important information.'
+                      }
+                    </p>
             
             <div className="permission-status">
               <strong>Permission Status:</strong> 
@@ -98,30 +118,71 @@ const Notifications: React.FC = () => {
               </span>
             </div>
 
-            <div className="setting-actions">
-              {!isPushSupported ? (
-                <button 
-                  className="btn-secondary"
-                  disabled
-                >
-                  Push Notifications Unavailable
-                </button>
-              ) : permission === 'default' ? (
-                <button 
-                  className="btn-primary"
-                  onClick={handleRequestPermission}
-                >
-                  Request Permission
-                </button>
-              ) : (
-                <button 
-                  className={`btn-${isSubscribed ? 'secondary' : 'primary'}`}
-                  onClick={handleToggleNotifications}
-                >
-                  {isSubscribed ? 'Disable Notifications' : 'Enable Notifications'}
-                </button>
-              )}
-            </div>
+                    <div className="setting-actions">
+                      {!isPushSupported ? (
+                        <button
+                          className="btn-secondary"
+                          disabled
+                        >
+                          Push Notifications Unavailable
+                        </button>
+                      ) : permission === 'default' ? (
+                        <button
+                          className="btn-primary"
+                          onClick={handleRequestPermission}
+                        >
+                          Request Permission
+                        </button>
+                      ) : (
+                        <button
+                          className={`btn-${isSubscribed ? 'secondary' : 'primary'}`}
+                          onClick={handleToggleNotifications}
+                        >
+                          {isSubscribed ? 'Disable Notifications' : 'Enable Notifications'}
+                        </button>
+                      )}
+                      
+                      {/* Debug Test Button */}
+                      <button
+                        className="btn-secondary"
+                        onClick={async () => {
+                          console.log('🔍 [DEBUG] Manual test - Browser support:', {
+                            hasNotification: 'Notification' in window,
+                            hasServiceWorker: 'serviceWorker' in navigator,
+                            hasPushManager: 'PushManager' in window,
+                            permission: Notification.permission,
+                            isSecureContext: window.isSecureContext,
+                            protocol: window.location.protocol,
+                            hostname: window.location.hostname
+                          });
+                          
+                          // Check service worker registration
+                          if ('serviceWorker' in navigator) {
+                            try {
+                              const registration = await navigator.serviceWorker.ready;
+                              console.log('🔍 [DEBUG] Service Worker ready:', registration);
+                              console.log('🔍 [DEBUG] Service Worker scope:', registration.scope);
+                              console.log('🔍 [DEBUG] Service Worker active:', registration.active);
+                            } catch (error) {
+                              console.log('🔍 [DEBUG] Service Worker error:', error);
+                            }
+                          }
+                          
+                          // Test local notification
+                          if ('Notification' in window && Notification.permission === 'granted') {
+                            new Notification('Test Notification', {
+                              body: 'This is a test notification',
+                              icon: '/icons/icon-192x192.png'
+                            });
+                          } else {
+                            console.log('🔍 [DEBUG] Cannot show notification - permission:', Notification.permission);
+                          }
+                        }}
+                        style={{ marginTop: '10px', fontSize: '0.8rem' }}
+                      >
+                        🧪 Test Notifications
+                      </button>
+                    </div>
           </div>
         </div>
 
@@ -136,9 +197,9 @@ const Notifications: React.FC = () => {
             <li>👥 <strong>Team Activity:</strong> Notifications when team members complete assessments</li>
             <li>🎯 <strong>Regional Updates:</strong> Sales leads completing assessments in your region</li>
           </ul>
-          <p style={{ marginTop: '16px', padding: '12px', backgroundColor: 'var(--blue-100)', borderRadius: '8px', fontSize: '0.9rem' }}>
-            <strong>Note:</strong> Currently, notifications work as local browser notifications. Push notifications require a backend server with VAPID keys to work across devices.
-          </p>
+                  <p style={{ marginTop: '16px', padding: '12px', backgroundColor: 'var(--blue-100)', borderRadius: '8px', fontSize: '0.9rem' }}>
+                    <strong>Note:</strong> Push notifications are now enabled! You can receive notifications even when the app is not open. For full functionality, a backend server is recommended for sending notifications across devices.
+                  </p>
         </div>
       </div>
     </div>

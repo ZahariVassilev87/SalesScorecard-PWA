@@ -1,10 +1,10 @@
 // Service Worker for Sales Scorecard PWA
 // Provides caching, offline capabilities, and performance improvements
 
-const CACHE_NAME = 'sales-scorecard-v1.4.0';
-const STATIC_CACHE_NAME = 'sales-scorecard-static-v1.4.0';
-const DYNAMIC_CACHE_NAME = 'sales-scorecard-dynamic-v1.4.0';
-const OFFLINE_CACHE_NAME = 'sales-scorecard-offline-v1.4.0';
+const CACHE_NAME = 'sales-scorecard-v1.5.0';
+const STATIC_CACHE_NAME = 'sales-scorecard-static-v1.5.0';
+const DYNAMIC_CACHE_NAME = 'sales-scorecard-dynamic-v1.5.0';
+const OFFLINE_CACHE_NAME = 'sales-scorecard-offline-v1.5.0';
 
 // Files to cache immediately
 const STATIC_ASSETS = [

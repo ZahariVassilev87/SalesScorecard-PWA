@@ -11,19 +11,29 @@ export interface NotificationPermission {
 
 class NotificationService {
   private vapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY || 
-    null; // No VAPID key - push notifications disabled for now
+    'VhqYrM-RxeWY_ap4ps2pQymmC8ke_PGMnpdu7wotAM5pMylrzBtEFF0eTT24vh6REef4LJ5q7jJ3nZ2JkaD8kl0'; // VAPID key for testing
 
   constructor() {
     console.log('🔍 [DEBUG] NotificationService constructor - VAPID key:', this.vapidPublicKey);
     console.log('🔍 [DEBUG] Environment variable:', process.env.REACT_APP_VAPID_PUBLIC_KEY);
-    console.log('🔍 [DEBUG] NEW VERSION 1.2.0 - Push notifications DISABLED');
+    console.log('🔍 [DEBUG] NEW VERSION 1.2.1 - Push notifications ENABLED');
   }
 
   // Check if notifications are supported
   public isSupported(): boolean {
-    // Temporarily disable push notifications until we have a proper VAPID key
-    return false;
-    // return 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+    // Enable push notifications with VAPID key
+    const hasNotification = 'Notification' in window;
+    const hasServiceWorker = 'serviceWorker' in navigator;
+    const hasPushManager = 'PushManager' in window;
+    
+    console.log('🔍 [DEBUG] Browser support check:', {
+      hasNotification,
+      hasServiceWorker,
+      hasPushManager,
+      vapidKey: this.vapidPublicKey ? 'Present' : 'Missing'
+    });
+    
+    return hasNotification && hasServiceWorker && hasPushManager;
   }
 
   // Get current notification permission
@@ -142,6 +152,22 @@ class NotificationService {
     } catch (error) {
       console.error('Failed to check subscription status:', error);
       return false;
+    }
+  }
+
+  // Get current push subscription
+  public async getSubscription(): Promise<globalThis.PushSubscription | null> {
+    if (!this.isSupported()) {
+      return null;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      return subscription;
+    } catch (error) {
+      console.error('Failed to get subscription:', error);
+      return null;
     }
   }
 
@@ -386,6 +412,8 @@ class NotificationService {
 
   // Convert VAPID key to Uint8Array
   private urlBase64ToUint8Array(base64String: string): Uint8Array {
+    console.log('🔍 [DEBUG] Converting VAPID key:', base64String);
+    
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding)
       .replace(/-/g, '+')
@@ -397,6 +425,8 @@ class NotificationService {
     for (let i = 0; i < rawData.length; ++i) {
       outputArray[i] = rawData.charCodeAt(i);
     }
+    
+    console.log('🔍 [DEBUG] VAPID key converted to Uint8Array, length:', outputArray.length);
     return outputArray;
   }
 

@@ -173,17 +173,32 @@ const SalesApp: React.FC = () => {
           )}
           
           {/* Notification Settings - Hidden on mobile */}
-          <button 
-            onClick={() => {
-              notificationService.showNotification('🔔 Notifications', {
-                body: 'Push notifications are currently disabled. Local notifications are still active for assessment events.'
-              });
-            }}
-            className="notification-button desktop-only"
-            title="Toggle Notifications"
-            style={{
-              background: '#28a745',
-              color: 'white',
+            <button 
+              onClick={async () => {
+                try {
+                  const isSubscribed = await notificationService.getSubscription();
+                  if (isSubscribed) {
+                    await notificationService.unsubscribeFromPush();
+                    notificationService.showNotification('🔔 Notifications Disabled', {
+                      body: 'You have been unsubscribed from push notifications.'
+                    });
+                  } else {
+                    const subscription = await notificationService.subscribeToPush();
+                    if (subscription) {
+                      notificationService.showNotification('🔔 Notifications Enabled', {
+                        body: 'You will now receive push notifications for important updates.'
+                      });
+                    }
+                  }
+                } catch (error) {
+                  console.error('Failed to toggle notifications:', error);
+                }
+              }}
+              className="notification-button desktop-only"
+              title="Toggle Notifications"
+              style={{
+                background: '#28a745',
+                color: 'white',
               border: 'none',
               fontSize: '16px',
               padding: '8px 12px',
