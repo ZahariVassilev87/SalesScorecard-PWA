@@ -19,15 +19,7 @@ const SalesApp: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(false);
 
-  // Debug logging
-  console.log('SalesApp rendered, user:', user);
-  console.log('showPerformanceDashboard:', showPerformanceDashboard);
-  console.log('PerformanceDashboard component:', PerformanceDashboard);
-  
-  // Alert to confirm component is loading
-  if (typeof window !== 'undefined') {
-    console.log('🚨 SALESAPP COMPONENT LOADED - DEBUG MODE ACTIVE');
-  }
+  // Performance dashboard state management
 
   const handleLogout = () => {
     logout();
@@ -257,64 +249,7 @@ const SalesApp: React.FC = () => {
         onClose={() => setShowPerformanceDashboard(false)}
       />
 
-      {/* Debug Test Button - Always Visible */}
-      <button 
-        onClick={() => {
-          console.log('Test button clicked!');
-          setShowPerformanceDashboard(true);
-        }}
-        style={{
-          position: 'fixed',
-          top: '10px',
-          left: '10px',
-          background: '#00ff00',
-          color: 'black',
-          border: '2px solid #000000',
-          padding: '10px',
-          borderRadius: '5px',
-          cursor: 'pointer',
-          zIndex: 10000,
-          fontSize: '14px',
-          fontWeight: 'bold',
-          display: 'block',
-          visibility: 'visible',
-          opacity: '1'
-        }}
-      >
-        🧪 TEST PERFORMANCE
-      </button>
 
-      {/* Additional Debug Info */}
-      <div style={{
-        position: 'fixed',
-        top: '60px',
-        left: '10px',
-        background: 'yellow',
-        color: 'black',
-        padding: '5px',
-        border: '1px solid black',
-        fontSize: '12px',
-        zIndex: 10000
-      }}>
-        Debug: showPerformanceDashboard = {showPerformanceDashboard.toString()}
-      </div>
-
-      {/* HUGE RED DEBUG BANNER */}
-      <div style={{
-        position: 'fixed',
-        top: '0',
-        left: '0',
-        right: '0',
-        background: 'red',
-        color: 'white',
-        padding: '10px',
-        textAlign: 'center',
-        fontSize: '16px',
-        fontWeight: 'bold',
-        zIndex: 99999
-      }}>
-        🚨 DEBUG MODE ACTIVE - Performance Dashboard Available 🚨
-      </div>
     </div>
   );
 };
