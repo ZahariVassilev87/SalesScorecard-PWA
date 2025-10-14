@@ -60,7 +60,7 @@ const Dashboard: React.FC = () => {
   if (isLoading) {
     return (
       <div className="dashboard">
-        <div className="loading">{t('dashboard.loading')}</div>
+        <div className="loading">Loading...</div>
       </div>
     );
   }
@@ -68,8 +68,16 @@ const Dashboard: React.FC = () => {
   return (
     <div className="dashboard">
       <div className="welcome-section">
-        <h2>{t('dashboard.welcome', { name: user?.displayName })}</h2>
+        <h2>Dashboard</h2>
         <p className="role-badge">{getRoleDisplayName(user?.role || '')}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="refresh-button dashboard-refresh"
+          title="Force refresh (fixes Chrome caching issues)"
+        >
+          <span>🔄</span>
+          <span>Refresh App</span>
+        </button>
       </div>
 
       {isSalesDirector ? (
@@ -78,37 +86,37 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-card">
             <div className="card-icon">🏢</div>
             <div className="card-value">{directorateData?.totalRegions || 0}</div>
-            <div className="card-label">{t('dashboard.totalRegions')}</div>
+            <div className="card-label">Total Regions</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">👥</div>
             <div className="card-value">{directorateData?.totalTeamMembers || 0}</div>
-            <div className="card-label">{t('dashboard.totalTeamMembers')}</div>
+            <div className="card-label">Total Team Members</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📊</div>
             <div className="card-value">{directorateData?.averagePerformance || 0}%</div>
-            <div className="card-label">{t('dashboard.averagePerformance')}</div>
+            <div className="card-label">Average Performance</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📋</div>
             <div className="card-value">{directorateData?.totalEvaluations || 0}</div>
-            <div className="card-label">{t('dashboard.totalEvaluations')}</div>
+            <div className="card-label">Total Evaluations</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📈</div>
             <div className="card-value">{directorateData?.evaluationsCompleted || 0}</div>
-            <div className="card-label">{t('dashboard.evaluationsCompleted')}</div>
+            <div className="card-label">Evaluations Completed</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">⭐</div>
             <div className="card-value">{directorateData?.averageScore || 0}</div>
-            <div className="card-label">{t('dashboard.averageScore')}</div>
+            <div className="card-label">Average Score</div>
           </div>
         </div>
       ) : (
@@ -117,48 +125,48 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-card">
             <div className="card-icon">📋</div>
             <div className="card-value">{evaluationData?.totalEvaluations || 0}</div>
-            <div className="card-label">{t('dashboard.myEvaluations')}</div>
+            <div className="card-label">My Evaluations</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">⭐</div>
             <div className="card-value">{evaluationData?.averageScore || 0}</div>
-            <div className="card-label">{t('dashboard.averageScore')}</div>
+            <div className="card-label">Average Score</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📊</div>
             <div className="card-value">{evaluationData?.totalScore || 0}</div>
-            <div className="card-label">{t('dashboard.totalScore')}</div>
+            <div className="card-label">Total Score</div>
           </div>
 
           <div className="dashboard-card">
             <div className="card-icon">📈</div>
             <div className="card-value">{evaluationData?.thisMonth || 0}</div>
-            <div className="card-label">{t('dashboard.thisMonth')}</div>
+            <div className="card-label">This Month</div>
           </div>
         </div>
       )}
 
       {!isSalesDirector && (
         <div className="quick-actions">
-          <h3>{t('dashboard.quickActions')}</h3>
+          <h3>Quick Actions</h3>
           <div className="actions-grid">
             <div className="action-card">
               <div className="action-icon">👥</div>
-              <div className="action-label">{t('dashboard.viewTeam')}</div>
+              <div className="action-label">View Team</div>
             </div>
             <div className="action-card">
               <div className="action-icon">📋</div>
-              <div className="action-label">{t('dashboard.reports')}</div>
+              <div className="action-label">Reports</div>
             </div>
             <div className="action-card">
               <div className="action-icon">⚙️</div>
-              <div className="action-label">{t('dashboard.settings')}</div>
+              <div className="action-label">Settings</div>
             </div>
             <div className="action-card">
               <div className="action-icon">📞</div>
-              <div className="action-label">{t('dashboard.support')}</div>
+              <div className="action-label">Support</div>
             </div>
           </div>
         </div>

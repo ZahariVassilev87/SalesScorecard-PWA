@@ -1,0 +1,53 @@
+SalesScorecard-PWA Backup Manifest
+==================================
+
+Backup Date: Tue Oct 14 14:36:33 EEST 2025
+Backup Timestamp: 20251014_143558
+Backup File: SalesScorecard-Backup-20251014_143558.tar.gz
+
+Contents:
+---------
+- Frontend source code (React/TypeScript)
+- Backend source code (Node.js/Express)
+- Database schema and data (if accessible)
+- Configuration files (.env, package.json, etc.)
+- Documentation and scripts
+
+Frontend:
+- React components in src/
+- Translation files in src/locales/
+- Build configuration
+- PWA configuration
+
+Backend:
+- Production backend in backend/
+- Local backend in local-backend/
+- Database migrations and schemas
+- API endpoints and business logic
+
+Database:
+- SQL dump file (if database was accessible)
+- Schema and data backup
+
+Configuration:
+- Environment variables
+- Package dependencies
+- Build configurations
+- Deployment settings
+
+Restore Instructions:
+---------------------
+1. Extract the archive: tar -xzf SalesScorecard-Backup-20251014_143558.tar.gz
+2. Navigate to the extracted directory
+3. Install dependencies: npm install
+4. Configure environment: cp .env.example .env (edit as needed)
+5. Restore database: psql < database_backup_20251014_143558.sql (if available)
+6. Build frontend: npm run build
+7. Start backend: npm start (or use PM2/Docker as configured)
+
+Notes:
+------
+- This backup was created on: Tue Oct 14 14:36:33 EEST 2025
+- Frontend build artifacts are not included (can be regenerated)
+- Node modules are not included (can be reinstalled)
+- Database backup depends on network access to production database

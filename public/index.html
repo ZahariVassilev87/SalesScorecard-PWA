@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <meta name="theme-color" content="#667eea" />
     <meta name="description" content="Sales Scorecard - Progressive Web Application for sales management and evaluation" />
     
@@ -41,37 +44,57 @@
     
     <title>Sales Scorecard PWA - Customer Type Added</title>
     
-    <!-- Force mobile cache refresh with version parameter -->
+    <!-- Mobile Debug Script -->
     <script>
-      // Force cache refresh for mobile browsers
-      if (window.location.search.indexOf('v=') === -1) {
-        window.location.href = window.location.href + (window.location.search ? '&' : '?') + 'v=' + Date.now();
-      }
+      console.log('🔍 [MOBILE DEBUG] index.html loaded');
+      console.log('🔍 [MOBILE DEBUG] User Agent:', navigator.userAgent);
+      console.log('🔍 [MOBILE DEBUG] Window location:', window.location.href);
+      
+      // Capture all errors
+      window.addEventListener('error', function(event) {
+        console.error('❌ [MOBILE DEBUG] JavaScript Error:', event.message);
+        console.error('❌ [MOBILE DEBUG] Error Source:', event.filename + ':' + event.lineno);
+        console.error('❌ [MOBILE DEBUG] Error:', event.error);
+      });
+      
+      window.addEventListener('unhandledrejection', function(event) {
+        console.error('❌ [MOBILE DEBUG] Unhandled Promise Rejection:', event.reason);
+      });
     </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     
-    <!-- Service Worker Registration - Force Update for Mobile -->
+    
+    <!-- Disable Service Worker for Chrome and Safari to fix caching issues -->
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          // Unregister any existing service workers to force fresh load
-          navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
+      // Detect Chrome and Safari - disable service worker for both
+      const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+      
+      if (isChrome || isSafari) {
+        console.log(`🚫 ${isChrome ? 'Chrome' : 'Safari'} detected - disabling service worker to fix caching issues`);
+        
+        // Unregister all service workers in Chrome/Safari
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(registration => {
+              console.log(`🚫 Unregistering service worker for ${isChrome ? 'Chrome' : 'Safari'}:`, registration.scope);
               registration.unregister();
-            }
-          });
-          
-          // Clear all caches
-          if ('caches' in window) {
-            caches.keys().then(function(names) {
-              for (let name of names) {
-                caches.delete(name);
-              }
             });
-          }
+          });
+        }
+      } else if ('serviceWorker' in navigator) {
+        // Enable service worker for other browsers (Firefox, Edge, etc.)
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js?v=' + Date.now())
+            .then(registration => {
+              console.log('✅ Service Worker registered for other browsers');
+            })
+            .catch(error => {
+              console.error('Service Worker registration failed:', error);
+            });
         });
       }
     </script>

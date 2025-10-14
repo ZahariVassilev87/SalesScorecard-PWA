@@ -1,5 +1,5 @@
 // API Service for Sales Scorecard PWA
-const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://api.instorm.io';
+const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://api.scorecard.instorm.io';
 
 export interface User {
   id: string;
@@ -94,6 +94,7 @@ export interface Evaluation {
     createdAt: string;
     updatedAt: string;
     displayName?: string; // For compatibility
+    name?: string; // Backend sometimes returns this instead of displayName
   };
   manager: User;
   items: EvaluationItem[];
@@ -103,21 +104,52 @@ class ApiService {
   private token: string | null = null;
 
   constructor() {
-    this.token = localStorage.getItem('userToken');
+    // Simple token initialization - try localStorage first, then sessionStorage
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const userToken = localStorage.getItem('userToken') || sessionStorage.getItem('userToken');
+    
+    // Use token if available, otherwise fallback to userToken
+    this.token = token || userToken;
+    
+    console.log('🔍 ApiService initialized with token:', !!this.token);
   }
 
   setToken(token: string) {
     this.token = token;
-    localStorage.setItem('userToken', token);
+    try {
+      localStorage.setItem('token', token);
+      localStorage.setItem('userToken', token); // Keep for backward compatibility
+      console.log('✅ [MOBILE DEBUG] Token saved to localStorage');
+    } catch (error) {
+      console.error('❌ [MOBILE DEBUG] Failed to save token to localStorage:', error);
+      // Mobile browsers sometimes have localStorage issues
+      // Store in sessionStorage as fallback
+      try {
+        sessionStorage.setItem('token', token);
+        sessionStorage.setItem('userToken', token); // Keep for backward compatibility
+        console.log('✅ [MOBILE DEBUG] Token saved to sessionStorage as fallback');
+      } catch (sessionError) {
+        console.error('❌ [MOBILE DEBUG] Failed to save token to sessionStorage:', sessionError);
+      }
+    }
   }
 
   clearToken() {
     this.token = null;
-    localStorage.removeItem('userToken');
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('userToken'); // Keep for backward compatibility
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('userToken'); // Keep for backward compatibility
+      console.log('✅ [MOBILE DEBUG] Tokens cleared from storage');
+    } catch (error) {
+      console.error('❌ [MOBILE DEBUG] Failed to clear tokens:', error);
+    }
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
+    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
@@ -141,38 +173,60 @@ class ApiService {
   }
 
   async login(email: string, password: string): Promise<LoginResponse> {
-    const response = await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email, password })
-    });
+    console.log('🔍 [DEBUG] Login attempt - Browser:', navigator.userAgent);
+    console.log('🔍 [DEBUG] Email:', email);
+    console.log('🔍 [DEBUG] Email length:', email.length);
+    console.log('🔍 [DEBUG] Email charCodes:', Array.from(email).map((c, i) => `${i}:${c}(${c.charCodeAt(0)})`).join(' '));
+    console.log('🔍 [DEBUG] Password length:', password.length);
+    console.log('🔍 [DEBUG] API_BASE:', API_BASE);
+    
+    const loginData = { email: email.trim(), password: password.trim() };
+    console.log('🔍 [DEBUG] Sending:', JSON.stringify(loginData));
+    
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(loginData)
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Login failed: ${response.status} ${errorText}`);
-    }
-
-    const data = await response.json();
-    const token = data.token || data.access_token;
-    
-    if (!token) {
-      throw new Error('No token received from server');
-    }
-    
-    this.setToken(token);
-    
-    return {
-      token: token,
-      user: {
-        id: data.user?.id || '1',
-        email: data.user?.email || email,
-        displayName: data.user?.displayName || email.split('@')[0],
-        role: data.user?.role || 'SALESPERSON',
-        isActive: data.user?.isActive !== false
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Login failed: ${response.status} ${errorText}`);
       }
-    };
+
+      const data = await response.json();
+      const token = data.token || data.access_token;
+      
+      if (!token) {
+        throw new Error('No token received from server');
+      }
+      
+      this.setToken(token);
+      
+      return {
+        token: token,
+        user: {
+          id: data.user?.id || '1',
+          email: data.user?.email || email,
+          displayName: data.user?.displayName || email.split('@')[0],
+          role: data.user?.role || 'SALESPERSON',
+          isActive: data.user?.isActive !== false
+        }
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === 'TimeoutError') {
+          throw new Error('Login timeout - please check your internet connection');
+        }
+        if (error.message.includes('Failed to fetch')) {
+          throw new Error('Network error - please check your internet connection');
+        }
+      }
+      throw error;
+    }
   }
 
 
@@ -217,13 +271,31 @@ class ApiService {
   }
 
   async getMyTeam(): Promise<Team | null> {
-    console.log('🔍 Loading team data...');
+    console.log('🔍 [API] Loading team data...');
+    console.log('🔍 [API] Current token source:', this.token ? 'EXISTS' : 'MISSING');
+    console.log('🔍 [API] Token preview:', this.token ? this.token.substring(0, 50) + '...' : 'NONE');
     
     try {
-      // Get current user profile which includes team information
-      console.log('📡 Calling /users/profile/me...');
-      const profile = await this.request<any>('/users/profile/me');
-      console.log('👤 Profile data:', profile);
+      // Use the new dedicated endpoint to get user's team with all members
+      console.log('📡 [API] Calling /users/my-team...');
+      const team = await this.request<Team>('/users/my-team');
+      console.log('👥 [API] Team data:', team);
+      
+      if (team) {
+        console.log(`✅ [API] Found team: ${team.name} with ${team.members?.length || 0} members`);
+        return team;
+      }
+      
+      console.log('⚠️ [API] No team found for current user');
+      return null;
+    } catch (error) {
+      console.error('❌ Error loading team:', error);
+      
+      // Fallback to old logic
+      console.log('⚠️ Falling back to old profile-based logic...');
+      try {
+        const profile = await this.request<any>('/users/profile/me');
+        console.log('👤 Profile data:', profile);
       
       if (profile) {
         // Check if user has managed teams
@@ -319,12 +391,10 @@ class ApiService {
       console.log('⚠️ No team data found in profile');
       // If user has no managed teams and no user teams, return null
       return null;
-    } catch (error) {
-      console.error('❌ Failed to load team data:', error);
-      console.log('🔄 Returning null - user has no team data');
-      
-      // Return null instead of mock data when user has no teams
-      return null;
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+        return null;
+      }
     }
   }
 
@@ -443,7 +513,7 @@ class ApiService {
     overallComment?: string;
     items: Array<{
       behaviorItemId: string;
-      score: number;
+      rating: number; // Backend expects 'rating' not 'score'
       comment?: string;
     }>;
   }): Promise<Evaluation> {
@@ -503,79 +573,61 @@ class ApiService {
     console.log('🔍 Loading evaluatable users...');
     
     try {
-      // Use the new backend endpoint with proper RBAC
-      console.log('📡 Calling /organizations/salespeople...');
-      const salespeople = await this.request<User[]>('/organizations/salespeople');
-      console.log('✅ Found salespeople from backend:', salespeople);
-      return salespeople;
-    } catch (error) {
-      console.error('❌ Error loading evaluatable users from backend:', error);
-      
-      // Fallback to old logic if backend fails
-      console.log('⚠️ Falling back to old logic...');
-      try {
-        const currentUserStr = localStorage.getItem('user');
-        if (!currentUserStr) {
-          console.log('❌ No current user found in localStorage');
-          throw new Error('No current user found');
-        }
-        
-        const currentUser = JSON.parse(currentUserStr);
-        console.log('👤 Current user role:', currentUser.role);
-        
-        // Get team members based on current user's role
-        if (currentUser.role === 'SALES_LEAD') {
-          console.log('🔍 Sales Lead: Getting team members...');
-          const team = await this.getMyTeam();
-          console.log('👥 Team data:', team);
-          if (team && team.members && team.members.length > 0) {
-            const salespeople = team.members.filter(member => member.role === 'SALESPERSON');
-            console.log('✅ Found salespeople:', salespeople);
-            if (salespeople.length > 0) {
-              return salespeople;
-            }
-          }
-          console.log('⚠️ No team members found - Sales Lead has no managed teams');
-          return [];
-        } else if (currentUser.role === 'REGIONAL_MANAGER' || currentUser.role === 'REGIONAL_SALES_MANAGER') {
-          console.log('🔍 Regional Manager: Getting team members...');
-          const team = await this.getMyTeam();
-          console.log('👥 Team data:', team);
-          if (team && team.members && team.members.length > 0) {
-            const salesLeads = team.members.filter(member => member.role === 'SALES_LEAD');
-            console.log('✅ Found sales leads:', salesLeads);
-            if (salesLeads.length > 0) {
-              return salesLeads;
-            }
-          }
-          console.log('⚠️ No team members found - Regional Manager has no managed teams');
-          return [];
-        } else if (currentUser.role === 'SALES_DIRECTOR') {
-          console.log('🔍 Sales Director: Getting regional managers...');
-          const users = await this.getUsers();
-          const regionalManagers = users.filter(user => user.role === 'REGIONAL_MANAGER' || user.role === 'REGIONAL_SALES_MANAGER');
-          console.log('✅ Found regional managers:', regionalManagers);
-          return regionalManagers;
-        } else if (currentUser.role === 'ADMIN') {
-          console.log('🔍 Admin: Getting all users...');
-          const users = await this.getUsers();
-          const nonAdmins = users.filter(user => user.role !== 'ADMIN');
-          console.log('✅ Found non-admin users:', nonAdmins);
-          return nonAdmins;
-        }
-        
-        console.log('⚠️ No matching role, returning empty array');
+      // Use team-based approach as primary method
+      console.log('📡 Getting team data for evaluatable users...');
+      const currentUserStr = localStorage.getItem('user');
+      if (!currentUserStr) {
+        console.log('❌ No current user found in localStorage');
         return [];
-      } catch (fallbackError) {
-        console.error('❌ Failed to load evaluatable users:', fallbackError);
-        console.log('🔄 Using fallback mock data...');
       }
+      
+      const currentUser = JSON.parse(currentUserStr);
+      console.log('👤 Current user role:', currentUser.role);
+      
+      // Get team members based on current user's role
+      if (currentUser.role === 'SALES_LEAD') {
+        console.log('🔍 Sales Lead: Getting team members...');
+        const team = await this.getMyTeam();
+        console.log('👥 Team data:', team);
+        if (team && team.members && team.members.length > 0) {
+          const salespeople = team.members.filter(member => member.role === 'SALESPERSON');
+          console.log('✅ Found salespeople:', salespeople);
+          return salespeople;
+        }
+        console.log('⚠️ No team members found - Sales Lead has no managed teams');
+        return [];
+      } else if (currentUser.role === 'REGIONAL_MANAGER' || currentUser.role === 'REGIONAL_SALES_MANAGER') {
+        console.log('🔍 Regional Manager: Getting team members...');
+        const team = await this.getMyTeam();
+        console.log('👥 Team data:', team);
+        if (team && team.members && team.members.length > 0) {
+          const salesLeads = team.members.filter(member => member.role === 'SALES_LEAD');
+          console.log('✅ Found sales leads:', salesLeads);
+          return salesLeads;
+        }
+        console.log('⚠️ No team members found - Regional Manager has no managed teams');
+        return [];
+      } else if (currentUser.role === 'SALES_DIRECTOR') {
+        console.log('🔍 Sales Director: Getting regional managers...');
+        const users = await this.getUsers();
+        const regionalManagers = users.filter(user => user.role === 'REGIONAL_MANAGER' || user.role === 'REGIONAL_SALES_MANAGER');
+        console.log('✅ Found regional managers:', regionalManagers);
+        return regionalManagers;
+      } else if (currentUser.role === 'ADMIN') {
+        console.log('🔍 Admin: Getting all users...');
+        const users = await this.getUsers();
+        const nonAdmins = users.filter(user => user.role !== 'ADMIN');
+        console.log('✅ Found non-admin users:', nonAdmins);
+        return nonAdmins;
+      }
+      
+      console.log('⚠️ No matching role, returning empty array');
+      return [];
+      
+    } catch (error) {
+      console.error('❌ Error loading evaluatable users:', error);
+      return [];
     }
-    
-    // If we reach here, the backend correctly returned an empty array
-    // This means the user has no teams they manage, so return empty array
-    console.log('✅ Backend correctly returned empty array - user has no managed teams');
-    return [];
   }
 
   private getCurrentUserId(): string {
@@ -588,16 +640,172 @@ class ApiService {
   }
 
   getCurrentUser(): User | null {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      return JSON.parse(userStr);
+    console.log('🔍 [MOBILE DEBUG] getCurrentUser called');
+    
+    // Try localStorage first, then sessionStorage for mobile compatibility
+    let userStr = localStorage.getItem('user');
+    if (!userStr) {
+      console.log('🔍 [MOBILE DEBUG] No user in localStorage, trying sessionStorage');
+      userStr = sessionStorage.getItem('user');
     }
+    
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        console.log('✅ [MOBILE DEBUG] User found in storage:', user.displayName);
+        return user;
+      } catch (error) {
+        console.error('❌ [MOBILE DEBUG] Failed to parse user data:', error);
+        return null;
+      }
+    }
+    
+    console.log('⚠️ [MOBILE DEBUG] No user data found in any storage');
     return null;
   }
 
   logout() {
+    console.log('🔍 [MOBILE DEBUG] ApiService logout called');
     this.clearToken();
-    localStorage.removeItem('user');
+    
+    // Clear user data from both storages
+    try {
+      localStorage.removeItem('user');
+      console.log('✅ [MOBILE DEBUG] User data cleared from localStorage');
+    } catch (error) {
+      console.error('❌ [MOBILE DEBUG] Failed to clear localStorage:', error);
+    }
+    
+    try {
+      sessionStorage.removeItem('user');
+      console.log('✅ [MOBILE DEBUG] User data cleared from sessionStorage');
+    } catch (error) {
+      console.error('❌ [MOBILE DEBUG] Failed to clear sessionStorage:', error);
+    }
+  }
+
+  // Sales Director Dashboard Analytics
+  async getDirectorDashboard(): Promise<{
+    // Regional execution performance (salespeople evaluations by sales leads)
+    regionalExecutionPerformance: Array<{
+      regionId: string;
+      regionName: string;
+      executionEvaluations: number;
+      avgExecutionScore: number;
+      uniqueSalespeopleEvaluated: number;
+      uniqueSalesLeadsEvaluating: number;
+    }>;
+    
+    // Regional coaching performance (sales leads evaluations by regional managers)
+    regionalCoachingPerformance: Array<{
+      regionId: string;
+      regionName: string;
+      coachingEvaluations: number;
+      avgCoachingScore: number;
+      uniqueSalesLeadsEvaluated: number;
+      uniqueRegionalManagersEvaluating: number;
+    }>;
+    
+    // Salespeople execution performance (by sales lead)
+    salespeopleExecutionPerformance: Array<{
+      salesLeadId: string;
+      salesLeadName: string;
+      salesLeadEmail: string;
+      executionEvaluationsCreated: number;
+      avgExecutionScore: number;
+      regionId: string;
+      regionName: string;
+    }>;
+    
+    // Sales lead coaching performance (of sales leads by regional managers)
+    salesLeadCoachingPerformance: Array<{
+      salesLeadId: string;
+      salesLeadName: string;
+      salesLeadEmail: string;
+      regionalManagerId: string;
+      regionalManagerName: string;
+      coachingEvaluationsReceived: number;
+      avgCoachingScore: number;
+      regionId: string;
+      regionName: string;
+    }>;
+    
+    // Company execution metrics (salespeople evaluations)
+    companyExecutionMetrics: {
+      totalExecutionEvaluations: number;
+      avgExecutionScore: number;
+      totalSalespeopleEvaluated: number;
+      totalSalesLeadsEvaluating: number;
+    } | null;
+    
+    // Company coaching metrics (sales leads evaluations)
+    companyCoachingMetrics: {
+      totalCoachingEvaluations: number;
+      avgCoachingScore: number;
+      totalSalesLeadsEvaluated: number;
+      totalRegionalManagersEvaluating: number;
+    } | null;
+    
+    // User counts
+    userCounts: {
+      totalSalesLeads: number;
+      totalRegionalManagers: number;
+      totalSalespeople: number;
+    } | null;
+    
+    // Share of Wallet distribution
+    shareOfWalletDistribution: Array<{
+      customerType: string;
+      evaluationCount: number;
+      avgScore: number;
+      percentage: number;
+    }>;
+    
+    // Execution trends (salespeople evaluations)
+    executionTrends: Array<{
+      date: string;
+      evaluationsCount: number;
+      avgScore: number;
+    }>;
+    
+    // Coaching trends (sales leads evaluations)
+    coachingTrends: Array<{
+      date: string;
+      evaluationsCount: number;
+      avgScore: number;
+    }>;
+
+    // Regional execution metrics (regional managers performance in sales behaviours)
+    regionalExecutionMetrics: Array<{
+      regionalManagerId: string;
+      regionalManagerName: string;
+      regionalManagerEmail: string;
+      regionId: string;
+      regionName: string;
+      executionEvaluations: number;
+      avgExecutionScore: number;
+      uniqueSalespeopleEvaluated: number;
+      uniqueSalesLeadsEvaluating: number;
+    }>;
+
+    // Regional coaching metrics (regional managers performance in coaching)
+    regionalCoachingMetrics: Array<{
+      regionalManagerId: string;
+      regionalManagerName: string;
+      regionalManagerEmail: string;
+      regionId: string;
+      regionName: string;
+      coachingEvaluations: number;
+      avgCoachingScore: number;
+      uniqueSalesLeadsEvaluated: number;
+    }>;
+  }> {
+    try {
+      return await this.request('/analytics/director-dashboard');
+    } catch (error) {
+      console.error('Failed to load director dashboard data:', error);
+      throw error;
+    }
   }
 }
 

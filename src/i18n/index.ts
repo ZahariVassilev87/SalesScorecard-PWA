@@ -5,17 +5,25 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 // Import translation files
 import enCommon from '../locales/en/common.json';
 import enEvaluation from '../locales/en/evaluation.json';
+import enCoaching from '../locales/en/coaching.json';
+import enSalesperson from '../locales/en/salesperson.json';
 import bgCommon from '../locales/bg/common.json';
 import bgEvaluation from '../locales/bg/evaluation.json';
+import bgCoaching from '../locales/bg/coaching.json';
+import bgSalesperson from '../locales/bg/salesperson.json';
 
 const resources = {
   en: {
     common: enCommon,
     evaluation: enEvaluation,
+    coaching: enCoaching,
+    salesperson: enSalesperson,
   },
   bg: {
     common: bgCommon,
     evaluation: bgEvaluation,
+    coaching: bgCoaching,
+    salesperson: bgSalesperson,
   },
 };
 
@@ -25,7 +33,7 @@ i18n
   .init({
     resources,
     fallbackLng: 'en',
-    debug: process.env.NODE_ENV === 'development',
+    debug: false, // Disable debug even in development for cleaner mobile logs
     
     // Language detection options
     detection: {
@@ -36,7 +44,7 @@ i18n
 
     // Namespace configuration
     defaultNS: 'common',
-    ns: ['common', 'evaluation'],
+    ns: ['common', 'evaluation', 'coaching', 'salesperson'],
 
     // Interpolation options
     interpolation: {
@@ -45,8 +53,14 @@ i18n
 
     // React options
     react: {
-      useSuspense: false,
+      useSuspense: false, // Critical for mobile - don't use Suspense
     },
+  })
+  .then(() => {
+    console.log('✅ [i18n] Initialized successfully');
+  })
+  .catch((error) => {
+    console.error('❌ [i18n] Initialization failed:', error);
   });
 
 export default i18n;

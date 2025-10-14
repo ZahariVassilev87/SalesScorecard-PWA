@@ -67,7 +67,7 @@ const NewEvaluationForm: React.FC<NewEvaluationFormProps> = ({ onSuccess, onCanc
       const evaluationItems = categories.flatMap(category =>
         category.items.map(item => ({
           behaviorItemId: item.id,
-          score: scores[item.id] || 0,
+          rating: scores[item.id] || 0, // Backend expects 'rating' not 'score'
           comment: comments[item.id] || ''
         }))
       );

@@ -1,0 +1,86 @@
+{
+  "title": "Sales Lead Coaching Evaluation",
+  "subtitle": "Evaluate Sales Lead coaching abilities in the field",
+  "cluster1": "Observation & Intervention During Client Meeting",
+  "cluster2": "Creating Coaching Environment",
+  "cluster3": "Quality of Analysis & Feedback",
+  "cluster4": "Translating Into Action",
+  
+  "letSalespersonLead": "Let salesperson lead the conversation",
+  "score1": "Manager led most of the conversation",
+  "score2": "Often interrupted or took over",
+  "score3": "Mostly let salesperson lead, but some interruptions",
+  "score4": "Fully let salesperson lead, minimal intervention",
+  
+  "providedSupport": "Provided support when needed",
+  "support1": "No support given",
+  "support2": "Late or inappropriate support",
+  "support3": "Provided support but not always timely",
+  "support4": "Timely and appropriate support, without taking over",
+  
+  "steppedInValue": "Stepped in with added value at right time",
+  "value1": "Did not step in",
+  "value2": "Stepped in too late or without value",
+  "value3": "Added some value, not consistently",
+  "value4": "Added clear value at the right moment",
+  
+  "activelyListened": "Actively listened to client and salesperson",
+  "listen1": "Not attentive",
+  "listen2": "Partial listening, missed points",
+  "listen3": "Listened but with limited reactions",
+  "listen4": "Fully attentive, demonstrated understanding",
+  
+  "calmAtmosphere": "Ensured calm and safe atmosphere",
+  "atmosphere1": "Created tension or criticism",
+  "atmosphere2": "Neutral but not supportive",
+  "atmosphere3": "Tried to create safety, partly successful",
+  "atmosphere4": "Clear support and respect shown",
+  
+  "askedSelfAssessment": "Asked salesperson for self-assessment / feelings",
+  "assessment1": "Did not ask",
+  "assessment2": "Asked superficially",
+  "assessment3": "Asked and partially listened",
+  "assessment4": "Asked, listened, and encouraged reflection",
+  
+  "listenedAttentively": "Listened attentively without interrupting",
+  "attentive1": "Frequently interrupted",
+  "attentive2": "Sometimes interrupted",
+  "attentive3": "Listened but not fully engaged",
+  "attentive4": "Fully attentive, no interruptions",
+  
+  "startedPositive": "Started with positive practices",
+  "positive1": "Only criticism",
+  "positive2": "One vague positive note",
+  "positive3": "Noted positives but without examples",
+  "positive4": "Clear, concrete positive practices",
+  
+  "concreteExamples": "Gave concrete examples from client meeting",
+  "examples1": "Spoke generally",
+  "examples2": "Few, vague examples",
+  "examples3": "Some examples, partially relevant",
+  "examples4": "Clear, specific examples from meeting",
+  
+  "identifiedImprovement": "Identified areas for improvement with examples",
+  "improvement1": "No improvement areas",
+  "improvement2": "Mentioned but vague",
+  "improvement3": "Identified with some examples",
+  "improvement4": "Clear, factual improvement points",
+  
+  "setClearTasks": "Set clear tasks for a specific period",
+  "tasks1": "No tasks given",
+  "tasks2": "Very general, no timeframe",
+  "tasks3": "Tasks set but vague timeframe",
+  "tasks4": "Clear, specific tasks with timeframe",
+  
+  "reachedAgreement": "Reached agreement on evaluation and next steps",
+  "agreement1": "Imposed view, no agreement",
+  "agreement2": "Partial agreement",
+  "agreement3": "Agreement but weak commitment",
+  "agreement4": "Full agreement and buy-in",
+  
+  "encouragedGoal": "Encouraged salesperson to set a personal goal/commitment",
+  "goal1": "Did not encourage",
+  "goal2": "Mentioned but superficial",
+  "goal3": "Encouraged, but weak ownership from salesperson",
+  "goal4": "Strongly encouraged, salesperson committed personally"
+}

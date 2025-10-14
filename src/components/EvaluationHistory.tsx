@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { apiService, Evaluation } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const EvaluationHistory: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useTranslation();
+  
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedEvaluation, setSelectedEvaluation] = useState<Evaluation | null>(null);
   const [activeTab, setActiveTab] = useState<'created' | 'about'>('created');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadEvaluations = async () => {
@@ -18,7 +22,7 @@ const EvaluationHistory: React.FC = () => {
         console.log('📊 Loaded evaluations:', data);
         setEvaluations(data);
       } catch (err) {
-        setError('Failed to load evaluations');
+        setError(t('history.loading'));
         console.error('Failed to load evaluations:', err);
       } finally {
         setIsLoading(false);
@@ -26,10 +30,10 @@ const EvaluationHistory: React.FC = () => {
     };
 
     loadEvaluations();
-  }, []);
+  }, [t]);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('bg-BG', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -38,20 +42,242 @@ const EvaluationHistory: React.FC = () => {
 
   const getScoreColor = (score?: number) => {
     if (!score) return '#8e8e93';
-    if (score >= 4) return '#34c759';
-    if (score >= 3) return '#ff9500';
-    return '#ff3b30';
+    if (score >= 4) return '#34c759'; // Excellent
+    if (score >= 3) return '#32d74b'; // Good
+    if (score >= 2) return '#ff9500'; // Fair
+    return '#ff3b30'; // Poor
   };
 
   const calculateCategoryScore = (evaluation: Evaluation, categoryName: string) => {
-    const categoryItems = evaluation.items.filter(item => 
-      item.behaviorItem.category?.name === categoryName
-    );
+    const categoryItems = evaluation.items.filter(item => {
+      const itemCategoryName = item.behaviorItem.category?.name === 'Unknown Category' 
+        ? getLegacyCategoryName(item.behaviorItemId)
+        : item.behaviorItem.category?.name || getLegacyCategoryName(item.behaviorItemId);
+      return itemCategoryName === categoryName;
+    });
     
     if (categoryItems.length === 0) return 0;
     
     const totalScore = categoryItems.reduce((sum, item) => sum + item.rating, 0);
-    return totalScore / categoryItems.length;
+    const avgScore = totalScore / categoryItems.length;
+    return avgScore;
+  };
+
+  // Get legacy category name for old evaluation IDs
+  const getLegacyCategoryName = (behaviorItemId: string) => {
+    // Extract category from behavior item ID
+    if (behaviorItemId.includes('_prep')) return 'preparation';
+    if (behaviorItemId.includes('_prob')) return 'problemDefinition';
+    if (behaviorItemId.includes('_obj')) return 'objections';
+    if (behaviorItemId.includes('_prop')) return 'commercial';
+    
+    const legacyMappings: Record<string, string> = {
+      // Coaching observation items
+      'obs1': 'Observation & Intervention During Client Meeting',
+      'obs2': 'Observation & Intervention During Client Meeting',
+      'obs3': 'Observation & Intervention During Client Meeting',
+      'obs4': 'Observation & Intervention During Client Meeting',
+      
+      // Coaching environment items
+      'env1': 'Creating Coaching Environment',
+      'env2': 'Creating Coaching Environment',
+      'env3': 'Creating Coaching Environment',
+      
+      // Coaching feedback items
+      'fb1': 'Quality of Analysis & Feedback',
+      'fb2': 'Quality of Analysis & Feedback',
+      'fb3': 'Quality of Analysis & Feedback',
+      
+      // Coaching action items
+      'act1': 'Translating Into Action',
+      'act2': 'Translating Into Action',
+      'act3': 'Translating Into Action',
+      
+      // Sales Behavior Categories - Simple format
+      'prep1': 'preparation',
+      'prep2': 'preparation',
+      'prep3': 'preparation',
+      'prep4': 'preparation',
+      'prep5': 'preparation',
+      'prep6': 'preparation',
+      'prep7': 'preparation',
+      
+      'prob1': 'problemDefinition',
+      'prob2': 'problemDefinition',
+      'prob3': 'problemDefinition',
+      'prob4': 'problemDefinition',
+      
+      'obj1': 'objections',
+      'obj2': 'objections',
+      'obj3': 'objections',
+      
+      'prop1': 'commercial',
+      'prop2': 'commercial',
+      'prop3': 'commercial',
+      'prop4': 'commercial',
+      
+      // Generic sales behavior categories
+      'discovery': 'discovery',
+      'solution': 'solution',
+      'closing': 'closing',
+      'professionalism': 'professionalism'
+    };
+    
+    return legacyMappings[behaviorItemId] || 'Unknown Category';
+  };
+
+  // Get legacy item name for old evaluation IDs
+  const getLegacyItemName = (behaviorItemId: string) => {
+    // Handle the specific format: salesperson_LOW_SHARE_prep1, etc.
+    if (behaviorItemId.includes('_prep1')) return 'Identified core products the client uses (in their menu) but does not buy from METRO';
+    if (behaviorItemId.includes('_prep2')) return 'Determined type of establishment (restaurant/hotel) and cuisine style';
+    if (behaviorItemId.includes('_prep3')) return 'Selected 1–2 focus products for the meeting';
+    if (behaviorItemId.includes('_prep4')) return 'Knows where the client currently orders from and why';
+    if (behaviorItemId.includes('_prep5')) return 'Analyzed client\'s restaurant prices and quality/price preferences';
+    if (behaviorItemId.includes('_prep6')) return 'Prepared strategy for focus product (e.g. which mozzarella, which brand)';
+    if (behaviorItemId.includes('_prep7')) return 'Visit aligned with METRO contact model';
+    
+    if (behaviorItemId.includes('_prob1')) return 'Asked about client\'s experience with current supplier';
+    if (behaviorItemId.includes('_prob2')) return 'Checked for issues with price, quality, and delivery';
+    if (behaviorItemId.includes('_prob3')) return 'Clarified how issues affect client\'s business';
+    if (behaviorItemId.includes('_prob4')) return 'Explored problem with a core product METRO does not supply';
+    
+    if (behaviorItemId.includes('_obj1')) return 'Listened fully to objection without interrupting';
+    if (behaviorItemId.includes('_obj2')) return 'Validated client\'s perspective';
+    if (behaviorItemId.includes('_obj3')) return 'Put objection in market context & showed METRO\'s response';
+    
+    if (behaviorItemId.includes('_prop1')) return 'Presented product as solution to specific problem';
+    if (behaviorItemId.includes('_prop2')) return 'Demonstrated product benefits with concrete examples';
+    if (behaviorItemId.includes('_prop3')) return 'Proposed test of key products';
+    if (behaviorItemId.includes('_prop4')) return 'Agreed on clear next step';
+    
+    const legacyMappings: Record<string, string> = {
+      // Coaching items
+      'obs1': 'Let salesperson lead the conversation',
+      'obs2': 'Provided support when needed',
+      'obs3': 'Stepped in with added value at right time',
+      'obs4': 'Actively listened to client and salesperson',
+      'env1': 'Ensured calm and safe atmosphere',
+      'env2': 'Asked salesperson for self-assessment / feelings',
+      'env3': 'Listened attentively without interrupting',
+      'fb1': 'Started with positive practices',
+      'fb2': 'Gave concrete examples from client meeting',
+      'fb3': 'Identified areas for improvement with examples',
+      'act1': 'Set clear tasks for a specific period',
+      'act2': 'Reached agreement on evaluation and next steps',
+      'act3': 'Encouraged salesperson to set a personal goal/commitment'
+    };
+    
+    return legacyMappings[behaviorItemId] || behaviorItemId;
+  };
+
+  // Map English category names to translation keys
+  const getCategoryTranslationKey = (categoryName: string): string => {
+    const categoryMap: Record<string, string> = {
+      // Coaching categories
+      'Observation & Intervention During Client Meeting': 'cluster1',
+      'Creating Coaching Environment': 'cluster2',
+      'Quality of Analysis & Feedback': 'cluster3',
+      'Translating Into Action': 'cluster4',
+      
+      // Sales behavior categories - simple format
+      'preparation': 'preparation',
+      'problemDefinition': 'problemDefinition',
+      'objections': 'objections',
+      'commercial': 'commercial',
+      
+      // Legacy sales behavior categories
+      'Preparation Before the Meeting': 'preparation',
+      'Problem Definition': 'problemDefinition',
+      'Handling Objections': 'objections',
+      'Commercial Proposal': 'commercial',
+      'Discovery & Needs Assessment': 'discovery',
+      'Solution Positioning': 'solution',
+      'Closing & Next Steps': 'closing',
+      'Professionalism': 'professionalism'
+    };
+    return categoryMap[categoryName] || categoryName;
+  };
+
+  // Map English behavior item names to translation keys
+  const getBehaviorItemTranslationKey = (itemName: string): string => {
+    const itemMap: Record<string, string> = {
+      // Coaching items
+      'Let salesperson lead the conversation': 'letSalespersonLead',
+      'Provided support when needed': 'providedSupport',
+      'Stepped in with added value at right time': 'steppedInValue',
+      'Actively listened to client and salesperson': 'activelyListened',
+      'Ensured calm and safe atmosphere': 'calmAtmosphere',
+      'Asked salesperson for self-assessment / feelings': 'askedSelfAssessment',
+      'Listened attentively without interrupting': 'listenedAttentively',
+      'Started with positive practices': 'startedPositive',
+      'Gave concrete examples from client meeting': 'concreteExamples',
+      'Identified areas for improvement with examples': 'identifiedImprovement',
+      'Set clear tasks for a specific period': 'setClearTasks',
+      'Reached agreement on evaluation and next steps': 'reachedAgreement',
+      'Encouraged salesperson to set a personal goal/commitment': 'encouragedGoal',
+      
+      // Sales behavior items - exact English descriptions from getLegacyItemName
+      'Identified core products the client uses (in their menu) but does not buy from METRO': 'Identified core products the client uses (in their menu) but does not buy from METRO',
+      'Determined type of establishment (restaurant/hotel) and cuisine style': 'Determined type of establishment (restaurant/hotel) and cuisine style',
+      'Selected 1–2 focus products for the meeting': 'Selected 1–2 focus products for the meeting',
+      'Knows where the client currently orders from and why': 'Knows where the client currently orders from and why',
+      'Analyzed client\'s restaurant prices and quality/price preferences': 'Analyzed client\'s restaurant prices and quality/price preferences',
+      'Prepared strategy for focus product (e.g. which mozzarella, which brand)': 'Prepared strategy for focus product (e.g. which mozzarella, which brand)',
+      'Visit aligned with METRO contact model': 'Visit aligned with METRO contact model',
+      
+      'Asked about client\'s experience with current supplier': 'Asked about client\'s experience with current supplier',
+      'Checked for issues with price, quality, and delivery': 'Checked for issues with price, quality, and delivery',
+      'Clarified how issues affect client\'s business': 'Clarified how issues affect client\'s business',
+      'Explored problem with a core product METRO does not supply': 'Explored problem with a core product METRO does not supply',
+      
+      'Listened fully to objection without interrupting': 'Listened fully to objection without interrupting',
+      'Validated client\'s perspective': 'Validated client\'s perspective',
+      'Put objection in market context & showed METRO\'s response': 'Put objection in market context & showed METRO\'s response',
+      
+      'Presented product as solution to specific problem': 'Presented product as solution to specific problem',
+      'Demonstrated product benefits with concrete examples': 'Demonstrated product benefits with concrete examples',
+      'Proposed test of key products': 'Proposed test of key products',
+      'Agreed on clear next step': 'Agreed on clear next step',
+      
+      // Legacy sales behavior items
+      'Research and preparation': 'sales:researchPreparation',
+      'Agenda setting': 'sales:agendaSetting',
+      'Materials preparation': 'sales:materialsPreparation',
+      'Objective setting': 'sales:objectiveSetting',
+      'Needs identification': 'sales:needsIdentification',
+      'Pain point analysis': 'sales:painPointAnalysis',
+      'Problem prioritization': 'sales:problemPrioritization',
+      'Impact assessment': 'sales:impactAssessment',
+      'Objection acknowledgment': 'sales:objectionAcknowledgment',
+      'Objection exploration': 'sales:objectionExploration',
+      'Solution presentation': 'sales:solutionPresentation',
+      'Objection resolution': 'sales:objectionResolution',
+      'Value proposition': 'sales:valueProposition',
+      'Pricing presentation': 'sales:pricingPresentation',
+      'Terms negotiation': 'sales:termsNegotiation',
+      'Closing approach': 'sales:closingApproach'
+    };
+    return itemMap[itemName] || itemName;
+  };
+
+  // Get unique categories from evaluation items
+  const getCategoriesFromEvaluation = (evaluation: Evaluation) => {
+    const categories = new Set<string>();
+    
+    evaluation.items.forEach(item => {
+      const legacyCategoryName = getLegacyCategoryName(item.behaviorItemId);
+      
+      const categoryName = item.behaviorItem.category?.name === 'Unknown Category' 
+        ? legacyCategoryName
+        : item.behaviorItem.category?.name || legacyCategoryName;
+      
+      if (categoryName) {
+        categories.add(categoryName);
+      }
+    });
+    
+    return Array.from(categories);
   };
 
   // Separate evaluations into two categories
@@ -63,7 +289,7 @@ const EvaluationHistory: React.FC = () => {
     );
 
     const evaluationsAboutMe = evaluations.filter(evaluation => 
-      evaluation.managerId !== user.id
+      evaluation.salespersonId === user.id
     );
 
     return { evaluationsICreated, evaluationsAboutMe };
@@ -81,6 +307,29 @@ const EvaluationHistory: React.FC = () => {
   };
 
   const currentEvaluations = getCurrentEvaluations();
+
+  const toggleCategory = (categoryName: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(categoryName)) {
+      newExpanded.delete(categoryName);
+    } else {
+      newExpanded.add(categoryName);
+    }
+    setExpandedCategories(newExpanded);
+  };
+
+  const isMobile = () => window.innerWidth <= 768;
+
+  const toggleAllCategories = () => {
+    const categories = getCategoriesFromEvaluation(selectedEvaluation || evaluations[0]);
+    const allExpanded = categories.every(cat => expandedCategories.has(cat));
+    
+    if (allExpanded) {
+      setExpandedCategories(new Set());
+    } else {
+      setExpandedCategories(new Set(categories));
+    }
+  };
 
   if (isLoading) {
     return (
@@ -103,8 +352,8 @@ const EvaluationHistory: React.FC = () => {
   return (
     <div className="evaluation-history">
       <div className="history-header">
-        <h2>Evaluation History</h2>
-        <p>View and manage your past evaluations</p>
+        <h2>{t('historyTitle')}</h2>
+        <p>{t('historySubtitle')}</p>
       </div>
 
       {/* Tab Navigation */}
@@ -114,7 +363,7 @@ const EvaluationHistory: React.FC = () => {
           onClick={() => setActiveTab('created')}
         >
           <span className="tab-icon">📝</span>
-          <span className="tab-text">Evaluations I Created</span>
+          <span className="tab-text">{t('history.evaluationsICreated')}</span>
           <span className="tab-count">({evaluationsICreated.length})</span>
         </button>
         <button 
@@ -122,7 +371,7 @@ const EvaluationHistory: React.FC = () => {
           onClick={() => setActiveTab('about')}
         >
           <span className="tab-icon">👤</span>
-          <span className="tab-text">Evaluations About Me</span>
+          <span className="tab-text">{t('history.evaluationsAboutMe')}</span>
           <span className="tab-count">({evaluationsAboutMe.length})</span>
         </button>
       </div>
@@ -131,11 +380,11 @@ const EvaluationHistory: React.FC = () => {
       <div className="tab-content">
         {currentEvaluations.length === 0 ? (
           <div className="no-evaluations">
-            <h3>No Evaluations Yet</h3>
+            <h3>{t('history.noEvaluationsYet')}</h3>
             <p>
               {activeTab === 'created' 
-                ? "You haven't created any evaluations yet. Start by creating your first evaluation."
-                : "No evaluations have been created about you yet."
+                ? t('history.youHaventCreated')
+                : t('history.noEvaluationsAboutYou')
               }
             </p>
           </div>
@@ -145,68 +394,59 @@ const EvaluationHistory: React.FC = () => {
               <div key={evaluation.id} className="evaluation-card">
                 <div className="evaluation-header">
                   <div className="evaluation-info">
-                    <h3>{evaluation.salesperson.displayName || `${evaluation.salesperson.firstName} ${evaluation.salesperson.lastName}`}</h3>
-                    <p className="evaluation-date">{formatDate(evaluation.visitDate)}</p>
+                    <div className="evaluation-title">
+                      <h3>{evaluation.salesperson.displayName || evaluation.salesperson.name || `${evaluation.salesperson.firstName} ${evaluation.salesperson.lastName}`}</h3>
+                      <span className="evaluation-date">{formatDate(evaluation.visitDate)}</span>
+                    </div>
+                    
+                    <div className="evaluation-details">
                     {evaluation.customerName && (
-                      <p className="customer-name">Customer: {evaluation.customerName}</p>
+                        <div className="detail-item">
+                          <span className="detail-label">{t('history.customer')}</span>
+                          <span className="detail-value">{evaluation.customerName}</span>
+                        </div>
                     )}
                     {evaluation.location && (
-                      <p className="location">📍 {evaluation.location}</p>
+                        <div className="detail-item">
+                          <span className="detail-label">{t('history.location')}</span>
+                          <span className="detail-value">📍 {evaluation.location}</span>
+                        </div>
                     )}
+                    </div>
                   </div>
+                  
                   <div className="overall-score">
                     <span 
                       className="score-value"
                       style={{ color: getScoreColor(evaluation.overallScore) }}
                     >
-                      {evaluation.overallScore ? evaluation.overallScore.toFixed(1) : 'N/A'}
+                      {evaluation.overallScore ? `${((evaluation.overallScore / 4) * 100).toFixed(0)}%` : 'N/A'}
                     </span>
-                    <span className="score-label">Overall</span>
+                    <span className="score-label">{t('history.overall')}</span>
                   </div>
                 </div>
 
                 <div className="category-scores">
-                  <div className="category-score">
-                    <span className="category-name">Discovery</span>
+                  {getCategoriesFromEvaluation(evaluation).map(categoryName => {
+                    const score = calculateCategoryScore(evaluation, categoryName);
+                    const percentage = ((score / 4) * 100).toFixed(0);
+                    return (
+                      <div key={categoryName} className="category-score">
+                        <span className="category-name">{t(getCategoryTranslationKey(categoryName), { ns: 'salesperson' })}</span>
                     <span 
                       className="score" 
-                      style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Discovery')) }}
+                          style={{ color: getScoreColor(score) }}
                     >
-                      {calculateCategoryScore(evaluation, 'Discovery').toFixed(1)}
+                          {percentage}%
                     </span>
                   </div>
-                  <div className="category-score">
-                    <span className="category-name">Solution</span>
-                    <span 
-                      className="score" 
-                      style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Solution Positioning')) }}
-                    >
-                      {calculateCategoryScore(evaluation, 'Solution Positioning').toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="category-score">
-                    <span className="category-name">Closing</span>
-                    <span 
-                      className="score" 
-                      style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Closing & Next Steps')) }}
-                    >
-                      {calculateCategoryScore(evaluation, 'Closing & Next Steps').toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="category-score">
-                    <span className="category-name">Professional</span>
-                    <span 
-                      className="score" 
-                      style={{ color: getScoreColor(calculateCategoryScore(evaluation, 'Professionalism')) }}
-                    >
-                      {calculateCategoryScore(evaluation, 'Professionalism').toFixed(1)}
-                    </span>
-                  </div>
+                    );
+                  })}
                 </div>
 
                 {evaluation.overallComment && (
                   <div className="overall-comment">
-                    <p><strong>Overall Comment:</strong></p>
+                    <p><strong>{t('history.overallComment')}:</strong></p>
                     <p>{evaluation.overallComment}</p>
                   </div>
                 )}
@@ -215,7 +455,7 @@ const EvaluationHistory: React.FC = () => {
                   className="view-details-button"
                   onClick={() => setSelectedEvaluation(evaluation)}
                 >
-                  View Details
+{t('history.details')}
                 </button>
               </div>
             ))}
@@ -227,7 +467,7 @@ const EvaluationHistory: React.FC = () => {
         <div className="evaluation-modal">
           <div className="modal-content">
             <div className="modal-header">
-              <h3>Evaluation Details</h3>
+                <h3>{t('history.evaluationDetails')}</h3>
               <button 
                 className="close-button"
                 onClick={() => setSelectedEvaluation(null)}
@@ -236,40 +476,113 @@ const EvaluationHistory: React.FC = () => {
               </button>
             </div>
             
+            <button 
+              className="modal-close-x"
+              onClick={() => setSelectedEvaluation(null)}
+              title="Close"
+            >
+              ×
+            </button>
+            
             <div className="modal-body">
               <div className="evaluation-details">
-                <h4>{selectedEvaluation.salesperson.displayName || `${selectedEvaluation.salesperson.firstName} ${selectedEvaluation.salesperson.lastName}`}</h4>
-                <p><strong>Date:</strong> {formatDate(selectedEvaluation.visitDate)}</p>
+                <h4>{selectedEvaluation.salesperson.displayName || selectedEvaluation.salesperson.name || `${selectedEvaluation.salesperson.firstName} ${selectedEvaluation.salesperson.lastName}`}</h4>
+                <p><strong>{t('history.date')}</strong> {formatDate(selectedEvaluation.visitDate)}</p>
                 {selectedEvaluation.customerName && (
-                  <p><strong>Customer:</strong> {selectedEvaluation.customerName}</p>
+                  <p><strong>{t('history.customer')}</strong> {selectedEvaluation.customerName}</p>
                 )}
                 {selectedEvaluation.location && (
-                  <p><strong>Location:</strong> {selectedEvaluation.location}</p>
+                  <p><strong>{t('history.location')}</strong> {selectedEvaluation.location}</p>
                 )}
               </div>
 
+              {isMobile() && (
+                <div className="mobile-controls">
+                  <button 
+                    className="toggle-all-button"
+                    onClick={toggleAllCategories}
+                  >
+                    {getCategoriesFromEvaluation(selectedEvaluation).every(cat => expandedCategories.has(cat)) 
+                      ? t('history.collapseAll') 
+                      : t('history.expandAll')
+                    }
+                  </button>
+                </div>
+              )}
+
               <div className="detailed-scores">
-                {['Discovery', 'Solution Positioning', 'Closing & Next Steps', 'Professionalism'].map(categoryName => {
-                  const categoryItems = selectedEvaluation.items.filter(item => 
-                    item.behaviorItem.category?.name === categoryName
-                  );
+                {getCategoriesFromEvaluation(selectedEvaluation).map(categoryName => {
+                  const categoryItems = selectedEvaluation.items.filter(item => {
+                    const itemCategoryName = item.behaviorItem.category?.name === 'Unknown Category'
+                      ? getLegacyCategoryName(item.behaviorItemId)
+                      : item.behaviorItem.category?.name || getLegacyCategoryName(item.behaviorItemId);
+                    return itemCategoryName === categoryName;
+                  });
                   
                   if (categoryItems.length === 0) return null;
                   
+                  const isExpanded = expandedCategories.has(categoryName);
+                  const showCollapsible = isMobile();
+                  
                   return (
                     <div key={categoryName} className="category-detail">
-                      <h5>{categoryName}</h5>
-                      {categoryItems.map(item => (
-                        <div key={item.id} className="item-detail">
-                          <div className="item-name">{item.behaviorItem.name}</div>
-                          <div className="item-score">
-                            <span className="score">{item.rating}/5</span>
-                            {item.comment && (
-                              <div className="item-comment">{item.comment}</div>
+                      <div 
+                        className="category-header"
+                        onClick={() => showCollapsible && toggleCategory(categoryName)}
+                        style={{ cursor: showCollapsible ? 'pointer' : 'default' }}
+                      >
+                        <h5>{t(getCategoryTranslationKey(categoryName), { ns: 'salesperson' })}</h5>
+                        {showCollapsible && (
+                          <span className="category-toggle">
+                            {isExpanded ? '−' : '+'}
+                          </span>
                             )}
                           </div>
+                      {(!showCollapsible || isExpanded) && (
+                        <div className="category-items">
+                          {categoryItems.map(item => {
+                            const itemName = getLegacyItemName(item.behaviorItemId);
+                            return (
+                            <div key={item.id} className="item-detail">
+                              <div className="item-name">{t(getBehaviorItemTranslationKey(itemName), { ns: 'salesperson' })}</div>
+                              <div className="item-score">
+                                <span className="score">{item.rating}/4</span>
+                              </div>
+                              <div className="item-comment">
+                                <div className="comment-label">{t('history.example')}</div>
+                                <div className="comment-text">
+                                  {(() => {
+                                    // Handle empty or missing comments
+                                    if (!item.comment) {
+                                      return <em>{t('history.noExampleProvided')}</em>;
+                                    }
+                                    
+                                    // Handle JSON comments
+                                    if (typeof item.comment === 'string' && item.comment.startsWith('{')) {
+                                      try {
+                                        const parsed = JSON.parse(item.comment);
+                                        // Check if this is just metadata (has behaviorItemId, itemName, categoryName)
+                                        if (parsed.behaviorItemId && parsed.itemName && parsed.categoryName) {
+                                          // This is metadata, not actual example text
+                                          return <em>{t('history.noExampleProvided')}</em>;
+                                        }
+                                        // Return actual example text if it exists
+                                        return parsed.text || parsed.comment || parsed.example || <em>{t('history.noExampleProvided')}</em>;
+                                      } catch {
+                                        return item.comment;
+                                      }
+                                    }
+                                    
+                                    // Handle plain text comments
+                                    return item.comment || <em>{t('history.noExampleProvided')}</em>;
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+                            );
+                          })}
                         </div>
-                      ))}
+                      )}
                     </div>
                   );
                 })}
@@ -277,7 +590,7 @@ const EvaluationHistory: React.FC = () => {
 
               {selectedEvaluation.overallComment && (
                 <div className="overall-comment-detail">
-                  <h5>Overall Comment</h5>
+                  <h5>{t('history.overallComment')}</h5>
                   <p>{selectedEvaluation.overallComment}</p>
                 </div>
               )}

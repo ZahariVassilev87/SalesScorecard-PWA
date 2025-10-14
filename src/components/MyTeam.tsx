@@ -1,36 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { apiService, Team } from '../services/api';
 
 const MyTeam: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [team, setTeam] = useState<Team | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-
+  const lastUserIdRef = useRef<string | null>(null);
+  
   useEffect(() => {
+    // Only load if user ID actually changed
+    if (!user?.id || user.id === lastUserIdRef.current) {
+      if (!user?.id) {
+        setIsLoading(false);
+      }
+      return;
+    }
+    
+    lastUserIdRef.current = user.id;
+    
     const loadTeam = async () => {
       try {
         const teamData = await apiService.getMyTeam();
-        setTeam(teamData);
+        
+        if (teamData && teamData.members && teamData.members.length > 0) {
+          setTeam(teamData);
+        } else {
+          setTeam(null);
+        }
       } catch (err) {
-        setError('Failed to load team data');
         console.error('Failed to load team:', err);
+        setError(t('team.failedToLoadTeamData'));
       } finally {
         setIsLoading(false);
       }
     };
 
     loadTeam();
-  }, []);
+  }, [user?.id, t]);
 
   const getRoleDisplayName = (role: string) => {
     switch (role) {
-      case 'SALES_DIRECTOR': return 'Sales Director';
-      case 'REGIONAL_SALES_MANAGER': return 'Regional Manager';
-      case 'SALES_LEAD': return 'Sales Lead';
-      case 'SALESPERSON': return 'Salesperson';
-      case 'ADMIN': return 'Administrator';
+      case 'SALES_DIRECTOR': return t('team.salesDirector');
+      case 'REGIONAL_SALES_MANAGER': return t('team.regionalManager');
+      case 'SALES_LEAD': return t('team.salesLead');
+      case 'SALESPERSON': return t('team.salesperson');
+      case 'ADMIN': return t('team.administrator');
       default: return role;
     }
   };
@@ -49,7 +67,7 @@ const MyTeam: React.FC = () => {
   if (isLoading) {
     return (
       <div className="my-team">
-        <div className="loading">Loading team...</div>
+        <div className="loading">{t('team.loading')}</div>
       </div>
     );
   }
@@ -66,8 +84,8 @@ const MyTeam: React.FC = () => {
     return (
       <div className="my-team">
         <div className="no-teams">
-          <h3>No Team Found</h3>
-          <p>You are not currently assigned to any team.</p>
+          <h3>{t('team.noTeam')}</h3>
+          <p>{t('team.noTeamDescription')}</p>
         </div>
       </div>
     );
@@ -76,7 +94,7 @@ const MyTeam: React.FC = () => {
   return (
     <div className="my-team">
       <div className="team-header">
-        <h2>My Team</h2>
+        <h2>{t('team.myTeam')}</h2>
         <div className="team-info">
           <h3>{team.name}</h3>
           {team.region && (
@@ -86,7 +104,7 @@ const MyTeam: React.FC = () => {
       </div>
 
       <div className="team-members">
-        <h4>Team Members ({team.members.length})</h4>
+        <h4>{t('team.teamMembers')} ({team.members.length})</h4>
         <div className="team-members-grid">
           {team.members.map((member) => (
             <div key={member.id} className="team-member-card">
@@ -98,7 +116,7 @@ const MyTeam: React.FC = () => {
                 <div className="member-role">{getRoleDisplayName(member.role)}</div>
                 <div className="member-email">{member.email}</div>
                 {member.id === user?.id && (
-                  <div className="member-badge">You</div>
+                  <div className="member-badge">{t('common.you')}</div>
                 )}
               </div>
             </div>
@@ -108,7 +126,7 @@ const MyTeam: React.FC = () => {
 
       {team.manager && (
         <div className="team-manager">
-          <h4>Team Manager</h4>
+          <h4>{t('team.teamManager')}</h4>
           <div className="manager-card">
             <div className="member-avatar">
               {getRoleIcon(team.manager.role)}

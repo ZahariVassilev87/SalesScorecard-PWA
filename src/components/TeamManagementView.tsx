@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService, User, Team } from '../services/api';
 
@@ -9,10 +9,20 @@ const TeamManagementView: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Only load if user ID actually changed
+    if (!user?.id || user.id === lastUserIdRef.current) {
+      if (!user?.id) {
+        setIsLoading(false);
+      }
+      return;
+    }
+    
+    lastUserIdRef.current = user.id;
+    
     const loadData = async () => {
-      console.log('🔍 [DEBUG] TeamManagementView: loadData called for user:', user?.email, 'role:', user?.role);
       try {
         // For admins and sales directors, get all data
         if (user?.role === 'ADMIN' || user?.role === 'SALES_DIRECTOR') {
@@ -68,7 +78,7 @@ const TeamManagementView: React.FC = () => {
     };
 
     loadData();
-  }, [user]);
+  }, [user]); // Include full user object to satisfy ESLint
 
   const getUsersByRole = (role: string) => {
     return allUsers.filter(user => user.role === role);

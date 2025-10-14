@@ -126,7 +126,7 @@ const RoleBasedEvaluationForm: React.FC<RoleBasedEvaluationFormProps> = ({ onSuc
       // In a real implementation, you'd have different evaluation types
       const evaluationItems = getEvaluationCriteria().map(criteria => ({
         behaviorItemId: criteria.id, // This would need to be mapped to actual behavior item IDs
-        score: scores[criteria.id] || 0,
+        rating: scores[criteria.id] || 0, // Backend expects 'rating' not 'score'
         comment: comments[criteria.id] || ''
       }));
 

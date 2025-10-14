@@ -1,0 +1,91 @@
+{
+  "title": "Salesperson Evaluation",
+  "description": "Evaluate Salesperson performance during sales meetings",
+  "cluster1": "Opening & Discovery (35%)",
+  "cluster2": "Presenting Solution (25%)",
+  "cluster3": "Handling Objections (20%)",
+  "cluster4": "Closing & Follow-up (20%)",
+  
+  "asksOpenQuestions": "Asks open-ended questions",
+  "openQ1": "Asks only closed yes/no questions",
+  "openQ2": "Asks some open questions but mostly closed",
+  "openQ3": "Consistently asks good open questions",
+  "openQ4": "Excellent open questions that uncover deep needs",
+  
+  "activeListening": "Listens actively to customer responses",
+  "listen1": "Doesn't listen - talks over customer",
+  "listen2": "Listens minimally - misses key points",
+  "listen3": "Listens well - catches important details",
+  "listen4": "Exceptional listening - fully engages",
+  
+  "identifiesPainPoints": "Identifies pain points and challenges",
+  "pain1": "Misses all pain points",
+  "pain2": "Identifies surface-level issues only",
+  "pain3": "Identifies key pain points",
+  "pain4": "Deeply understands and articulates all pain points",
+  
+  "needsAnalysis": "Analyzes customer needs thoroughly",
+  "needs1": "No needs analysis performed",
+  "needs2": "Superficial needs analysis",
+  "needs3": "Good needs analysis",
+  "needs4": "Comprehensive needs analysis",
+  
+  "clearStructure": "Presents solution with clear structure",
+  "struct1": "Disorganized - confusing presentation",
+  "struct2": "Somewhat organized - hard to follow",
+  "struct3": "Well-structured - easy to follow",
+  "struct4": "Perfectly structured - compelling flow",
+  
+  "benefitsFocus": "Focuses on customer benefits",
+  "benefits1": "Only talks about features",
+  "benefits2": "Mentions benefits briefly",
+  "benefits3": "Clearly explains benefits",
+  "benefits4": "Compellingly demonstrates value and ROI",
+  
+  "addressesObjectives": "Addresses customer objectives",
+  "objectives1": "Ignores customer objectives",
+  "objectives2": "Addresses some objectives",
+  "objectives3": "Addresses all stated objectives",
+  "objectives4": "Exceeds - addresses unstated needs too",
+  
+  "acknowledgesObjections": "Acknowledges objections respectfully",
+  "ack1": "Defensive - argues with customer",
+  "ack2": "Dismissive - minimizes concerns",
+  "ack3": "Respectful - acknowledges concerns",
+  "ack4": "Empathetic - validates and explores",
+  
+  "clarifiesConcerns": "Clarifies the real concern",
+  "clarify1": "Doesn't probe - assumes understanding",
+  "clarify2": "Asks one clarifying question",
+  "clarify3": "Probes to understand root concern",
+  "clarify4": "Expertly uncovers true objection",
+  
+  "respondsRelevantly": "Responds with relevant information",
+  "respond1": "Irrelevant - doesn't address concern",
+  "respond2": "Partially relevant response",
+  "respond3": "Directly addresses concern",
+  "respond4": "Perfect response - eliminates objection",
+  
+  "asksForBusiness": "Asks for the business clearly",
+  "ask1": "Never asks - waits for customer",
+  "ask2": "Vague ask - customer unsure",
+  "ask3": "Clear ask - customer knows what's wanted",
+  "ask4": "Confident, assumptive close",
+  
+  "confirmsNextSteps": "Confirms next steps",
+  "steps1": "No next steps - meeting ends vaguely",
+  "steps2": "Vague next steps",
+  "steps3": "Clear next steps defined",
+  "steps4": "Specific next steps with dates/commitments",
+  
+  "followsUp": "Sets up follow-up meeting",
+  "followup1": "No follow-up scheduled",
+  "followup2": "Vague follow-up mentioned",
+  "followup3": "Follow-up scheduled",
+  "followup4": "Follow-up in calendar with clear agenda"
+}
+
+
+
+
+
