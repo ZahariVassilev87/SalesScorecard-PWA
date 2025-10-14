@@ -9,6 +9,7 @@ import CoachingEvaluationForm from './CoachingEvaluationForm';
 import SalespersonEvaluationForm from './SalespersonEvaluationForm';
 import EvaluationHistory from './EvaluationHistory';
 import AnalyticsView from './AnalyticsView';
+import ExportView from './ExportView';
 import TeamManagementView from './TeamManagementView';
 import LanguageSwitcher from './LanguageSwitcher';
 import MobileDebugPanel from './MobileDebugPanel';
@@ -45,6 +46,10 @@ const SalesApp: React.FC = () => {
 
   const canManageTeams = (userRole: string) => {
     return ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER', 'REGIONAL_MANAGER'].includes(userRole);
+  };
+
+  const canExport = (userRole: string) => {
+    return ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER', 'REGIONAL_MANAGER', 'SALES_LEAD'].includes(userRole);
   };
 
   const isSalesDirector = (userRole: string) => {
@@ -129,6 +134,18 @@ const SalesApp: React.FC = () => {
               <span>🏢</span>
               <span>{t('navigation.dashboard')}</span>
             </button>
+            {canExport(user?.role || '') && (
+              <button
+                className={activeTab === 'export' ? 'nav-button active' : 'nav-button'}
+                onClick={() => {
+                  setActiveTab('export');
+                  closeMobileMenu();
+                }}
+              >
+                <span>📤</span>
+                <span>Export</span>
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -167,6 +184,19 @@ const SalesApp: React.FC = () => {
               >
                 <span>📈</span>
                 <span>{t('navigation.analytics')}</span>
+              </button>
+            )}
+            
+            {canExport(user?.role || '') && (
+              <button
+                className={activeTab === 'export' ? 'nav-button active' : 'nav-button'}
+                onClick={() => {
+                  setActiveTab('export');
+                  closeMobileMenu();
+                }}
+              >
+                <span>📤</span>
+                <span>Export</span>
               </button>
             )}
             
@@ -236,6 +266,7 @@ const SalesApp: React.FC = () => {
         )}
         {activeTab === 'history' && <EvaluationHistory />}
         {activeTab === 'analytics' && <AnalyticsView />}
+        {activeTab === 'export' && <ExportView />}
         {activeTab === 'teams' && <TeamManagementView />}
       </main>
 

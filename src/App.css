@@ -3744,3 +3744,259 @@ body {
     font-size: 0.9rem;
   }
 }
+
+/* Export View Styles */
+.export-view {
+  padding: var(--space-6);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.export-header {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.export-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: var(--space-2);
+}
+
+.export-header p {
+  color: var(--gray-600);
+  font-size: 1.1rem;
+}
+
+.export-form {
+  background: white;
+  border-radius: var(--space-3);
+  padding: var(--space-6);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--gray-200);
+}
+
+.export-section {
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.export-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.export-section h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin-bottom: var(--space-4);
+}
+
+.scope-options,
+.data-type-options,
+.time-period-options,
+.format-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.scope-option,
+.data-type-option,
+.time-period-option,
+.format-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--space-2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.scope-option:hover,
+.data-type-option:hover,
+.time-period-option:hover,
+.format-option:hover {
+  border-color: var(--primary-300);
+  background: var(--primary-50);
+}
+
+.scope-option input,
+.data-type-option input,
+.time-period-option input,
+.format-option input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-500);
+}
+
+.export-select {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--space-2);
+  font-size: 1rem;
+  background: white;
+  cursor: pointer;
+}
+
+.export-select:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
+}
+
+.custom-date-range {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.date-input {
+  flex: 1;
+  padding: var(--space-3);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--space-2);
+  font-size: 1rem;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
+}
+
+.export-actions {
+  margin-top: var(--space-8);
+  text-align: center;
+}
+
+.error-message {
+  background: var(--error-50);
+  color: var(--error-600);
+  padding: var(--space-3);
+  border-radius: var(--space-2);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--error-200);
+}
+
+.export-button {
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+  color: white;
+  border: none;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--space-2);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(168, 85, 247, 0.2);
+}
+
+.export-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 8px -1px rgba(168, 85, 247, 0.3);
+}
+
+.export-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Collapsible Month Options */
+.month-options-container {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  background: var(--gray-50);
+  border-radius: var(--space-2);
+  border: 1px solid var(--gray-200);
+}
+
+.month-options-header h4 {
+  margin: 0 0 var(--space-3) 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.month-options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-2);
+}
+
+.month-option-button {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--space-2);
+  background: white;
+  color: var(--gray-700);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.month-option-button:hover {
+  border-color: var(--primary-300);
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
+
+.month-option-button.selected {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: white;
+}
+
+.month-option-button.selected:hover {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+}
+
+/* Mobile Responsiveness for Export View */
+@media (max-width: 768px) {
+  .export-view {
+    padding: var(--space-4);
+  }
+  
+  .export-form {
+    padding: var(--space-4);
+  }
+  
+  .custom-date-range {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .scope-options,
+  .data-type-options,
+  .time-period-options,
+  .format-options {
+    gap: var(--space-2);
+  }
+  
+  .scope-option,
+  .data-type-option,
+  .time-period-option,
+  .format-option {
+    padding: var(--space-2);
+  }
+  
+  .month-options-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: var(--space-1);
+  }
+  
+  .month-option-button {
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.8rem;
+  }
+}
