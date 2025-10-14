@@ -1,0 +1,1998 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+const crypto = require('crypto');
+const path = require('path');
+let webpush = null;
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Database connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+// JWT Secrets (use environment variables in production)
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_for_access_tokens';
+const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your_refresh_secret_key_for_refresh_tokens';
+
+// CORS configuration for production
+app.use(cors({
+  origin: [
+    'https://d2tuhgmig1r5ut.cloudfront.net', // CloudFront domain
+    'https://scorecard.instorm.io', // Scorecard domain
+    'https://instorm.io', // Main domain
+    'https://www.instorm.io', // WWW domain
+    'http://localhost:3000' // Development
+  ],
+  credentials: true
+}));
+
+// Serve React Admin panel static files
+app.use('/public-admin/react-admin', express.static('public/react-admin'));
+
+// Force fresh index.html for admin (avoid stale cached UI)
+app.get('/public-admin/react-admin/', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.sendFile(path.join(__dirname, 'public', 'react-admin', 'index.html'));
+});
+
+app.get('/public-admin/react-admin/index.html', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.sendFile(path.join(__dirname, 'public', 'react-admin', 'index.html'));
+});
+
+// Handle deep links inside React Admin by serving index.html for page routes (not static files)
+app.get('/public-admin/react-admin/*', (req, res) => {
+  // Skip static files (js, css, images, etc.)
+  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/)) {
+    return res.status(404).send('Not found');
+  }
+  
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.sendFile(path.join(__dirname, 'public', 'react-admin', 'index.html'));
+});
+
+// Serve entire public directory under /public-admin for auxiliary pages
+app.use('/public-admin', express.static('public'));
+
+// Serve admin-with-delete.html
+app.get('/admin-with-delete.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin-with-delete.html'));
+});
+
+// Serve test-delete.html
+app.get('/test-delete.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'test-delete.html'));
+});
+
+// Expose token/tools helpers at root for convenience
+app.get('/clear-tokens.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'clear-tokens.html'));
+});
+
+app.get('/clear-offline-data.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'clear-offline-data.html'));
+});
+
+app.use(bodyParser.json());
+
+// In-memory storage for evaluations (in production, use database)
+let storedEvaluations = [];
+
+// In-memory storage for Web Push subscriptions
+// Keyed by subscription.endpoint for idempotency
+const pushSubscriptions = new Map();
+
+// Attempt to load web-push for server-initiated notifications (optional)
+try {
+  // Lazy require so the server still runs if dependency is missing
+  // To enable sending, ensure 'web-push' is installed in the environment
+  // and VAPID keys are configured via env vars
+  // npm i web-push
+  // export VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=...
+  // export VAPID_SUBJECT="mailto:admin@instorm.io"
+  // Then restart the server
+  // eslint-disable-next-line global-require
+  webpush = require('web-push');
+  const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+  const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+  const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@instorm.io';
+
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    console.log('✅ Web Push configured with provided VAPID keys');
+  } else {
+    console.log('ℹ️ VAPID keys not provided; /api/notifications/test will be a no-op');
+  }
+} catch (e) {
+  console.log('ℹ️ web-push not installed; push send endpoint will be disabled');
+}
+
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'No token provided', error: 'Unauthorized', statusCode: 401 });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      console.log('Token verification failed:', err.message);
+      return res.status(403).json({ message: 'Forbidden', statusCode: 403 });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Authorization middleware for evaluation creation
+const authorizeEvaluationCreation = (req, res, next) => {
+  const userRole = req.user.role;
+  const allowedRoles = ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER'];
+  
+  if (!allowedRoles.includes(userRole)) {
+    return res.status(403).json({ 
+      message: 'Insufficient permissions to create evaluations', 
+      statusCode: 403 
+    });
+  }
+  
+  next();
+};
+
+// Utility: detect user_teams column naming (camelCase vs snake_case)
+async function getUserTeamsColumns(client) {
+  const cols = await client.query(`
+    SELECT column_name FROM information_schema.columns 
+    WHERE table_name = 'user_teams'
+  `);
+  const names = new Set(cols.rows.map(r => r.column_name));
+  const usesCamel = names.has('userId') && names.has('teamId');
+  return {
+    userCol: usesCamel ? '"userId"' : 'user_id',
+    teamCol: usesCamel ? '"teamId"' : 'team_id'
+  };
+}
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Sales Scorecard API',
+    version: '1.4.0',
+    endpoints: [
+      'POST /auth/login',
+      'POST /auth/refresh',
+      'POST /auth/logout',
+      'POST /evaluations',
+      'GET /evaluations/my',
+      'GET /organizations/teams',
+      'GET /organizations/salespeople',
+      'GET /public-admin/teams',
+      'GET /public-admin/users',
+      'GET /users',
+      'GET /scoring/categories',
+      'GET /analytics/dashboard',
+      'GET /analytics/team',
+      'GET /health'
+    ]
+  });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Temporary endpoint to list all users (for debugging)
+app.get('/debug/users', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, email, "displayName", role, "isActive" FROM users ORDER BY email');
+    res.json({
+      message: 'All users in database',
+      count: result.rows.length,
+      users: result.rows.map(user => ({
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        isActive: user.isActive
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ 
+      message: 'Database error', 
+      error: error.message 
+    });
+  }
+});
+
+// Temporary endpoint to check for ADMIN users specifically
+app.get('/debug/admin-users', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, email, "displayName", role, "isActive" FROM users WHERE role = \'ADMIN\' ORDER BY email');
+    res.json({
+      message: 'Admin users in database',
+      count: result.rows.length,
+      users: result.rows.map(user => ({
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        isActive: user.isActive
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching admin users:', error);
+    res.status(500).json({ 
+      message: 'Database error', 
+      error: error.message 
+    });
+  }
+});
+
+// Temporary endpoint to create an admin user
+app.post('/debug/create-admin', async (req, res) => {
+  try {
+    const { email, password, displayName } = req.body;
+    
+    if (!email || !password || !displayName) {
+      return res.status(400).json({ 
+        message: 'Email, password, and displayName are required' 
+      });
+    }
+
+    // Hash the password
+    const bcrypt = require('bcrypt');
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create admin user
+    const result = await pool.query(
+      'INSERT INTO users (id, email, password, "displayName", role, "isActive", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id, email, "displayName", role, "isActive"',
+      [crypto.randomUUID(), email, hashedPassword, displayName, 'ADMIN', true]
+    );
+
+    res.json({
+      message: 'Admin user created successfully',
+      user: {
+        id: result.rows[0].id,
+        email: result.rows[0].email,
+        displayName: result.rows[0].displayName,
+        role: result.rows[0].role,
+        isActive: result.rows[0].isActive
+      }
+    });
+  } catch (error) {
+    console.error('Error creating admin user:', error);
+    res.status(500).json({ 
+      message: 'Database error', 
+      error: error.message 
+    });
+  }
+});
+
+// Simple endpoint to add admin user directly
+app.get('/debug/add-admin', async (req, res) => {
+  try {
+    const bcrypt = require('bcrypt');
+    const hashedPassword = await bcrypt.hash('test123', 10);
+    
+    // Insert admin user directly
+    const result = await pool.query(
+      'INSERT INTO users (id, email, password, "displayName", role, "isActive", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id, email, "displayName", role, "isActive"',
+      ['cmfn0fwjb0001qpwtbk5fqnf2', 'vassilev.zahari@gmail.com', hashedPassword, 'Zahari Vassilev', 'ADMIN', true]
+    );
+
+    res.json({
+      message: 'Admin user added successfully',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error adding admin user:', error);
+    res.status(500).json({ 
+      message: 'Database error', 
+      error: error.message 
+    });
+  }
+});
+
+// Endpoint to list files in container
+app.get('/debug/list-files', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    
+    const listFiles = (dir, prefix = '') => {
+      const files = [];
+      const items = fs.readdirSync(dir);
+      
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+        
+        if (stat.isDirectory()) {
+          files.push(prefix + item + '/');
+          files.push(...listFiles(fullPath, prefix + item + '/'));
+        } else {
+          files.push(prefix + item);
+        }
+      }
+      
+      return files;
+    };
+    
+    const files = listFiles('/app');
+    res.json({ files: files.filter(f => f.includes('backup') || f.includes('.json')) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint to setup database tables
+app.get('/debug/setup-database', async (req, res) => {
+  try {
+    const results = {
+      tables: 0,
+      errors: []
+    };
+    
+    // Create regions table
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS regions (
+          id VARCHAR(255) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          "createdAt" TIMESTAMP DEFAULT NOW(),
+          "updatedAt" TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      results.tables++;
+    } catch (error) {
+      results.errors.push(`Regions table: ${error.message}`);
+    }
+    
+    // Create teams table
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS teams (
+          id VARCHAR(255) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          "regionId" VARCHAR(255),
+          "managerId" VARCHAR(255),
+          "createdAt" TIMESTAMP DEFAULT NOW(),
+          "updatedAt" TIMESTAMP DEFAULT NOW(),
+          FOREIGN KEY ("regionId") REFERENCES regions(id),
+          FOREIGN KEY ("managerId") REFERENCES users(id)
+        )
+      `);
+      results.tables++;
+    } catch (error) {
+      results.errors.push(`Teams table: ${error.message}`);
+    }
+    
+    // Create user_teams table
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_teams (
+          id VARCHAR(255) PRIMARY KEY,
+          "userId" VARCHAR(255) NOT NULL,
+          "teamId" VARCHAR(255) NOT NULL,
+          "createdAt" TIMESTAMP DEFAULT NOW(),
+          "updatedAt" TIMESTAMP DEFAULT NOW(),
+          FOREIGN KEY ("userId") REFERENCES users(id),
+          FOREIGN KEY ("teamId") REFERENCES teams(id),
+          UNIQUE("userId", "teamId")
+        )
+      `);
+      results.tables++;
+    } catch (error) {
+      results.errors.push(`User_teams table: ${error.message}`);
+    }
+    
+    res.json({
+      message: 'Database setup completed',
+      results: results
+    });
+  } catch (error) {
+    console.error('Error setting up database:', error);
+    res.status(500).json({ 
+      message: 'Database setup error', 
+      error: error.message 
+    });
+  }
+});
+
+// Endpoint to restore data manually
+app.get('/debug/restore-data', async (req, res) => {
+  try {
+    const bcrypt = require('bcrypt');
+    const results = {
+      regions: 0,
+      teams: 0,
+      users: 0,
+      errors: []
+    };
+    
+    // Create sample regions
+    try {
+      const regions = [
+        { id: 'region-1', name: 'North America' },
+        { id: 'region-2', name: 'Europe' },
+        { id: 'region-3', name: 'Asia Pacific' }
+      ];
+      
+      for (const region of regions) {
+        await pool.query(
+          'INSERT INTO regions (id, name, "createdAt", "updatedAt") VALUES ($1, $2, NOW(), NOW()) ON CONFLICT (id) DO NOTHING',
+          [region.id, region.name]
+        );
+        results.regions++;
+      }
+    } catch (error) {
+      results.errors.push(`Regions: ${error.message}`);
+    }
+    
+    // Create sample teams
+    try {
+      const teams = [
+        { id: 'team-1', name: 'Enterprise Sales', regionId: 'region-1' },
+        { id: 'team-2', name: 'SMB Sales', regionId: 'region-1' },
+        { id: 'team-3', name: 'European Sales', regionId: 'region-2' },
+        { id: 'team-4', name: 'APAC Sales', regionId: 'region-3' }
+      ];
+      
+      for (const team of teams) {
+        await pool.query(
+          'INSERT INTO teams (id, name, "regionId", "createdAt", "updatedAt") VALUES ($1, $2, $3, NOW(), NOW()) ON CONFLICT (id) DO NOTHING',
+          [team.id, team.name, team.regionId]
+        );
+        results.teams++;
+      }
+    } catch (error) {
+      results.errors.push(`Teams: ${error.message}`);
+    }
+    
+    // Create sample users
+    try {
+      const users = [
+        { id: 'user-1', email: 'john.doe@company.com', displayName: 'John Doe', role: 'SALESPERSON', password: 'password123' },
+        { id: 'user-2', email: 'jane.smith@company.com', displayName: 'Jane Smith', role: 'SALES_LEAD', password: 'password123' },
+        { id: 'user-3', email: 'mike.johnson@company.com', displayName: 'Mike Johnson', role: 'REGIONAL_SALES_MANAGER', password: 'password123' },
+        { id: 'user-4', email: 'sarah.wilson@company.com', displayName: 'Sarah Wilson', role: 'SALES_DIRECTOR', password: 'password123' },
+        { id: 'user-5', email: 'david.brown@company.com', displayName: 'David Brown', role: 'SALESPERSON', password: 'password123' }
+      ];
+      
+      for (const user of users) {
+        const hashedPassword = await bcrypt.hash(user.password, 10);
+        
+        await pool.query(
+          'INSERT INTO users (id, email, password, "displayName", role, "isActive", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) ON CONFLICT (id) DO NOTHING',
+          [user.id, user.email, hashedPassword, user.displayName, user.role, true]
+        );
+        results.users++;
+      }
+    } catch (error) {
+      results.errors.push(`Users: ${error.message}`);
+    }
+    
+    res.json({
+      message: 'Sample data created successfully',
+      results: results
+    });
+  } catch (error) {
+    console.error('Error creating sample data:', error);
+    res.status(500).json({ 
+      message: 'Database error', 
+      error: error.message 
+    });
+  }
+});
+
+// Authentication routes
+app.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  console.log('Login attempt:', { email, password: '***' });
+
+  try {
+    // First, let's check what schemas exist in the database
+    const schemasInfo = await pool.query(`
+      SELECT schema_name 
+      FROM information_schema.schemata 
+      WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')
+      ORDER BY schema_name
+    `);
+    console.log('Available schemas in database:', schemasInfo.rows);
+    
+    // Check what tables exist in all schemas
+    const tablesInfo = await pool.query(`
+      SELECT table_schema, table_name 
+      FROM information_schema.tables 
+      WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')
+      ORDER BY table_schema, table_name
+    `);
+    console.log('Available tables in all schemas:', tablesInfo.rows);
+    
+    // Check if there are any tables that might contain user data
+    const userTablesInfo = await pool.query(`
+      SELECT table_schema, table_name 
+      FROM information_schema.tables 
+      WHERE table_name ILIKE '%user%' OR table_name ILIKE '%account%' OR table_name ILIKE '%member%'
+      ORDER BY table_schema, table_name
+    `);
+    console.log('Tables that might contain user data:', userTablesInfo.rows);
+    
+    // Check what columns exist in the users table
+    const usersTableInfo = await pool.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' 
+      ORDER BY ordinal_position
+    `);
+    console.log('Available columns in users table:', usersTableInfo.rows);
+    
+    // Check current database name
+    const dbInfo = await pool.query(`SELECT current_database(), current_schema()`);
+    console.log('Current database and schema:', dbInfo.rows[0]);
+    
+    // Check if there are other databases we can connect to
+    const otherDbsInfo = await pool.query(`
+      SELECT datname 
+      FROM pg_database 
+      WHERE datistemplate = false AND datname NOT IN ('postgres', 'template0', 'template1')
+      ORDER BY datname
+    `);
+    console.log('Other available databases:', otherDbsInfo.rows);
+    
+    const result = await pool.query(
+      'SELECT id, email, password, role, "displayName", "isActive" FROM users WHERE email = $1 AND "isActive" = true',
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ 
+        message: 'Invalid email or password', 
+        error: 'Unauthorized', 
+        statusCode: 401 
+      });
+    }
+
+    const user = result.rows[0];
+    
+    // Use bcrypt to compare hashed password
+    const bcrypt = require('bcrypt');
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    
+    if (!isPasswordValid) {
+      return res.status(401).json({ 
+        message: 'Invalid email or password', 
+        error: 'Unauthorized', 
+        statusCode: 401 
+      });
+    }
+
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email, 
+        role: user.role,
+        displayName: user.displayName 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    const refreshToken = jwt.sign(
+      { id: user.id, email: user.email },
+      REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    console.log('Login successful for user:', user.email);
+
+    res.json({
+      token,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        isActive: user.isActive
+      }
+    });
+  } catch (error) {
+    console.error('Database error during login:', error);
+    res.status(500).json({ 
+      message: 'Internal server error', 
+      error: 'DatabaseError', 
+      statusCode: 500 
+    });
+  }
+});
+
+app.post('/auth/refresh', (req, res) => {
+  const { refreshToken } = req.body;
+  console.log('Refresh token request');
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'No refresh token provided' });
+  }
+
+  jwt.verify(refreshToken, REFRESH_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ message: 'Invalid refresh token' });
+    }
+
+    const newToken = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email, 
+        role: 'REGIONAL_SALES_MANAGER',
+        displayName: 'User' 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({ token: newToken });
+  });
+});
+
+app.post('/auth/logout', (req, res) => {
+  console.log('Logout request');
+  res.json({ message: 'Logged out successfully' });
+});
+
+// Push notification endpoints
+// Store a push subscription for the authenticated user
+app.post('/api/notifications/subscribe', authenticateToken, async (req, res) => {
+  try {
+    const { subscription, userId } = req.body || {};
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ message: 'Invalid subscription' });
+    }
+
+    const ownerUserId = userId || req.user?.id;
+    pushSubscriptions.set(subscription.endpoint, { subscription, userId: ownerUserId, createdAt: Date.now() });
+    console.log(`🔔 Stored push subscription for user ${ownerUserId} (${subscription.endpoint.slice(0, 32)}...)`);
+    return res.json({ message: 'Subscribed', endpoint: subscription.endpoint });
+  } catch (error) {
+    console.error('Error storing subscription:', error);
+    return res.status(500).json({ message: 'Failed to store subscription' });
+  }
+});
+
+// Remove a push subscription
+app.post('/api/notifications/unsubscribe', authenticateToken, async (req, res) => {
+  try {
+    const { subscription, endpoint } = req.body || {};
+    const key = endpoint || subscription?.endpoint;
+    if (!key) {
+      return res.status(400).json({ message: 'Endpoint required' });
+    }
+    pushSubscriptions.delete(key);
+    console.log(`🔕 Removed push subscription (${String(key).slice(0, 32)}...)`);
+    return res.json({ message: 'Unsubscribed' });
+  } catch (error) {
+    console.error('Error removing subscription:', error);
+    return res.status(500).json({ message: 'Failed to remove subscription' });
+  }
+});
+
+// List subscriptions (admin only)
+app.get('/api/notifications/list', authenticateToken, async (req, res) => {
+  try {
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    const all = Array.from(pushSubscriptions.values()).map(s => ({
+      userId: s.userId,
+      endpoint: s.subscription.endpoint,
+      createdAt: s.createdAt
+    }));
+    return res.json({ count: all.length, subscriptions: all });
+  } catch (error) {
+    console.error('Error listing subscriptions:', error);
+    return res.status(500).json({ message: 'Failed to list subscriptions' });
+  }
+});
+
+// Send a test notification to the current user's first subscription
+app.post('/api/notifications/test', authenticateToken, async (req, res) => {
+  try {
+    const sub = Array.from(pushSubscriptions.values()).find(s => s.userId === req.user?.id) || Array.from(pushSubscriptions.values())[0];
+    if (!sub) {
+      return res.status(404).json({ message: 'No subscriptions available' });
+    }
+    if (!webpush) {
+      console.log('web-push not available; simulating success');
+      return res.json({ message: 'Simulated push (web-push not installed)' });
+    }
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+      console.log('VAPID keys missing; simulating success');
+      return res.json({ message: 'Simulated push (VAPID not configured)' });
+    }
+
+    const payload = JSON.stringify({
+      title: '🔔 Sales Scorecard',
+      body: 'This is a test push notification',
+      icon: '/logo192.png',
+      data: { url: '/#dashboard' }
+    });
+
+    await webpush.sendNotification(sub.subscription, payload).catch(err => {
+      console.error('web-push error:', err?.body || err?.message || err);
+      throw err;
+    });
+    return res.json({ message: 'Push sent' });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to send push' });
+  }
+});
+
+// Evaluation routes
+app.post('/evaluations', authenticateToken, authorizeEvaluationCreation, (req, res) => {
+  console.log('Evaluation creation request from user:', req.user.email);
+  console.log('Evaluation data:', req.body);
+  
+  const evaluationId = `eval_${Date.now()}`;
+  const evaluation = {
+    id: evaluationId,
+    salespersonId: req.body.salespersonId,
+    salesperson: {
+      id: req.body.salespersonId,
+      name: 'Maria', // This would come from the salespeople data in a real app
+      email: 'maria@company.com'
+    },
+    managerId: req.user.id,
+    manager: {
+      id: req.user.id,
+      name: req.user.displayName || 'Regional Manager',
+      email: req.user.email
+    },
+    visitDate: req.body.visitDate,
+    customerName: req.body.customerName || 'Unknown Customer',
+    customerType: req.body.customerType || 'unknown',
+    location: req.body.location || 'Unknown Location',
+    overallComment: req.body.overallComment || '',
+    overallScore: calculateOverallScore(req.body.items),
+    items: req.body.items.map((item, index) => ({
+      id: `item_${evaluationId}_${index}`,
+      behaviorItemId: item.behaviorItemId,
+      behaviorItem: {
+        id: item.behaviorItemId,
+        name: getBehaviorItemName(item.behaviorItemId),
+        category: { name: 'Coaching' }
+      },
+      rating: item.score,
+      comment: item.comment || ''
+    })),
+    version: 1,
+    createdAt: new Date().toISOString()
+  };
+  
+  storedEvaluations.push(evaluation);
+  console.log(`✅ Stored evaluation ${evaluationId} for user ${req.user.email}`);
+  console.log(`📊 Total evaluations stored: ${storedEvaluations.length}`);
+  
+  res.status(201).json({ 
+    message: 'Evaluation created successfully', 
+    id: evaluationId,
+    data: req.body
+  });
+});
+
+app.get('/evaluations/my', authenticateToken, (req, res) => {
+  console.log('My evaluations request from user:', req.user.email);
+  
+  const userEvaluations = storedEvaluations.filter(eval => eval.managerId === req.user.id);
+  console.log(`Found ${userEvaluations.length} evaluations for user ${req.user.email}`);
+  
+  res.json(userEvaluations);
+});
+
+// Organization routes
+app.get('/organizations/teams', authenticateToken, (req, res) => {
+  console.log('Organizations teams request from user:', req.user.email, 'role:', req.user.role);
+  
+  // Return empty array for now - this should be handled by your existing admin panel
+  // The frontend should be calling the original /public-admin/teams endpoint
+  res.json([]);
+});
+
+app.get('/organizations/salespeople', authenticateToken, async (req, res) => {
+  console.log('Organizations salespeople request from user:', req.user.email, 'role:', req.user.role);
+  
+  try {
+    const { userCol, teamCol } = await getUserTeamsColumns(pool);
+    
+    // Hierarchical filtering based on role
+    // REGIONAL_MANAGER sees SALES_LEADs in their teams
+    // SALES_LEAD sees SALESPEOPLEs in their teams
+    
+    let query = `
+      SELECT 
+        u.id, u.email, u."displayName", u.role, u."isActive",
+        t.id AS team_id, t.name AS team_name,
+        ut.${userCol} AS user_id, ut.${teamCol} AS team_id_joined
+      FROM users u
+      LEFT JOIN user_teams ut ON u.id = ut.${userCol}
+      LEFT JOIN teams t ON ut.${teamCol} = t.id
+      WHERE u."isActive" = true
+    `;
+
+    const params = [];
+
+    if (req.user.role === 'REGIONAL_MANAGER' || req.user.role === 'REGIONAL_SALES_MANAGER') {
+      // Regional Managers can evaluate Sales Leads in their teams
+      params.push(req.user.id);
+      query += ` AND u.role = 'SALES_LEAD' AND t."managerId" = $1`;
+      console.log('🔍 Regional Manager filtering: Only showing SALES_LEADs in their teams');
+    } else if (req.user.role === 'SALES_LEAD') {
+      // Sales Leads can evaluate Salespeople in their teams
+      // First, find which teams the Sales Lead is in
+      params.push(req.user.id);
+      query += ` AND u.role = 'SALESPERSON' AND t.id IN (
+        SELECT ut2.${teamCol} 
+        FROM user_teams ut2 
+        WHERE ut2.${userCol} = $1
+      )`;
+      console.log('🔍 Sales Lead filtering: Only showing SALESPEOPLEs in their teams');
+    } else if (req.user.role === 'SALESPERSON') {
+      // A salesperson should only see themself
+      params.push(req.user.id);
+      query += ` AND u.id = $1`;
+      console.log('🔍 Salesperson filtering: Only showing self');
+    } else if (req.user.role === 'ADMIN' || req.user.role === 'SALES_DIRECTOR') {
+      // Admins and Sales Directors can see everyone
+      query += ` AND u.role IN ('SALESPERSON', 'SALES_LEAD')`;
+      console.log('🔍 Admin/Director filtering: Showing all salespeople and leads');
+    } else {
+      // Unknown role - return empty
+      query += ` AND 1=0`;
+      console.log('⚠️ Unknown role - returning empty list');
+    }
+    
+    console.log('📊 Query:', query);
+    console.log('📊 Params:', params);
+    
+    const result = await pool.query(query, params);
+    
+    const salespeople = result.rows.map(row => ({
+      id: row.id,
+      email: row.email,
+      displayName: row.displayName,
+      role: row.role,
+      isActive: row.isActive,
+      teamId: row.team_id,
+      teamName: row.team_name
+    }));
+    
+    console.log(`✅ Returning ${salespeople.length} evaluatable users for ${req.user.role} ${req.user.email}:`);
+    salespeople.forEach(sp => console.log(`  - ${sp.displayName} (${sp.role}) from team ${sp.teamName}`));
+    
+    res.json(salespeople);
+  } catch (error) {
+    console.error('❌ Database error fetching salespeople:', error);
+    res.status(500).json({ 
+      message: 'Internal server error', 
+      error: 'DatabaseError', 
+      statusCode: 500 
+    });
+  }
+});
+
+// Get user's own team with all members
+app.get('/users/my-team', authenticateToken, async (req, res) => {
+  console.log('My team request from user:', req.user.email, 'role:', req.user.role);
+  
+  try {
+    const { userCol, teamCol } = await getUserTeamsColumns(pool);
+    
+    // Find the user's team(s)
+    const userTeamsQuery = `
+      SELECT DISTINCT t.id, t.name, t."managerId", t."regionId",
+        r.name AS region_name,
+        m.id AS manager_id, m.email AS manager_email, 
+        m."displayName" AS manager_name, m.role AS manager_role
+      FROM teams t
+      INNER JOIN user_teams ut ON ut.${teamCol} = t.id
+      LEFT JOIN regions r ON r.id = t."regionId"
+      LEFT JOIN users m ON m.id = t."managerId"
+      WHERE ut.${userCol} = $1
+      LIMIT 1
+    `;
+    
+    const userTeamsResult = await pool.query(userTeamsQuery, [req.user.id]);
+    
+    if (userTeamsResult.rows.length === 0) {
+      console.log('⚠️ User has no team membership');
+      return res.json(null);
+    }
+    
+    const teamRow = userTeamsResult.rows[0];
+    const teamId = teamRow.id;
+    
+    console.log(`✅ Found team: ${teamRow.name} (${teamId})`);
+    
+    // Get all members of this team
+    const membersQuery = `
+      SELECT u.id, u.email, u."displayName", u.role, u."isActive"
+      FROM users u
+      INNER JOIN user_teams ut ON ut.${userCol} = u.id
+      WHERE ut.${teamCol} = $1
+        AND u."isActive" = true
+      ORDER BY 
+        CASE u.role
+          WHEN 'REGIONAL_MANAGER' THEN 1
+          WHEN 'REGIONAL_SALES_MANAGER' THEN 1
+          WHEN 'SALES_LEAD' THEN 2
+          WHEN 'SALESPERSON' THEN 3
+          ELSE 4
+        END,
+        u."displayName"
+    `;
+    
+    const membersResult = await pool.query(membersQuery, [teamId]);
+    
+    console.log(`✅ Found ${membersResult.rows.length} team members`);
+    
+    const team = {
+      id: teamRow.id,
+      name: teamRow.name,
+      managerId: teamRow.managerId,
+      region: teamRow.region_name ? {
+        id: teamRow.regionId,
+        name: teamRow.region_name
+      } : null,
+      manager: teamRow.manager_id ? {
+        id: teamRow.manager_id,
+        email: teamRow.manager_email,
+        displayName: teamRow.manager_name,
+        role: teamRow.manager_role,
+        isActive: true
+      } : null,
+      members: membersResult.rows.map(row => ({
+        id: row.id,
+        email: row.email,
+        displayName: row.displayName,
+        role: row.role,
+        isActive: row.isActive
+      }))
+    };
+    
+    console.log(`✅ Returning team ${team.name} with ${team.members.length} members`);
+    res.json(team);
+  } catch (error) {
+    console.error('❌ Database error fetching my team:', error);
+    res.status(500).json({ 
+      message: 'Internal server error', 
+      error: 'DatabaseError', 
+      statusCode: 500 
+    });
+  }
+});
+
+// Public admin routes (fallback)
+app.get('/public-admin/teams', authenticateToken, async (req, res) => {
+  console.log('Public admin teams request from user:', req.user.email);
+  
+  try {
+    // Ensure tables exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS teams (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        "regionId" VARCHAR(255),
+        "managerId" VARCHAR(255),
+        "createdAt" TIMESTAMP DEFAULT NOW(),
+        "updatedAt" TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_teams (
+        id VARCHAR(255) PRIMARY KEY,
+        "userId" VARCHAR(255) NOT NULL,
+        "teamId" VARCHAR(255) NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT NOW(),
+        "updatedAt" TIMESTAMP DEFAULT NOW(),
+        UNIQUE("userId", "teamId")
+      )
+    `);
+
+    // Fetch teams
+    const teamsResult = await pool.query(`
+      SELECT 
+        t.id, 
+        t.name, 
+        t."regionId", 
+        t."managerId", 
+        t."createdAt", 
+        t."updatedAt",
+        mu.id as mgr_id, 
+        mu.email as mgr_email, 
+        mu."displayName" as mgr_name, 
+        mu.role as mgr_role,
+        COALESCE(mu."isActive", true) as mgr_active
+      FROM teams t
+      LEFT JOIN users mu ON mu.id = t."managerId"
+      ORDER BY t.name
+    `);
+
+    const teamIds = teamsResult.rows.map(r => r.id);
+
+    // Fetch user-team memberships (supports both camelCase and snake_case schemas)
+    let memberships = [];
+    if (teamIds.length > 0) {
+      const { userCol, teamCol } = await getUserTeamsColumns(pool);
+      const mt = await pool.query(`
+        SELECT ut.${teamCol} as team_id, u.id as user_id, u.email, u."displayName", u.role, u."isActive"
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.${userCol}
+        WHERE ut.${teamCol} = ANY($1)
+      `, [teamIds]);
+      memberships = mt.rows;
+    }
+
+    // Group memberships by team
+    const teamIdToMembers = new Map();
+    for (const row of memberships) {
+      if (!teamIdToMembers.has(row.team_id)) teamIdToMembers.set(row.team_id, []);
+      teamIdToMembers.get(row.team_id).push({
+        user: {
+          id: row.user_id,
+          email: row.email,
+          displayName: row.displayName,
+          role: row.role,
+          isActive: row.isActive
+        }
+      });
+    }
+
+    const teams = teamsResult.rows.map(row => {
+      const userTeams = teamIdToMembers.get(row.id) || [];
+      const members = userTeams.map(m => ({
+        id: m.user.id,
+        email: m.user.email,
+        displayName: m.user.displayName,
+        role: m.user.role,
+        isActive: m.user.isActive
+      }));
+
+      return {
+        id: row.id,
+        name: row.name,
+        region: row.regionId ? { id: row.regionId, name: row.regionId } : null,
+        manager: row.managerId && row.mgr_id ? {
+          id: row.mgr_id,
+          email: row.mgr_email,
+          displayName: row.mgr_name,
+          role: row.mgr_role,
+          isActive: row.mgr_active
+        } : null,
+        managerId: row.managerId,
+        // Keep legacy field for compatibility
+        userTeams,
+        // New field expected by frontend Team interface
+        members
+      };
+    });
+
+    console.log(`Returning ${teams.length} teams with members for admin panel`);
+    res.json(teams);
+  } catch (error) {
+    console.error('Error fetching teams:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Assign members to a team
+app.post('/public-admin/teams/:id/members', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userIds } = req.body || {};
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'userIds array is required' });
+    }
+
+    // Ensure team exists
+    const teamExists = await pool.query('SELECT id FROM teams WHERE id = $1', [id]);
+    if (teamExists.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    // Validate that users exist to avoid FK violations
+    const usersResult = await pool.query(
+      'SELECT id FROM users WHERE id = ANY($1::text[]) AND "isActive" = true',
+      [userIds]
+    );
+    const existingUserIds = new Set(usersResult.rows.map(r => r.id));
+    const missingUserIds = userIds.filter(u => !existingUserIds.has(u));
+    if (missingUserIds.length > 0) {
+      return res.status(400).json({ error: 'Some users do not exist', missingUserIds });
+    }
+
+    // Ensure membership table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_teams (
+        id VARCHAR(255) PRIMARY KEY,
+        "userId" VARCHAR(255) NOT NULL,
+        "teamId" VARCHAR(255) NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT NOW(),
+        "updatedAt" TIMESTAMP DEFAULT NOW(),
+        UNIQUE("userId", "teamId")
+      )
+    `);
+
+    // Detect schema style (camelCase vs snake_case)
+    const cols = await pool.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'user_teams'
+    `);
+    const colNames = cols.rows.map(r => r.column_name);
+    const usesCamel = colNames.includes('userId') && colNames.includes('teamId');
+    const userCol = usesCamel ? '"userId"' : 'user_id';
+    const teamCol = usesCamel ? '"teamId"' : 'team_id';
+
+    // Upsert memberships (one by one to surface specific failures)
+    for (const userId of userIds) {
+      const insertSql = `INSERT INTO user_teams (id, ${userCol}, ${teamCol}, "createdAt", "updatedAt")
+                         VALUES ($1, $2, $3, NOW(), NOW())
+                         ON CONFLICT (${userCol}, ${teamCol}) DO UPDATE SET "updatedAt" = NOW()`;
+      await pool.query(insertSql, [crypto.randomUUID(), userId, id]);
+    }
+
+    // Return updated team with members
+    const teamRow = await pool.query(`
+      SELECT 
+        t.id, t.name, t."regionId", t."managerId",
+        mu.id as mgr_id, mu.email as mgr_email, mu."displayName" as mgr_name, mu.role as mgr_role,
+        COALESCE(mu."isActive", true) as mgr_active
+      FROM teams t
+      LEFT JOIN users mu ON mu.id = t."managerId"
+      WHERE t.id = $1
+    `, [id]);
+
+    const members = await pool.query(`
+      SELECT ut."teamId", u.id as user_id, u.email, u."displayName", u.role, u."isActive"
+      FROM user_teams ut
+      JOIN users u ON u.id = ut."userId"
+      WHERE ut."teamId" = $1
+    `, [id]);
+
+    const row = teamRow.rows[0];
+    const userTeams = members.rows.map(m => ({
+      user: {
+        id: m.user_id,
+        email: m.email,
+        displayName: m.displayName,
+        role: m.role,
+        isActive: m.isActive
+      }
+    }));
+
+    const team = {
+      id: row.id,
+      name: row.name,
+      region: row.regionId ? { id: row.regionId, name: row.regionId } : null,
+      manager: row.managerId && row.mgr_id ? {
+        id: row.mgr_id,
+        email: row.mgr_email,
+        displayName: row.mgr_name,
+        role: row.mgr_role,
+        isActive: row.mgr_active
+      } : null,
+      managerId: row.managerId,
+      // Legacy field
+      userTeams,
+      // New field
+      members: userTeams.map(m => ({
+        id: m.user.id,
+        email: m.user.email,
+        displayName: m.user.displayName,
+        role: m.user.role,
+        isActive: m.user.isActive
+      }))
+    };
+
+    res.json(team);
+  } catch (error) {
+    console.error('Error assigning team members:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Compatibility endpoint for admin panel: assign a single user to a team
+app.post('/public-admin/assign-user-to-team', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, userId, userIds } = req.body || {};
+    const finalTeamId = teamId;
+    const finalUserIds = Array.isArray(userIds) && userIds.length > 0 
+      ? userIds 
+      : (userId ? [userId] : []);
+
+    if (!finalTeamId) {
+      return res.status(400).json({ error: 'teamId is required' });
+    }
+    if (!Array.isArray(finalUserIds) || finalUserIds.length === 0) {
+      return res.status(400).json({ error: 'userId or userIds is required' });
+    }
+
+    // Ensure team exists
+    const teamExists = await pool.query('SELECT id FROM teams WHERE id = $1', [finalTeamId]);
+    if (teamExists.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    // Validate that users exist to avoid FK violations
+    const usersResult = await pool.query(
+      'SELECT id FROM users WHERE id = ANY($1::text[]) AND "isActive" = true',
+      [finalUserIds]
+    );
+    const existingUserIds = new Set(usersResult.rows.map(r => r.id));
+    const missingUserIds = finalUserIds.filter(u => !existingUserIds.has(u));
+    if (missingUserIds.length > 0) {
+      return res.status(400).json({ error: 'Some users do not exist', missingUserIds });
+    }
+
+    // Ensure membership table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_teams (
+        id VARCHAR(255) PRIMARY KEY,
+        "userId" VARCHAR(255) NOT NULL,
+        "teamId" VARCHAR(255) NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT NOW(),
+        "updatedAt" TIMESTAMP DEFAULT NOW(),
+        UNIQUE("userId", "teamId")
+      )
+    `);
+
+    // Detect schema style (camelCase vs snake_case)
+    const { userCol, teamCol } = await getUserTeamsColumns(pool);
+
+    // Upsert memberships
+    for (const uid of finalUserIds) {
+      const insertSql = `INSERT INTO user_teams (id, ${userCol}, ${teamCol}, "createdAt", "updatedAt")
+                         VALUES ($1, $2, $3, NOW(), NOW())
+                         ON CONFLICT (${userCol}, ${teamCol}) DO UPDATE SET "updatedAt" = NOW()`;
+      await pool.query(insertSql, [crypto.randomUUID(), uid, finalTeamId]);
+    }
+
+    return res.json({ message: 'Users assigned to team successfully', teamId: finalTeamId, userIds: finalUserIds });
+  } catch (error) {
+    console.error('Error assigning user to team:', error);
+    return res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Remove user from team (admin-only)
+app.post('/public-admin/remove-user-from-team', authenticateToken, async (req, res) => {
+  // Require ADMIN
+  if (req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    const { teamId, userId } = req.body || {};
+
+    if (!teamId) {
+      return res.status(400).json({ error: 'teamId is required' });
+    }
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    console.log(`[REMOVE USER FROM TEAM] Removing user ${userId} from team ${teamId}`);
+
+    // Detect schema style
+    const { userCol, teamCol } = await getUserTeamsColumns(pool);
+
+    // Remove membership
+    const result = await pool.query(
+      `DELETE FROM user_teams WHERE ${userCol} = $1 AND ${teamCol} = $2`,
+      [userId, teamId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User is not a member of this team' });
+    }
+
+    console.log(`[REMOVE USER FROM TEAM] Successfully removed user from team`);
+
+    res.json({
+      message: 'User removed from team successfully',
+      teamId,
+      userId
+    });
+  } catch (error) {
+    console.error('[REMOVE USER FROM TEAM] Error:', error);
+    res.status(500).json({ 
+      error: 'Failed to remove user from team', 
+      message: error.message 
+    });
+  }
+});
+
+app.get('/public-admin/users', authenticateToken, async (req, res) => {
+  console.log('Public admin users request from user:', req.user.email);
+  
+  try {
+    // Simple query that works with current database schema
+    const result = await pool.query(`
+      SELECT id, email, "displayName", role, "isActive", "createdAt", "updatedAt"
+      FROM users
+      WHERE "isActive" = true
+      ORDER BY "displayName", email
+    `);
+    
+    const users = result.rows.map(row => ({
+      id: row.id,
+      email: row.email,
+      displayName: row.displayName,
+      role: row.role,
+      isActive: row.isActive,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      teamId: null,
+      teamName: null,
+      teamRole: null
+    }));
+    
+    console.log(`Returning ${users.length} users for admin panel`);
+    res.json(users);
+  } catch (error) {
+    console.error('Database error fetching users:', error);
+    res.status(500).json({ 
+      message: 'Internal server error', 
+      error: 'DatabaseError', 
+      statusCode: 500 
+    });
+  }
+});
+
+// User routes
+app.get('/users', authenticateToken, (req, res) => {
+  console.log('Users request from user:', req.user.email);
+  // TODO: Connect to your real admin panel to get users data
+  res.json([]);
+});
+
+// Scoring categories
+app.get('/scoring/categories', authenticateToken, async (req, res) => {
+  console.log('Scoring categories request from user:', req.user.email, 'role:', req.user.role);
+  
+  try {
+    // Determine which form to return based on user role
+    // REGIONAL_MANAGER evaluates SALES_LEADs -> return SALES_LEAD forms
+    // SALES_LEAD evaluates SALESPEOPLEs -> return SALESPERSON forms
+    
+    let targetRole = null;
+    
+    if (req.user.role === 'REGIONAL_MANAGER' || req.user.role === 'REGIONAL_SALES_MANAGER') {
+      targetRole = 'SALES_LEAD';
+      console.log('🔍 Regional Manager - returning Sales Lead Coaching Evaluation');
+    } else if (req.user.role === 'SALES_LEAD') {
+      targetRole = 'SALESPERSON';
+      console.log('🔍 Sales Lead - returning Salesperson Evaluation');
+    } else {
+      // Default to SALESPERSON form for others
+      targetRole = 'SALESPERSON';
+      console.log('🔍 Default - returning Salesperson Evaluation');
+    }
+    
+    // Get categories with their items from database
+    const categoriesQuery = `
+      SELECT bc.id, bc.name, bc."order", bc.weight
+      FROM behavior_categories bc
+      WHERE bc.name LIKE '%' || $1 || '%'
+      ORDER BY bc."order"
+    `;
+    
+    const categoriesResult = await pool.query(categoriesQuery, [targetRole]);
+    
+    if (categoriesResult.rows.length === 0) {
+      console.log('⚠️ No categories found, returning empty array');
+      return res.json([]);
+    }
+    
+    // Get items for each category
+    const categories = [];
+    for (const cat of categoriesResult.rows) {
+      const itemsQuery = `
+        SELECT bi.id, bi.name, bi."order", 1.0 as weight
+        FROM behavior_items bi
+        WHERE bi."categoryId" = $1 AND bi."isActive" = true
+        ORDER BY bi."order"
+      `;
+      
+      const itemsResult = await pool.query(itemsQuery, [cat.id]);
+      
+      categories.push({
+        id: cat.id,
+        name: cat.name,
+        order: cat.order,
+        weight: cat.weight,
+        items: itemsResult.rows
+      });
+    }
+    
+    console.log(`✅ Returning ${categories.length} categories with ${categories.reduce((sum, c) => sum + c.items.length, 0)} items`);
+    res.json(categories);
+    
+  } catch (error) {
+    console.error('❌ Error fetching scoring categories:', error);
+    res.status(500).json({ 
+      message: 'Internal server error', 
+      error: 'DatabaseError', 
+      statusCode: 500 
+    });
+  }
+});
+
+// Analytics routes
+app.get('/analytics/dashboard', authenticateToken, (req, res) => {
+  console.log('Dashboard analytics request from user:', req.user.email);
+  res.json({
+    totalEvaluations: storedEvaluations.length,
+    averageScore: storedEvaluations.length > 0 ? 
+      storedEvaluations.reduce((sum, eval) => sum + eval.overallScore, 0) / storedEvaluations.length : 0,
+    evaluationsThisMonth: storedEvaluations.filter(eval => {
+      const evalDate = new Date(eval.createdAt);
+      const now = new Date();
+      return evalDate.getMonth() === now.getMonth() && evalDate.getFullYear() === now.getFullYear();
+    }).length
+  });
+});
+
+app.get('/analytics/team', authenticateToken, (req, res) => {
+  console.log('Team analytics request from user:', req.user.email);
+  res.json({
+    teamEvaluations: storedEvaluations.filter(eval => eval.managerId === req.user.id),
+    teamAverageScore: 0 // Calculate based on team evaluations
+  });
+});
+
+// Helper functions
+function calculateOverallScore(items) {
+  if (!items || items.length === 0) return 0;
+  const totalScore = items.reduce((sum, item) => sum + (item.score || 0), 0);
+  return Math.round((totalScore / items.length) * 100) / 100;
+}
+
+function getBehaviorItemName(itemId) {
+  const items = {
+    'coaching-1': 'Active Listening',
+    'coaching-2': 'Questioning Skills',
+    'coaching-3': 'Feedback Delivery',
+    'coaching-4': 'Goal Setting',
+    'coaching-5': 'Follow-up'
+  };
+  return items[itemId] || 'Unknown Item';
+}
+
+// Endpoint to permanently delete a user
+app.delete('/public-admin/users/:id', authenticateToken, async (req, res) => {
+  try {
+    // Only allow ADMIN users to delete users
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only ADMIN users can delete users' });
+    }
+
+    const userId = req.params.id;
+
+    // Prevent admin from deleting themselves
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
+
+    // Simple delete - just remove the user
+    const result = await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ 
+      message: 'User permanently deleted',
+      deletedUserId: userId
+    });
+
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Temporary endpoint to reset all user passwords to 'test123'
+app.post('/admin/reset-passwords', authenticateToken, async (req, res) => {
+  try {
+    // Only allow ADMIN users to reset passwords
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Only ADMIN users can reset passwords' });
+    }
+
+    const bcrypt = require('bcrypt');
+    const newPassword = 'test123';
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update all active users with the new password
+    const result = await pool.query(
+      'UPDATE users SET password = $1, "updatedAt" = NOW() WHERE "isActive" = true',
+      [hashedPassword]
+    );
+
+    // Get list of updated users
+    const users = await pool.query(
+      'SELECT id, email, "displayName", role FROM users WHERE "isActive" = true ORDER BY "displayName"'
+    );
+
+    res.json({
+      message: 'All user passwords have been reset to: test123',
+      updatedCount: result.rowCount,
+      users: users.rows
+    });
+
+  } catch (error) {
+    console.error('Error resetting passwords:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Production backend server running on port ${PORT}`);
+  console.log('📋 Available endpoints:');
+  console.log('  POST /auth/login - Login with email/password');
+  console.log('  POST /auth/refresh - Refresh access token');
+  console.log('  POST /auth/logout - Logout and invalidate refresh token');
+  console.log('  POST /evaluations - Create evaluation (requires auth)');
+  console.log('  GET /evaluations/my - Get my evaluations (requires auth)');
+  console.log('  GET /organizations/teams - Get teams (requires auth)');
+  console.log('  GET /organizations/salespeople - Get salespeople (requires auth)');
+  console.log('  GET /public-admin/teams - Get all teams (requires auth)');
+  console.log('  GET /public-admin/users - Get all users (requires auth)');
+  console.log('  POST /public-admin/users - Create user (requires auth)');
+  console.log('  PUT /public-admin/users/:id - Update user (requires auth)');
+  console.log('  POST /public-admin/users/:id/deactivate - Deactivate user (requires auth)');
+  console.log('  DELETE /public-admin/users/:id - Delete user (requires auth)');
+  console.log('  GET /users - Get all users (requires auth)');
+  console.log('  GET /scoring/categories - Get scoring categories (requires auth)');
+  console.log('  GET /analytics/dashboard - Get dashboard analytics (requires auth)');
+  console.log('  GET /analytics/team - Get team analytics (requires auth)');
+  console.log('  GET /health - Health check');
+  console.log('  GET /public-admin/react-admin - React Admin panel');
+  console.log('🔑 Using real database authentication');
+  console.log('  Connect to your PostgreSQL database using DATABASE_URL');
+  console.log('  All endpoints now return real data from your database');
+});
+
+// Additional admin panel endpoints
+app.get('/public-admin/regions', authenticateToken, async (req, res) => {
+  try {
+    // For now, return default regions since the regions table doesn't exist
+    const defaultRegions = [
+      { id: 'north-america', name: 'North America' },
+      { id: 'europe', name: 'Europe' },
+      { id: 'asia-pacific', name: 'Asia Pacific' },
+      { id: 'latin-america', name: 'Latin America' }
+    ];
+    res.json(defaultRegions);
+  } catch (error) {
+    console.error('Error fetching regions:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Setup teams table endpoint
+app.get('/debug/setup-teams-table', authenticateToken, async (req, res) => {
+  try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS teams (
+            id VARCHAR(255) PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            "regionId" VARCHAR(255),
+            "managerId" VARCHAR(255),
+            "createdAt" TIMESTAMP DEFAULT NOW(),
+            "updatedAt" TIMESTAMP DEFAULT NOW()
+          )
+        `);
+    
+    res.json({ message: 'Teams table created successfully' });
+  } catch (error) {
+    console.error('Error creating teams table:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// User management endpoints
+app.post('/public-admin/users', authenticateToken, async (req, res) => {
+  try {
+    const { displayName, email, password, role } = req.body;
+    const bcrypt = require('bcrypt');
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    const result = await pool.query(
+      'INSERT INTO users (id, email, password, "displayName", role, "isActive", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id, email, "displayName", role, "isActive"',
+      [crypto.randomUUID(), email, hashedPassword, displayName, role, true]
+    );
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/public-admin/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { displayName, email, role, isActive } = req.body;
+    
+    const result = await pool.query(
+      'UPDATE users SET "displayName" = $1, email = $2, role = $3, "isActive" = $4, "updatedAt" = NOW() WHERE id = $5 RETURNING id, email, "displayName", role, "isActive"',
+      [displayName, email, role, isActive, id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/public-admin/users/:id/deactivate', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      'UPDATE users SET "isActive" = false, "updatedAt" = NOW() WHERE id = $1 RETURNING id, email, "displayName", role, "isActive"',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error deactivating user:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/public-admin/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // First check if user exists
+    const checkResult = await pool.query('SELECT id, email, "displayName" FROM users WHERE id = $1', [id]);
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = checkResult.rows[0];
+    
+    // Clean up references to avoid FK violations
+    // 1) Remove memberships in user_teams (support both schema variants)
+    await pool.query('DELETE FROM user_teams WHERE "userId" = $1', [id]).catch(() => {});
+    await pool.query('DELETE FROM user_teams WHERE user_id = $1', [id]).catch(() => {});
+
+    // 2) If the user manages any teams, clear managerId
+    await pool.query('UPDATE teams SET "managerId" = NULL, "updatedAt" = NOW() WHERE "managerId" = $1', [id]).catch(() => {});
+
+    // 3) Clean up push subscriptions
+    await pool.query('DELETE FROM push_subscriptions WHERE "userId" = $1', [id]).catch(() => {});
+    await pool.query('DELETE FROM push_subscriptions WHERE user_id = $1', [id]).catch(() => {});
+
+    // 4) Best-effort cleanup of other potential references if such tables exist
+    const candidates = [
+      { table: 'evaluations', cols: ['managerId', 'salespersonId', 'manager_id', 'salesperson_id'] },
+      { table: 'refresh_tokens', cols: ['userId', 'user_id'] },
+      { table: 'user_roles', cols: ['userId', 'user_id'] },
+      { table: 'audit_logs', cols: ['userId', 'user_id'] }
+    ];
+    for (const c of candidates) {
+      try {
+        const exists = await pool.query('SELECT 1 FROM information_schema.tables WHERE table_name = $1', [c.table]);
+        if (exists.rowCount > 0) {
+          for (const col of c.cols) {
+            await pool.query(`DELETE FROM ${c.table} WHERE "${col}" = $1`, [id]).catch(() => {});
+          }
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    // Delete the user
+    const result = await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ 
+      message: 'User deleted successfully',
+      deletedUser: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    // If FK violation, fallback to anonymize (force-delete behavior) so UI keeps working
+    if (error && (error.code === '23503' || /foreign key/i.test(String(error.detail||error.message)))) {
+      try {
+        const anonEmail = `deleted+${req.params.id}@instorm.io`;
+        await pool.query('UPDATE users SET email = $1, "displayName" = $2, "isActive" = false, role = $3, "updatedAt" = NOW() WHERE id = $4',
+          [anonEmail, 'Deleted User', 'SALESPERSON', req.params.id]);
+        return res.status(200).json({ message: 'User anonymized due to FK constraints', forced: true });
+      } catch (e2) {
+        console.error('Fallback anonymize failed:', e2);
+      }
+    }
+    res.status(500).json({ error: 'Database error', detail: error?.detail || error?.message });
+  }
+});
+
+// Debug helper: attempt deletion and always return detailed error message
+app.post('/public-admin/debug-delete/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Reuse logic by invoking the same cleanup and delete sequence inline
+    const checkResult = await pool.query('SELECT id, email, "displayName" FROM users WHERE id = $1', [id]);
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check all possible FK references before attempting deletion
+    const fkChecks = [];
+    
+    // Check user_teams table
+    const userTeamsCheck = await pool.query('SELECT COUNT(*) as count FROM user_teams WHERE "userId" = $1 OR user_id = $1', [id]);
+    fkChecks.push({ table: 'user_teams', count: userTeamsCheck.rows[0].count });
+    
+    // Check teams table (as manager)
+    const teamsCheck = await pool.query('SELECT COUNT(*) as count FROM teams WHERE "managerId" = $1', [id]);
+    fkChecks.push({ table: 'teams', count: teamsCheck.rows[0].count });
+    
+    // Check evaluations table
+    const evaluationsCheck = await pool.query('SELECT COUNT(*) as count FROM evaluations WHERE "managerId" = $1 OR "salespersonId" = $1 OR manager_id = $1 OR salesperson_id = $1', [id]);
+    fkChecks.push({ table: 'evaluations', count: evaluationsCheck.rows[0].count });
+    
+    // Check refresh_tokens table
+    const refreshTokensCheck = await pool.query('SELECT COUNT(*) as count FROM refresh_tokens WHERE "userId" = $1 OR user_id = $1', [id]);
+    fkChecks.push({ table: 'refresh_tokens', count: refreshTokensCheck.rows[0].count });
+    
+    // Check push_subscriptions table
+    const pushSubsCheck = await pool.query('SELECT COUNT(*) as count FROM push_subscriptions WHERE "userId" = $1 OR user_id = $1', [id]);
+    fkChecks.push({ table: 'push_subscriptions', count: pushSubsCheck.rows[0].count });
+
+    await pool.query('DELETE FROM user_teams WHERE "userId" = $1', [id]).catch(() => {});
+    await pool.query('DELETE FROM user_teams WHERE user_id = $1', [id]).catch(() => {});
+    await pool.query('UPDATE teams SET "managerId" = NULL, "updatedAt" = NOW() WHERE "managerId" = $1', [id]).catch(() => {});
+
+    const candidates = [
+      { table: 'evaluations', cols: ['managerId', 'salespersonId', 'manager_id', 'salesperson_id'] },
+      { table: 'refresh_tokens', cols: ['userId', 'user_id'] },
+      { table: 'user_roles', cols: ['userId', 'user_id'] },
+      { table: 'audit_logs', cols: ['userId', 'user_id'] }
+    ];
+    for (const c of candidates) {
+      try {
+        const exists = await pool.query('SELECT 1 FROM information_schema.tables WHERE table_name = $1', [c.table]);
+        if (exists.rowCount > 0) {
+          for (const col of c.cols) {
+            await pool.query(`DELETE FROM ${c.table} WHERE "${col}" = $1`, [id]).catch(() => {});
+          }
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    const del = await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    if (del.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    return res.json({ 
+      message: 'User deleted (debug endpoint)', 
+      id,
+      fkChecks: fkChecks,
+      success: true 
+    });
+  } catch (error) {
+    return res.status(500).json({ 
+      error: 'Database error', 
+      detail: error?.detail || error?.message,
+      fkChecks: fkChecks,
+      constraint: error?.constraint,
+      code: error?.code
+    });
+  }
+});
+
+// Force-delete (anonymize) user to satisfy foreign keys while removing access
+app.post('/public-admin/users/:id/force-delete', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userRes = await pool.query('SELECT id, email, "displayName" FROM users WHERE id = $1', [id]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Remove from memberships and manager links
+    await pool.query('DELETE FROM user_teams WHERE "userId" = $1', [id]).catch(() => {});
+    await pool.query('DELETE FROM user_teams WHERE user_id = $1', [id]).catch(() => {});
+    await pool.query('UPDATE teams SET "managerId" = NULL, "updatedAt" = NOW() WHERE "managerId" = $1', [id]).catch(() => {});
+
+    // Anonymize user row (preserve for FKs), revoke access
+    const anonEmail = `deleted+${id}@instorm.io`;
+    const updated = await pool.query(
+      'UPDATE users SET email = $1, "displayName" = $2, "isActive" = false, role = $3, "updatedAt" = NOW() WHERE id = $4 RETURNING id, email, "displayName", role, "isActive"',
+      [anonEmail, 'Deleted User', 'SALESPERSON', id]
+    );
+
+    return res.json({ message: 'User anonymized (force-deleted)', user: updated.rows[0] });
+  } catch (error) {
+    console.error('Force delete error:', error);
+    return res.status(500).json({ error: 'Database error', detail: error?.detail || error?.message });
+  }
+});
+
+// Team management endpoints
+app.post('/public-admin/teams', authenticateToken, async (req, res) => {
+  try {
+    const { name, region, managerId } = req.body;
+    
+    // Ensure teams table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS teams (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        "regionId" VARCHAR(255),
+        "managerId" VARCHAR(255),
+        "createdAt" TIMESTAMP DEFAULT NOW(),
+        "updatedAt" TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    const insert = await pool.query(
+      'INSERT INTO teams (id, name, "regionId", "managerId", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id, name, "regionId", "managerId"',
+      [crypto.randomUUID(), name, region || null, managerId || null]
+    );
+
+    res.json(insert.rows[0]);
+  } catch (error) {
+    console.error('Error creating team:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Delete team (admin-only): removes memberships, then team
+app.delete('/public-admin/teams/:id', authenticateToken, async (req, res) => {
+  // Require ADMIN
+  if (req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    await client.query('BEGIN');
+
+    // Ensure team exists
+    const team = await client.query('SELECT id,name FROM teams WHERE id = $1 FOR UPDATE', [id]);
+    if (team.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    console.log(`[DELETE TEAM] Deleting team: ${team.rows[0].name} (ID: ${id})`);
+
+    // Detect user_teams column style
+    const { userCol, teamCol } = await getUserTeamsColumns(client);
+
+    // Step 1: Check for evaluations referencing this team (through salespeople)
+    const evaluationsCheck = await client.query(`
+      SELECT COUNT(*) as count 
+      FROM evaluations e
+      JOIN users u ON u.id = e."salespersonId" OR u.id = e."managerId"
+      JOIN user_teams ut ON ut.${userCol} = u.id
+      WHERE ut.${teamCol} = $1
+    `, [id]);
+    
+    const evaluationCount = parseInt(evaluationsCheck.rows[0].count);
+    if (evaluationCount > 0) {
+      console.log(`[DELETE TEAM] Warning: Team has ${evaluationCount} related evaluations`);
+      // Don't block deletion, but log it
+    }
+
+    // Step 2: Check if team has managed teams (as a region manager's team)
+    const managedCheck = await client.query(`
+      SELECT COUNT(*) as count
+      FROM teams
+      WHERE "managerId" IN (
+        SELECT ut.${userCol}
+        FROM user_teams ut
+        WHERE ut.${teamCol} = $1
+      )
+    `, [id]);
+    
+    const managedCount = parseInt(managedCheck.rows[0].count);
+    if (managedCount > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: `Cannot delete team: ${managedCount} other team(s) are managed by members of this team. Please reassign those teams first.`
+      });
+    }
+
+    // Step 3: Delete user_teams memberships
+    const deleteMemberships = await client.query(`DELETE FROM user_teams WHERE ${teamCol} = $1`, [id]);
+    console.log(`[DELETE TEAM] Deleted ${deleteMemberships.rowCount} team memberships`);
+
+    // Step 4: Update any users who have this team as their primary team
+    const updateUsers = await client.query(`
+      UPDATE users 
+      SET "teamId" = NULL 
+      WHERE "teamId" = $1
+    `, [id]);
+    console.log(`[DELETE TEAM] Updated ${updateUsers.rowCount} users with this teamId`);
+
+    // Step 5: Delete the team
+    await client.query('DELETE FROM teams WHERE id = $1', [id]);
+    console.log(`[DELETE TEAM] Team deleted successfully`);
+
+    await client.query('COMMIT');
+    return res.json({ 
+      message: 'Team deleted successfully', 
+      id,
+      deletedMemberships: deleteMemberships.rowCount,
+      updatedUsers: updateUsers.rowCount
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[DELETE TEAM] Error deleting team:', error);
+    console.error('[DELETE TEAM] Error stack:', error.stack);
+    
+    // Provide more specific error messages
+    if (error.code === '23503') {
+      return res.status(400).json({ 
+        error: 'Cannot delete team due to foreign key constraint. The team may be referenced by other data.',
+        detail: error.detail || 'Unknown constraint violation'
+      });
+    }
+    
+    return res.status(500).json({ 
+      error: 'Failed to delete team',
+      message: error.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = app;

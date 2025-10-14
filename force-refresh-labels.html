@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Force Refresh - Mobile Labels Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .mobile-label {
+            font-weight: 700;
+            color: #1f2937;
+            font-size: 0.875rem;
+            margin-bottom: 8px;
+            background-color: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .test-data {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Mobile Labels Test - Force Refresh</h1>
+        
+        <div class="info">
+            <strong>Instructions:</strong> This page tests the new mobile label styling. If labels are dark and have background highlights, the CSS update worked!
+        </div>
+
+        <div class="test-section">
+            <h2>📱 Mobile Label Style Test</h2>
+            <p>These should be <strong>dark gray text with light background</strong>:</p>
+            
+            <div class="test-data">
+                <span class="mobile-label">Regional Manager:</span>
+                <div>Krasimir (krasimir@company.com)</div>
+            </div>
+            
+            <div class="test-data">
+                <span class="mobile-label">Region:</span>
+                <div>Metro Bulgaria</div>
+            </div>
+            
+            <div class="test-data">
+                <span class="mobile-label">Evaluations:</span>
+                <div>15</div>
+            </div>
+            
+            <div class="test-data">
+                <span class="mobile-label">Avg Score:</span>
+                <div>85%</div>
+            </div>
+            
+            <div class="test-data">
+                <span class="mobile-label">Salespeople:</span>
+                <div>8</div>
+            </div>
+            
+            <div class="test-data">
+                <span class="mobile-label">Sales Leads:</span>
+                <div>3</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔄 Force Refresh Actions</h2>
+            <button class="button" onclick="window.location.href='https://scorecard.instorm.io/?v=' + Date.now()">
+                Go to Main App (Force Refresh)
+            </button>
+            <button class="button" onclick="clearCache()">
+                Clear Browser Cache
+            </button>
+            <button class="button" onclick="hardRefresh()">
+                Hard Refresh Page
+            </button>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Expected Results</h2>
+            <p class="success">✅ Labels should be DARK GRAY (#1f2937) with LIGHT BACKGROUND (#f3f4f6)</p>
+            <p class="success">✅ Labels should be BOLD (font-weight: 700)</p>
+            <p class="success">✅ Labels should have ROUNDED CORNERS and PADDING</p>
+            <p class="success">✅ Labels should be HIGHLY VISIBLE against any background</p>
+        </div>
+
+        <div class="test-section">
+            <h2>🚨 Troubleshooting</h2>
+            <p>If labels are still light/blue:</p>
+            <ol>
+                <li>Clear browser cache completely</li>
+                <li>Try incognito/private mode</li>
+                <li>Force refresh with Ctrl+F5 (Windows) or Cmd+Shift+R (Mac)</li>
+                <li>Wait 2-3 minutes for CloudFront cache to clear</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function clearCache() {
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (let name of names) {
+                        caches.delete(name);
+                    }
+                });
+            }
+            alert('Cache cleared! Now refresh the page.');
+        }
+
+        function hardRefresh() {
+            window.location.reload(true);
+        }
+
+        // Auto-refresh every 30 seconds to check for updates
+        setTimeout(() => {
+            console.log('Auto-refreshing to check for CSS updates...');
+            window.location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
+

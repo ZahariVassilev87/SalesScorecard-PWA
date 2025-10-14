@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Invalid Tokens</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            padding: 50px; 
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #dc3545;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background-color: #c82333;
+            transform: translateY(-2px);
+        }
+        .success {
+            background-color: #28a745;
+        }
+        .success:hover {
+            background-color: #218838;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #333;
+            padding: 15px;
+            border-radius: 5px;
+            background: #f8f9fa;
+        }
+        .error { background: #f8d7da; color: #721c24; }
+        .success-msg { background: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Clear Invalid Tokens</h1>
+        <p>This page will clear all offline data with invalid/malformed tokens to fix the 403 Forbidden error.</p>
+        
+        <button onclick="checkCurrentData()">Check Current Data</button>
+        <button onclick="clearInvalidTokens()">Clear Invalid Tokens</button>
+        <button onclick="testSync()" class="success">Test Sync</button>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        function checkCurrentData() {
+            const statusDiv = document.getElementById('status');
+            const evaluations = JSON.parse(localStorage.getItem('offlineEvaluations') || '[]');
+            const updates = JSON.parse(localStorage.getItem('offlineUserUpdates') || '[]');
+            const currentToken = localStorage.getItem('userToken');
+            
+            let status = '<h3>Current Data Status:</h3>';
+            status += `<p><strong>Offline Evaluations:</strong> ${evaluations.length} items</p>`;
+            status += `<p><strong>Offline Updates:</strong> ${updates.length} items</p>`;
+            status += `<p><strong>Current Token:</strong> ${currentToken ? 'Present (' + currentToken.length + ' chars)' : 'None'}</p>`;
+            
+            if (currentToken) {
+                const isJWT = currentToken.includes('.');
+                status += `<p><strong>Token Type:</strong> ${isJWT ? '✅ Valid JWT' : '❌ Invalid (not JWT)'}</p>`;
+            }
+            
+            if (evaluations.length > 0) {
+                status += '<h4>Evaluation Tokens:</h4>';
+                evaluations.forEach((eval, index) => {
+                    const isJWT = eval.token && eval.token.includes('.');
+                    status += `<p>Evaluation ${index + 1}: ${isJWT ? '✅ Valid JWT' : '❌ Invalid (' + (eval.token ? eval.token.length : 0) + ' chars)'}</p>`;
+                });
+            }
+            
+            statusDiv.innerHTML = status;
+        }
+        
+        function clearInvalidTokens() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = 'Clearing invalid tokens...';
+            
+            try {
+                // Clear all offline data
+                localStorage.removeItem('offlineEvaluations');
+                localStorage.removeItem('offlineUserUpdates');
+                
+                // Check if current token is valid
+                const currentToken = localStorage.getItem('userToken');
+                if (currentToken && !currentToken.includes('.')) {
+                    localStorage.removeItem('userToken');
+                    statusDiv.innerHTML = '<div class="success-msg">✅ All invalid data cleared! Including invalid current token.</div>';
+                } else {
+                    statusDiv.innerHTML = '<div class="success-msg">✅ All offline data cleared! Current token is valid.</div>';
+                }
+                
+                setTimeout(() => {
+                    checkCurrentData();
+                }, 2000);
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="error">❌ Error clearing data: ${error.message}</div>`;
+                console.error('Error clearing offline data:', error);
+            }
+        }
+        
+        function testSync() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = 'Testing sync with current token...';
+            
+            const currentToken = localStorage.getItem('userToken');
+            if (!currentToken) {
+                statusDiv.innerHTML = '<div class="error">❌ No token found. Please log in first.</div>';
+                return;
+            }
+            
+            fetch('http://localhost:3001/evaluations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${currentToken}`
+                },
+                body: JSON.stringify({
+                    salespersonId: 'cmfz2lwck00006sgnaia9galb',
+                    visitDate: '2025-09-28',
+                    items: [{ behaviorItemId: 'let-salesperson-lead', score: 3, comment: 'Test sync' }],
+                    customerName: 'Test Customer',
+                    customerType: 'low-share',
+                    location: 'Test Location'
+                })
+            }).then(response => {
+                if (response.ok) {
+                    statusDiv.innerHTML = '<div class="success-msg">✅ Sync successful! Token is working correctly.</div>';
+                } else {
+                    statusDiv.innerHTML = `<div class="error">❌ Sync failed: ${response.status} ${response.statusText}</div>`;
+                }
+            }).catch(error => {
+                statusDiv.innerHTML = `<div class="error">❌ Sync error: ${error.message}</div>`;
+            });
+        }
+        
+        // Auto-check on page load
+        window.onload = function() {
+            checkCurrentData();
+        };
+    </script>
+</body>
+</html>
+
+

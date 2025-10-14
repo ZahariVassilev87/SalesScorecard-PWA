@@ -1,0 +1,24 @@
+{
+  "name": "sales-scorecard-backend-refresh",
+  "version": "1.0.0",
+  "description": "Backend server with refresh token implementation for Sales Scorecard PWA",
+  "main": "backend-refresh-token-example.js",
+  "scripts": {
+    "start": "node backend-refresh-token-example.js",
+    "dev": "nodemon backend-refresh-token-example.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["jwt", "refresh-token", "authentication", "sales-scorecard"],
+  "author": "Sales Scorecard Team",
+  "license": "MIT"
+}
+
+

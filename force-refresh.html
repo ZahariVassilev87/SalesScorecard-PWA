@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Force Refresh PWA</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; text-align: center; }
+        button { padding: 15px 30px; font-size: 16px; margin: 10px; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>🔄 Force PWA Refresh</h1>
+    <p>This will clear all caches and force the PWA to reload with fresh data.</p>
+    
+    <button onclick="clearAllCaches()">🗑️ Clear All Caches</button>
+    <button onclick="reloadPWA()">🔄 Reload PWA</button>
+    <button onclick="testAPI()">🧪 Test API</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        async function clearAllCaches() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Clearing caches...</p>';
+            
+            try {
+                // Clear service worker caches
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (const cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                        console.log('Deleted cache:', cacheName);
+                    }
+                    results.innerHTML += '<p class="success">✅ Service worker caches cleared</p>';
+                }
+                
+                // Clear localStorage
+                localStorage.clear();
+                results.innerHTML += '<p class="success">✅ LocalStorage cleared</p>';
+                
+                // Clear sessionStorage
+                sessionStorage.clear();
+                results.innerHTML += '<p class="success">✅ SessionStorage cleared</p>';
+                
+                // Unregister service worker
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                        console.log('Unregistered service worker');
+                    }
+                    results.innerHTML += '<p class="success">✅ Service workers unregistered</p>';
+                }
+                
+                results.innerHTML += '<p class="success">🎉 All caches cleared! You can now reload the PWA.</p>';
+                
+            } catch (error) {
+                results.innerHTML += '<p class="error">❌ Error: ' + error.message + '</p>';
+            }
+        }
+        
+        function reloadPWA() {
+            window.location.href = '/';
+        }
+        
+        async function testAPI() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Testing API...</p>';
+            
+            try {
+                // Login as Krasimir
+                const loginResponse = await fetch('https://api.instorm.io/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'krasimir@company.com',
+                        password: 'test123'
+                    })
+                });
+                
+                if (!loginResponse.ok) {
+                    throw new Error('Login failed');
+                }
+                
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+                
+                results.innerHTML += '<p class="success">✅ Login successful</p>';
+                
+                // Test my-team
+                const myTeamResponse = await fetch('https://api.instorm.io/users/my-team', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const myTeamData = await myTeamResponse.json();
+                results.innerHTML += '<p class="success">✅ My Team: ' + myTeamData.name + ' with ' + myTeamData.members.length + ' members</p>';
+                
+                // Test salespeople
+                const salespeopleResponse = await fetch('https://api.instorm.io/organizations/salespeople', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const salespeopleData = await salespeopleResponse.json();
+                results.innerHTML += '<p class="success">✅ Salespeople: ' + salespeopleData.length + ' people in dropdown</p>';
+                
+            } catch (error) {
+                results.innerHTML += '<p class="error">❌ API Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>
+
+
+
+

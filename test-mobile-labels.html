@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Labels Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        /* Mobile Label Styles - Always Available */
+        .mobile-label {
+          font-weight: 700 !important;
+          color: #1f2937 !important;
+          font-size: 0.875rem;
+          background-color: #f3f4f6 !important;
+          padding: 4px 8px;
+          border-radius: 4px;
+          display: inline-block;
+          min-width: 120px;
+          text-align: left;
+          white-space: nowrap;
+        }
+
+        .table-cell {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 16px;
+          padding: 16px;
+          border-bottom: 1px solid #e5e7eb;
+        }
+
+        .table-cell:last-child {
+          border-bottom: none;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Mobile Labels Test</h1>
+        
+        <div class="test-section">
+            <h2>Expected Result:</h2>
+            <p class="success">✅ Labels should be DARK GRAY (#1f2937) with LIGHT BACKGROUND (#f3f4f6)</p>
+            <p class="success">✅ Labels should be BOLD (font-weight: 700)</p>
+            <p class="success">✅ Labels should be HORIZONTAL (side by side with data)</p>
+        </div>
+
+        <div class="test-section">
+            <h2>Test Data:</h2>
+            
+            <div class="table-cell">
+                <span class="mobile-label">Regional Manager:</span>
+                <div>
+                    <div>Krasimir</div>
+                    <div>krasimir@company.com</div>
+                </div>
+            </div>
+            
+            <div class="table-cell">
+                <span class="mobile-label">Region:</span>
+                <span>Metro Bulgaria</span>
+            </div>
+            
+            <div class="table-cell">
+                <span class="mobile-label">Evaluations:</span>
+                <span>2</span>
+            </div>
+            
+            <div class="table-cell">
+                <span class="mobile-label">Avg Score:</span>
+                <span style="color: #10b981;">92%</span>
+            </div>
+            
+            <div class="table-cell">
+                <span class="mobile-label">Salespeople:</span>
+                <span>2</span>
+            </div>
+            
+            <div class="table-cell">
+                <span class="mobile-label">Sales Leads:</span>
+                <span>1</span>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Current CSS Applied:</h2>
+            <pre>
+.mobile-label {
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+  background-color: #f3f4f6 !important;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  min-width: 120px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table-cell {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+            </pre>
+        </div>
+
+        <div class="test-section">
+            <h2>If Labels Are Still White:</h2>
+            <p class="error">❌ There might be a caching issue or conflicting CSS</p>
+            <p>Try:</p>
+            <ol>
+                <li>Hard refresh (Ctrl+F5 or Cmd+Shift+R)</li>
+                <li>Clear browser cache completely</li>
+                <li>Check if the CSS file is loading correctly</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Frontend API Calls</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>Test Frontend API Calls</h1>
+    <button onclick="testLogin()">Test Login & API Calls</button>
+    <div id="results"></div>
+    
+    <script>
+        async function testLogin() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Testing...</p>';
+            
+            try {
+                // Login as Krasimir
+                const loginResponse = await fetch('https://api.instorm.io/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'krasimir@company.com',
+                        password: 'test123'
+                    })
+                });
+                
+                if (!loginResponse.ok) {
+                    throw new Error('Login failed');
+                }
+                
+                const loginData = await loginResponse.json();
+                const token = loginData.token;
+                
+                results.innerHTML += '<div class="result success">✅ Login successful</div>';
+                
+                // Test /users/my-team
+                const myTeamResponse = await fetch('https://api.instorm.io/users/my-team', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const myTeamData = await myTeamResponse.json();
+                results.innerHTML += '<div class="result success"><h3>My Team:</h3><pre>' + JSON.stringify(myTeamData, null, 2) + '</pre></div>';
+                
+                // Test /organizations/salespeople
+                const salespeopleResponse = await fetch('https://api.instorm.io/organizations/salespeople', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const salespeopleData = await salespeopleResponse.json();
+                results.innerHTML += '<div class="result success"><h3>Salespeople for Evaluation:</h3><pre>' + JSON.stringify(salespeopleData, null, 2) + '</pre></div>';
+                
+            } catch (error) {
+                results.innerHTML += '<div class="result error">❌ Error: ' + error.message + '</div>';
+            }
+        }
+    </script>
+</body>
+</html>
+
+
+
+

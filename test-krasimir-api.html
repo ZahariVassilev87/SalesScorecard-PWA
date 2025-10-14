@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Krasimir API</title>
+</head>
+<body>
+    <h1>Test Krasimir's API Endpoints</h1>
+    
+    <div id="results"></div>
+    
+    <script>
+        async function testAPI() {
+            const results = document.getElementById('results');
+            
+            // First login as Krasimir
+            const loginResponse = await fetch('https://api.instorm.io/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: 'krasimir@company.com',
+                    password: 'password123'
+                })
+            });
+            
+            if (!loginResponse.ok) {
+                results.innerHTML = '<p style="color: red;">Login failed</p>';
+                return;
+            }
+            
+            const loginData = await loginResponse.json();
+            const token = loginData.token;
+            
+            results.innerHTML += '<p style="color: green;">✅ Login successful</p>';
+            
+            // Test /users/my-team
+            const myTeamResponse = await fetch('https://api.instorm.io/users/my-team', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const myTeamData = await myTeamResponse.json();
+            results.innerHTML += '<h3>My Team Result:</h3>';
+            results.innerHTML += '<pre>' + JSON.stringify(myTeamData, null, 2) + '</pre>';
+            
+            // Test /organizations/salespeople
+            const salespeopleResponse = await fetch('https://api.instorm.io/organizations/salespeople', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const salespeopleData = await salespeopleResponse.json();
+            results.innerHTML += '<h3>Salespeople for Evaluation:</h3>';
+            results.innerHTML += '<pre>' + JSON.stringify(salespeopleData, null, 2) + '</pre>';
+        }
+        
+        testAPI().catch(err => {
+            document.getElementById('results').innerHTML = '<p style="color: red;">Error: ' + err.message + '</p>';
+        });
+    </script>
+</body>
+</html>
+
+
+
+

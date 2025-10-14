@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Backend Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Direct Backend Connection Test</h1>
+    <p>This page tests the backend connection directly from the React app server.</p>
+    
+    <button onclick="testHealth()">Test Health Endpoint</button>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="testAll()">Test All Endpoints</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001';
+        
+        function addResult(message, isError = false) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${isError ? 'error' : 'success'}`;
+            resultDiv.innerHTML = message;
+            resultsDiv.appendChild(resultDiv);
+        }
+        
+        async function testHealth() {
+            try {
+                addResult('Testing health endpoint...');
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                addResult(`✅ Health check passed: ${data.status} at ${data.timestamp}`);
+            } catch (error) {
+                addResult(`❌ Health check failed: ${error.message}`, true);
+            }
+        }
+        
+        async function testLogin() {
+            try {
+                addResult('Testing login endpoint...');
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'manager@company.com',
+                        password: 'password'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`✅ Login successful: ${data.user.displayName} (${data.user.role})`);
+                } else {
+                    const errorData = await response.json();
+                    addResult(`❌ Login failed: ${response.status} - ${errorData.message}`, true);
+                }
+            } catch (error) {
+                addResult(`❌ Login request failed: ${error.message}`, true);
+            }
+        }
+        
+        async function testAll() {
+            addResult('Starting comprehensive backend test...');
+            await testHealth();
+            await testLogin();
+            addResult('Test completed!');
+        }
+    </script>
+</body>
+</html>
+
+

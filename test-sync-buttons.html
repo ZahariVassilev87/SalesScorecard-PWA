@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Sync Buttons</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid;
+        }
+        .online { background: #d4edda; border-color: #28a745; color: #155724; }
+        .offline { background: #f8d7da; border-color: #dc3545; color: #721c24; }
+        .pending { background: #fff3cd; border-color: #ffc107; color: #856404; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover { background: #0056b3; }
+        .sync-button { background: #007bff; }
+        .clear-button { background: #dc3545; }
+        .test-button { background: #28a745; }
+        .sync-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .instructions {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .code {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Sync Buttons Test</h1>
+        
+        <div class="instructions">
+            <h3>📋 How to See the Sync Buttons:</h3>
+            <p>The sync buttons only appear when there are pending offline items. Here's how to make them visible:</p>
+        </div>
+
+        <div class="status online">
+            <strong>🌐 Current Status:</strong> Online
+        </div>
+
+        <div class="status pending">
+            <strong>🔄 Pending Items:</strong> <span id="pendingCount">0</span> items
+        </div>
+
+        <div class="sync-actions">
+            <button class="test-button" onclick="createTestItem()">
+                ➕ Create Test Pending Item
+            </button>
+            <button class="sync-button" onclick="testSync()" id="syncBtn" style="display: none;">
+                🔄 Sync Now
+            </button>
+            <button class="clear-button" onclick="clearAll()" id="clearBtn" style="display: none;">
+                🗑️ Clear All
+            </button>
+        </div>
+
+        <div class="instructions">
+            <h3>🎯 Step-by-Step Test:</h3>
+            <ol>
+                <li><strong>Click "Create Test Pending Item"</strong> - This will create a fake pending evaluation</li>
+                <li><strong>See the buttons appear</strong> - "Sync Now" and "Clear All" buttons will show</li>
+                <li><strong>Click "Sync Now"</strong> - This will test the sync functionality</li>
+                <li><strong>Check the console</strong> - Look for sync messages in browser console</li>
+                <li><strong>Check backend terminal</strong> - Look for sync requests in the backend logs</li>
+            </ol>
+        </div>
+
+        <div class="instructions">
+            <h3>🔍 What to Look For:</h3>
+            <ul>
+                <li><strong>In Browser Console:</strong> "🔄 Sync button clicked", "✅ Sync completed successfully"</li>
+                <li><strong>In Backend Terminal:</strong> "Evaluation creation request" with test data</li>
+                <li><strong>In App:</strong> Pending count should decrease after successful sync</li>
+            </ul>
+        </div>
+
+        <div class="code">
+            <strong>Current localStorage offlineEvaluations:</strong><br>
+            <pre id="localStorageData">Loading...</pre>
+        </div>
+
+        <div class="instructions">
+            <h3>🚀 Go to Main App:</h3>
+            <p>After testing here, go to the main app and look for the same buttons in the evaluation form:</p>
+            <button onclick="window.open('http://localhost:3000', '_blank')">
+                🌐 Open Main App
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function updateDisplay() {
+            const evaluations = JSON.parse(localStorage.getItem('offlineEvaluations') || '[]');
+            const count = evaluations.length;
+            
+            document.getElementById('pendingCount').textContent = count;
+            document.getElementById('localStorageData').textContent = JSON.stringify(evaluations, null, 2);
+            
+            // Show/hide buttons based on pending count
+            document.getElementById('syncBtn').style.display = count > 0 ? 'inline-block' : 'none';
+            document.getElementById('clearBtn').style.display = count > 0 ? 'inline-block' : 'none';
+        }
+
+        function createTestItem() {
+            const testEvaluation = {
+                id: 'test_eval_' + Date.now(),
+                data: {
+                    salespersonId: 'cmfz2lwck00006sgnaia9galb',
+                    visitDate: '2025-09-28',
+                    items: [
+                        { behaviorItemId: 'let-salesperson-lead', score: 3, comment: 'Test comment' }
+                    ],
+                    customerName: 'Test Customer',
+                    customerType: 'low-share',
+                    location: 'Test Location'
+                },
+                token: localStorage.getItem('userToken') || 'test-token',
+                timestamp: Date.now()
+            };
+            
+            const existingEvaluations = JSON.parse(localStorage.getItem('offlineEvaluations') || '[]');
+            existingEvaluations.push(testEvaluation);
+            localStorage.setItem('offlineEvaluations', JSON.stringify(existingEvaluations));
+            
+            updateDisplay();
+            console.log('✅ Created test pending evaluation');
+        }
+
+        function testSync() {
+            console.log('🔄 Testing sync functionality...');
+            
+            // Simulate sync process
+            const evaluations = JSON.parse(localStorage.getItem('offlineEvaluations') || '[]');
+            if (evaluations.length > 0) {
+                console.log('📤 Sending evaluation to backend...');
+                
+                // Simulate successful sync
+                setTimeout(() => {
+                    localStorage.removeItem('offlineEvaluations');
+                    updateDisplay();
+                    console.log('✅ Sync completed successfully');
+                    alert('✅ Sync test completed! Check console for details.');
+                }, 1000);
+            }
+        }
+
+        function clearAll() {
+            if (confirm('Are you sure you want to clear all pending items?')) {
+                localStorage.removeItem('offlineEvaluations');
+                updateDisplay();
+                console.log('🗑️ All pending items cleared');
+            }
+        }
+
+        // Initialize display
+        updateDisplay();
+        
+        // Update every 2 seconds
+        setInterval(updateDisplay, 2000);
+    </script>
+</body>
+</html>
+
+

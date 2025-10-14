@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Category Mapping</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+    </style>
+</head>
+<body>
+    <h1>Category Mapping Test</h1>
+    <div id="results"></div>
+
+    <script>
+        // Test the category mapping logic
+        function testCategoryMapping() {
+            const results = document.getElementById('results');
+            results.innerHTML = '';
+
+            // Test data similar to what you provided
+            const testBehaviorItemIds = [
+                'salesperson_LOW_SHARE_prep1',
+                'salesperson_LOW_SHARE_prep2',
+                'salesperson_LOW_SHARE_prep3',
+                'salesperson_LOW_SHARE_prep4',
+                'salesperson_LOW_SHARE_prep5',
+                'salesperson_LOW_SHARE_prep6',
+                'salesperson_LOW_SHARE_prep7',
+                'salesperson_LOW_SHARE_prob1',
+                'salesperson_LOW_SHARE_prob2',
+                'salesperson_LOW_SHARE_prob3',
+                'salesperson_LOW_SHARE_prob4',
+                'salesperson_LOW_SHARE_obj1',
+                'salesperson_LOW_SHARE_obj2',
+                'salesperson_LOW_SHARE_obj3',
+                'salesperson_LOW_SHARE_prop1',
+                'salesperson_LOW_SHARE_prop2',
+                'salesperson_LOW_SHARE_prop3',
+                'salesperson_LOW_SHARE_prop4'
+            ];
+
+            // Category mapping function (from our fix)
+            function getLegacyCategoryName(behaviorItemId) {
+                // Extract category from behavior item ID
+                if (behaviorItemId.includes('_prep')) return 'preparation';
+                if (behaviorItemId.includes('_prob')) return 'problemDefinition';
+                if (behaviorItemId.includes('_obj')) return 'objections';
+                if (behaviorItemId.includes('_prop')) return 'commercial';
+                
+                return 'Unknown Category';
+            }
+
+            // Item name mapping function (from our fix)
+            function getLegacyItemName(behaviorItemId) {
+                // Handle the specific format: salesperson_LOW_SHARE_prep1, etc.
+                if (behaviorItemId.includes('_prep1')) return 'Identified core products the client uses (in their menu) but does not buy from METRO';
+                if (behaviorItemId.includes('_prep2')) return 'Determined type of establishment (restaurant/hotel) and cuisine style';
+                if (behaviorItemId.includes('_prep3')) return 'Selected 1–2 focus products for the meeting';
+                if (behaviorItemId.includes('_prep4')) return 'Knows where the client currently orders from and why';
+                if (behaviorItemId.includes('_prep5')) return 'Analyzed client\'s restaurant prices and quality/price preferences';
+                if (behaviorItemId.includes('_prep6')) return 'Prepared strategy for focus product (e.g. which mozzarella, which brand)';
+                if (behaviorItemId.includes('_prep7')) return 'Visit aligned with METRO contact model';
+                
+                if (behaviorItemId.includes('_prob1')) return 'Asked about client\'s experience with current supplier';
+                if (behaviorItemId.includes('_prob2')) return 'Checked for issues with price, quality, and delivery';
+                if (behaviorItemId.includes('_prob3')) return 'Clarified how issues affect client\'s business';
+                if (behaviorItemId.includes('_prob4')) return 'Explored problem with a core product METRO does not supply';
+                
+                if (behaviorItemId.includes('_obj1')) return 'Listened fully to objection without interrupting';
+                if (behaviorItemId.includes('_obj2')) return 'Validated client\'s perspective';
+                if (behaviorItemId.includes('_obj3')) return 'Put objection in market context & showed METRO\'s response';
+                
+                if (behaviorItemId.includes('_prop1')) return 'Presented product as solution to specific problem';
+                if (behaviorItemId.includes('_prop2')) return 'Demonstrated product benefits with concrete examples';
+                if (behaviorItemId.includes('_prop3')) return 'Proposed test of key products';
+                if (behaviorItemId.includes('_prop4')) return 'Agreed on clear next step';
+                
+                return behaviorItemId;
+            }
+
+            let successCount = 0;
+            let totalTests = 0;
+
+            testBehaviorItemIds.forEach(itemId => {
+                totalTests++;
+                const categoryName = getLegacyCategoryName(itemId);
+                const itemName = getLegacyItemName(itemId);
+                
+                const isSuccess = categoryName !== 'Unknown Category' && itemName !== itemId;
+                
+                if (isSuccess) successCount++;
+
+                const div = document.createElement('div');
+                div.className = `test-result ${isSuccess ? 'success' : 'error'}`;
+                div.innerHTML = `
+                    <strong>${itemId}</strong><br>
+                    Category: ${categoryName}<br>
+                    Item: ${itemName}<br>
+                    Status: ${isSuccess ? '✅ SUCCESS' : '❌ FAILED'}
+                `;
+                results.appendChild(div);
+            });
+
+            // Summary
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = `test-result ${successCount === totalTests ? 'success' : 'error'}`;
+            summaryDiv.innerHTML = `
+                <strong>SUMMARY</strong><br>
+                Tests Passed: ${successCount}/${totalTests}<br>
+                Success Rate: ${Math.round((successCount / totalTests) * 100)}%<br>
+                Status: ${successCount === totalTests ? '✅ ALL TESTS PASSED' : '❌ SOME TESTS FAILED'}
+            `;
+            results.appendChild(summaryDiv);
+        }
+
+        // Run the test when page loads
+        testCategoryMapping();
+    </script>
+</body>
+</html>

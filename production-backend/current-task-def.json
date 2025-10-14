@@ -1,0 +1,113 @@
+{
+    "taskDefinitionArn": "arn:aws:ecs:eu-north-1:221855463690:task-definition/sales-scorecard-task:78",
+    "containerDefinitions": [
+        {
+            "name": "sales-scorecard-api",
+            "image": "221855463690.dkr.ecr.us-east-1.amazonaws.com/sales-scorecard-api:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 3000,
+                    "hostPort": 3000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "NODE_ENV",
+                    "value": "production"
+                },
+                {
+                    "name": "VAPID_PUBLIC_KEY",
+                    "value": "BObSOgKLv2p6nSlc6gawMFGvyr-tL_v6x2C7A9ZSStYETKUzUA205tTuRfWh9Y1LD5rtoGY75xOaLv9fX3r-Tgc"
+                },
+                {
+                    "name": "VAPID_PRIVATE_KEY",
+                    "value": "tTXqFrsmUS5NUZ9pc50nQNevGEjypY4BsGPw58EWonw"
+                },
+                {
+                    "name": "PORT",
+                    "value": "3000"
+                },
+                {
+                    "name": "VAPID_SUBJECT",
+                    "value": "mailto:support@instorm.io"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "secrets": [
+                {
+                    "name": "DATABASE_URL",
+                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:221855463690:secret:sales-scorecard-db-url-0dI6Mw"
+                },
+                {
+                    "name": "JWT_SECRET",
+                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:221855463690:secret:sales-scorecard-jwt-secret-t3rK9M"
+                },
+                {
+                    "name": "AWS_ACCESS_KEY_ID",
+                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:221855463690:secret:sales-scorecard-aws-credentials-gWTwDF"
+                },
+                {
+                    "name": "AWS_SECRET_ACCESS_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:221855463690:secret:sales-scorecard-aws-credentials-gWTwDF"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/sales-scorecard",
+                    "awslogs-region": "eu-north-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "systemControls": []
+        }
+    ],
+    "family": "sales-scorecard-task",
+    "executionRoleArn": "arn:aws:iam::221855463690:role/ecsTaskExecutionRole",
+    "networkMode": "awsvpc",
+    "revision": 78,
+    "volumes": [],
+    "status": "ACTIVE",
+    "requiresAttributes": [
+        {
+            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+        },
+        {
+            "name": "ecs.capability.execution-role-awslogs"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.ecr-auth"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+        },
+        {
+            "name": "ecs.capability.secrets.asm.environment-variables"
+        },
+        {
+            "name": "ecs.capability.execution-role-ecr-pull"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+        },
+        {
+            "name": "ecs.capability.task-eni"
+        }
+    ],
+    "placementConstraints": [],
+    "compatibilities": [
+        "EC2",
+        "FARGATE"
+    ],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "256",
+    "memory": "512",
+    "registeredAt": "2025-09-29T22:47:46.184000+03:00",
+    "registeredBy": "arn:aws:iam::221855463690:root"
+}

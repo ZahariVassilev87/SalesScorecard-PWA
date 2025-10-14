@@ -1,0 +1,24 @@
+{
+  "name": "sales-scorecard-local-backend",
+  "version": "1.0.0",
+  "description": "Local backend server for Sales Scorecard PWA development",
+  "main": "local-backend-server.js",
+  "scripts": {
+    "start": "node local-backend-server.js",
+    "dev": "nodemon local-backend-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["local", "backend", "jwt", "refresh-token", "sales-scorecard"],
+  "author": "Sales Scorecard Team",
+  "license": "MIT"
+}
+
+

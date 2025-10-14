@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Structure Assessment</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f7;
+        }
+        h1 { color: #1d1d1f; border-bottom: 3px solid #0071e3; padding-bottom: 10px; }
+        h2 { color: #0071e3; margin-top: 30px; }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #86868b;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e5e7;
+        }
+        th {
+            background: #f5f5f7;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+        tr:hover {
+            background: #fafafa;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-director { background: #FF3B30; color: white; }
+        .badge-regional { background: #FF9500; color: white; }
+        .badge-lead { background: #007AFF; color: white; }
+        .badge-salesperson { background: #34C759; color: white; }
+        .badge-admin { background: #5856D6; color: white; }
+        .stat {
+            display: inline-block;
+            margin: 10px 20px 10px 0;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-top: 5px;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ff9500;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #34c759;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .error {
+            background: #f8d7da;
+            border-left: 4px solid #ff3b30;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .hierarchy {
+            margin-left: 20px;
+            border-left: 2px solid #e5e5e7;
+            padding-left: 20px;
+        }
+        code {
+            background: #f5f5f7;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+        }
+        pre {
+            background: #1d1d1f;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Database Structure Assessment</h1>
+    
+    <div id="login-section" class="section">
+        <h2>🔐 Authentication Required</h2>
+        <p>Enter your credentials to assess the database structure:</p>
+        <input type="email" id="email" placeholder="Email" style="width: 300px; padding: 10px; margin: 5px; border-radius: 8px; border: 1px solid #e5e5e7;">
+        <input type="password" id="password" placeholder="Password" style="width: 300px; padding: 10px; margin: 5px; border-radius: 8px; border: 1px solid #e5e5e7;">
+        <button onclick="login()" style="padding: 10px 20px; background: #0071e3; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 5px;">Login & Assess</button>
+    </div>
+
+    <div id="results" style="display: none;">
+        <div class="section">
+            <h2>📈 Quick Stats</h2>
+            <div id="stats"></div>
+        </div>
+
+        <div class="section">
+            <h2>👥 Users by Role</h2>
+            <div id="users-by-role"></div>
+        </div>
+
+        <div class="section">
+            <h2>🗺️ Regions</h2>
+            <div id="regions"></div>
+        </div>
+
+        <div class="section">
+            <h2>🏢 Teams Structure</h2>
+            <div id="teams"></div>
+        </div>
+
+        <div class="section">
+            <h2>🔗 User-Team-Region Relationships</h2>
+            <div id="relationships"></div>
+        </div>
+
+        <div class="section">
+            <h2>📝 Evaluations Overview</h2>
+            <div id="evaluations"></div>
+        </div>
+
+        <div class="section">
+            <h2>💡 Recommendations for Analytics Setup</h2>
+            <div id="recommendations"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://api.instorm.io';
+        let token = '';
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (!response.ok) throw new Error('Login failed');
+
+                const data = await response.json();
+                token = data.token;
+                
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+                
+                await assessStructure();
+            } catch (error) {
+                alert('Login failed: ' + error.message);
+            }
+        }
+
+        async function fetchAPI(endpoint) {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error(`Failed to fetch ${endpoint}`);
+            return await response.json();
+        }
+
+        async function assessStructure() {
+            try {
+                // Fetch all data
+                const [users, teams, evaluations] = await Promise.all([
+                    fetchAPI('/public-admin/users'),
+                    fetchAPI('/public-admin/teams'),
+                    fetchAPI('/public-admin/evaluations')  // Use admin endpoint to get ALL evaluations
+                ]);
+
+                // Try to fetch regions (may not exist)
+                let regions = [];
+                try {
+                    regions = await fetchAPI('/public-admin/regions');
+                } catch (e) {
+                    console.log('Regions endpoint not available');
+                }
+
+                // Process data
+                displayStats(users, teams, evaluations);
+                displayUsersByRole(users);
+                displayRegions(regions, teams);
+                displayTeams(teams, users);
+                displayRelationships(users, teams, regions);
+                displayEvaluations(evaluations, users);
+                displayRecommendations(users, teams, regions, evaluations);
+
+            } catch (error) {
+                console.error('Error assessing structure:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function displayStats(users, teams, evaluations) {
+            const stats = document.getElementById('stats');
+            const userCount = users.length;
+            const teamCount = teams.length;
+            const evalCount = evaluations.length;
+            const avgScore = evalCount > 0 
+                ? (evaluations.reduce((sum, e) => sum + (e.overallScore || 0), 0) / evalCount).toFixed(2)
+                : 'N/A';
+
+            stats.innerHTML = `
+                <div class="stat">
+                    <div class="stat-label">Total Users</div>
+                    <div class="stat-value">${userCount}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Teams</div>
+                    <div class="stat-value">${teamCount}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Evaluations</div>
+                    <div class="stat-value">${evalCount}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Avg Score</div>
+                    <div class="stat-value">${avgScore}</div>
+                </div>
+            `;
+        }
+
+        function displayUsersByRole(users) {
+            const roleCount = {};
+            users.forEach(u => {
+                roleCount[u.role] = (roleCount[u.role] || 0) + 1;
+            });
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr><th>Role</th><th>Count</th><th>Users</th></tr>
+                    </thead>
+                    <tbody>
+                        ${Object.entries(roleCount).map(([role, count]) => {
+                            const usersInRole = users.filter(u => u.role === role);
+                            return `
+                                <tr>
+                                    <td><strong>${role}</strong></td>
+                                    <td>${count}</td>
+                                    <td>${usersInRole.map(u => u.displayName).join(', ')}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('users-by-role').innerHTML = html;
+        }
+
+        function displayRegions(regions, teams) {
+            const div = document.getElementById('regions');
+            if (regions.length === 0) {
+                div.innerHTML = '<div class="warning">⚠️ No regions table found. Teams are not organized by region.</div>';
+                return;
+            }
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr><th>Region</th><th>Teams</th></tr>
+                    </thead>
+                    <tbody>
+                        ${regions.map(r => {
+                            const regionTeams = teams.filter(t => t.regionId === r.id);
+                            return `
+                                <tr>
+                                    <td><strong>${r.name}</strong></td>
+                                    <td>${regionTeams.length} teams: ${regionTeams.map(t => t.name).join(', ') || 'None'}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            div.innerHTML = html;
+        }
+
+        function displayTeams(teams, users) {
+            const html = `
+                <table>
+                    <thead>
+                        <tr><th>Team</th><th>Manager</th><th>Members</th><th>Region</th></tr>
+                    </thead>
+                    <tbody>
+                        ${teams.map(t => {
+                            const manager = users.find(u => u.id === t.managerId);
+                            const members = users.filter(u => u.teamId === t.id);
+                            return `
+                                <tr>
+                                    <td><strong>${t.name}</strong></td>
+                                    <td>${manager ? manager.displayName + ' (' + manager.role + ')' : 'No manager'}</td>
+                                    <td>${members.length} members</td>
+                                    <td>${t.regionId || 'No region'}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('teams').innerHTML = html;
+        }
+
+        function displayRelationships(users, teams, regions) {
+            const hierarchy = {};
+            
+            // Build hierarchy
+            users.forEach(u => {
+                if (u.role === 'SALES_DIRECTOR') {
+                    hierarchy[u.id] = { user: u, children: [] };
+                }
+            });
+
+            users.forEach(u => {
+                if (u.role === 'REGIONAL_SALES_MANAGER') {
+                    // Find their teams
+                    const managedTeams = teams.filter(t => t.managerId === u.id);
+                    hierarchy[u.id] = { user: u, teams: managedTeams, children: [] };
+                }
+            });
+
+            users.forEach(u => {
+                if (u.role === 'SALES_LEAD') {
+                    const team = teams.find(t => t.id === u.teamId);
+                    hierarchy[u.id] = { user: u, team: team, children: [] };
+                }
+            });
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr><th>User</th><th>Role</th><th>Team</th><th>Team Manager</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        ${users.filter(u => ['SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER', 'SALES_LEAD', 'SALESPERSON'].includes(u.role))
+                            .map(u => {
+                            const team = teams.find(t => t.id === u.teamId);
+                            const teamManager = team ? users.find(m => m.id === team.managerId) : null;
+                            const roleClass = u.role.toLowerCase().replace('_', '-');
+                            return `
+                                <tr>
+                                    <td><strong>${u.displayName}</strong></td>
+                                    <td><span class="badge badge-${roleClass}">${u.role}</span></td>
+                                    <td>${team ? team.name : '⚠️ Not assigned'}</td>
+                                    <td>${teamManager ? teamManager.displayName : '-'}</td>
+                                    <td>${u.isActive ? '✅ Active' : '❌ Inactive'}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('relationships').innerHTML = html;
+        }
+
+        function displayEvaluations(evaluations, users) {
+            if (evaluations.length === 0) {
+                document.getElementById('evaluations').innerHTML = '<div class="warning">⚠️ No evaluations found in the system.</div>';
+                return;
+            }
+
+            // Count evaluations by manager
+            const byManager = {};
+            evaluations.forEach(e => {
+                byManager[e.managerId] = (byManager[e.managerId] || 0) + 1;
+            });
+
+            // Count evaluations by salesperson
+            const bySalesperson = {};
+            evaluations.forEach(e => {
+                bySalesperson[e.salespersonId] = (bySalesperson[e.salespersonId] || 0) + 1;
+            });
+
+            const html = `
+                <div class="success">
+                    ✅ Found ${evaluations.length} evaluations in the system
+                </div>
+                <h3>Top Evaluators</h3>
+                <table>
+                    <thead>
+                        <tr><th>Manager</th><th>Evaluations Created</th><th>Avg Score</th></tr>
+                    </thead>
+                    <tbody>
+                        ${Object.entries(byManager).map(([managerId, count]) => {
+                            const manager = users.find(u => u.id === managerId) || { displayName: 'Unknown' };
+                            const managerEvals = evaluations.filter(e => e.managerId === managerId);
+                            const avgScore = (managerEvals.reduce((sum, e) => sum + (e.overallScore || 0), 0) / count).toFixed(2);
+                            return `
+                                <tr>
+                                    <td>${manager.displayName}</td>
+                                    <td>${count}</td>
+                                    <td>${avgScore}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('evaluations').innerHTML = html;
+        }
+
+        function displayRecommendations(users, teams, regions, evaluations) {
+            const hasRegions = regions.length > 0;
+            const hasSalesDirector = users.some(u => u.role === 'SALES_DIRECTOR');
+            const hasRegionalManagers = users.some(u => u.role === 'REGIONAL_SALES_MANAGER');
+            const hasSalesLeads = users.some(u => u.role === 'SALES_LEAD');
+            const hasEvaluations = evaluations.length > 0;
+
+            let recommendations = '<h3>🎯 Analytics Setup Recommendations</h3>';
+
+            if (!hasRegions) {
+                recommendations += `
+                    <div class="warning">
+                        <strong>⚠️ Missing Regions Structure</strong>
+                        <p>Your system doesn't have a regions table. This limits regional analytics.</p>
+                        <p><strong>Recommendation:</strong> Since you don't have regions, we should focus on <strong>Team-based analytics</strong>:</p>
+                        <ul>
+                            <li>Sales Director sees: All teams, all managers, company-wide stats</li>
+                            <li>Regional/Sales Manager sees: Their team(s) only</li>
+                            <li>Sales Lead sees: Their direct reports only</li>
+                        </ul>
+                    </div>
+                `;
+            } else {
+                recommendations += `
+                    <div class="success">
+                        <strong>✅ Regions Structure Exists</strong>
+                        <p>You can implement <strong>Region-based + Team-based analytics</strong>:</p>
+                        <ul>
+                            <li>Sales Director sees: All regions → All teams → All members</li>
+                            <li>Regional Manager sees: Their region → Their teams → Their members</li>
+                            <li>Sales Lead sees: Their team → Their direct reports</li>
+                        </ul>
+                    </div>
+                `;
+            }
+
+            if (!hasEvaluations) {
+                recommendations += `
+                    <div class="warning">
+                        <strong>⚠️ No Evaluations Yet</strong>
+                        <p>Once evaluations are created, analytics will show:</p>
+                        <ul>
+                            <li>Performance trends over time</li>
+                            <li>Behavior category strengths/weaknesses</li>
+                            <li>Team comparisons</li>
+                            <li>Individual progress tracking</li>
+                        </ul>
+                    </div>
+                `;
+            }
+
+            recommendations += `
+                <h3>📊 Proposed Analytics Endpoints</h3>
+                <pre>
+# Company-wide (Sales Director only)
+GET /analytics/company/overview
+GET /analytics/company/by-team
+GET /analytics/company/by-behavior
+
+# Team analytics (Regional Manager, Sales Lead)
+GET /analytics/team/:teamId/overview
+GET /analytics/team/:teamId/members
+GET /analytics/team/:teamId/trends
+
+# Individual analytics
+GET /analytics/user/:userId/performance
+GET /analytics/user/:userId/history
+                </pre>
+
+                <h3>🛠️ Next Steps</h3>
+                <ol>
+                    <li><strong>Create Analytics API Endpoints</strong> - Backend endpoints with role-based access</li>
+                    <li><strong>Build Analytics Dashboard</strong> - Visual charts and tables in admin panel</li>
+                    <li><strong>Add Filters</strong> - Date range, team selection, behavior categories</li>
+                    <li><strong>Export Capability</strong> - CSV/Excel export for reports</li>
+                </ol>
+            `;
+
+            document.getElementById('recommendations').innerHTML = recommendations;
+        }
+    </script>
+</body>
+</html>
+

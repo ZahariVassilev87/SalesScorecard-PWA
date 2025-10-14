@@ -1,0 +1,70 @@
+{
+    "family": "sales-scorecard-task",
+    "containerDefinitions": [
+        {
+            "name": "sales-scorecard-api",
+            "image": "221855463690.dkr.ecr.eu-north-1.amazonaws.com/sales-scorecard-api:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 3000,
+                    "hostPort": 3000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "NODE_ENV",
+                    "value": "production"
+                },
+                {
+                    "name": "VAPID_PUBLIC_KEY",
+                    "value": "BObSOgKLv2p6nSlc6gawMFGvyr-tL_v6x2C7A9ZSStYETKUzUA205tTuRfWh9Y1LD5rtoGY75xOaLv9fX3r-Tgc"
+                },
+                {
+                    "name": "VAPID_PRIVATE_KEY",
+                    "value": "tTXqFrsmUS5NUZ9pc50nQNevGEjypY4BsGPw58EWonw"
+                },
+                {
+                    "name": "PORT",
+                    "value": "3000"
+                },
+                {
+                    "name": "VAPID_SUBJECT",
+                    "value": "mailto:zahari.vasilev@instorm.bg"
+                },
+                {
+                    "name": "REFRESH_SECRET",
+                    "value": "your_refresh_secret_key_for_refresh_tokens"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "secrets": [
+                {
+                    "name": "DATABASE_URL",
+                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:221855463690:secret:sales-scorecard-db-url-0dI6Mw"
+                },
+                {
+                    "name": "JWT_SECRET",
+                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:221855463690:secret:sales-scorecard-jwt-secret-t3rK9M"
+                }
+            ]
+        }
+    ],
+    "placementConstraints": [],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "256",
+    "memory": "512",
+    "networkMode": "awsvpc",
+    "executionRoleArn": "arn:aws:iam::221855463690:role/ecsTaskExecutionRole"
+}
+
+
+
+
+
+

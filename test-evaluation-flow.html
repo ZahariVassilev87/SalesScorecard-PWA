@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Evaluation Flow</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin: 20px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Test Evaluation Flow</h1>
+    <p>This page tests the complete evaluation flow: login → create evaluation → check history</p>
+    
+    <button onclick="testCompleteFlow()">Test Complete Flow</button>
+    <button onclick="testLogin()">Test Login Only</button>
+    <button onclick="testCreateEvaluation()">Test Create Evaluation</button>
+    <button onclick="testGetHistory()">Test Get History</button>
+    
+    <div id="result"></div>
+
+    <script>
+        let authToken = null;
+        const API_BASE = 'http://localhost:3001';
+
+        async function testCompleteFlow() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="result">Testing complete flow...</div>';
+
+            try {
+                // Step 1: Login
+                resultDiv.innerHTML += '<div class="result">Step 1: Logging in...</div>';
+                const loginResult = await testLogin();
+                if (!loginResult.success) {
+                    throw new Error('Login failed: ' + loginResult.error);
+                }
+
+                // Step 2: Create evaluation
+                resultDiv.innerHTML += '<div class="result">Step 2: Creating evaluation...</div>';
+                const createResult = await testCreateEvaluation();
+                if (!createResult.success) {
+                    throw new Error('Create evaluation failed: ' + createResult.error);
+                }
+
+                // Step 3: Get history
+                resultDiv.innerHTML += '<div class="result">Step 3: Getting history...</div>';
+                const historyResult = await testGetHistory();
+                if (!historyResult.success) {
+                    throw new Error('Get history failed: ' + historyResult.error);
+                }
+
+                resultDiv.innerHTML += '<div class="result success">✅ Complete flow test successful!</div>';
+                resultDiv.innerHTML += `<div class="result">Created evaluation: ${createResult.data.id}</div>`;
+                resultDiv.innerHTML += `<div class="result">History contains ${historyResult.data.length} evaluations</div>`;
+
+            } catch (error) {
+                resultDiv.innerHTML += `<div class="result error">❌ Flow test failed: ${error.message}</div>`;
+            }
+        }
+
+        async function testLogin() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: 'manager@company.com', password: 'password' })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    return { success: true, data: data };
+                } else {
+                    return { success: false, error: data.message };
+                }
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function testCreateEvaluation() {
+            if (!authToken) {
+                return { success: false, error: 'No auth token available' };
+            }
+
+            try {
+                const evaluationData = {
+                    salespersonId: 'cmfz2lwck00006sgnaia9galb',
+                    visitDate: new Date().toISOString().split('T')[0],
+                    items: [
+                        { behaviorItemId: 'let-salesperson-lead', score: 4, comment: 'Test comment' }
+                    ],
+                    customerName: 'Test Customer',
+                    customerType: 'low-share',
+                    location: 'Test Location'
+                };
+
+                const response = await fetch(`${API_BASE}/evaluations`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(evaluationData)
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    return { success: true, data: data };
+                } else {
+                    return { success: false, error: data.message };
+                }
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function testGetHistory() {
+            if (!authToken) {
+                return { success: false, error: 'No auth token available' };
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/evaluations/my`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    return { success: true, data: data };
+                } else {
+                    return { success: false, error: data.message };
+                }
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+    </script>
+</body>
+</html>
+
+
