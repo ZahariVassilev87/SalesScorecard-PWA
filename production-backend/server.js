@@ -240,26 +240,49 @@ async function getUserTeamsColumns(client) {
     WHERE table_name = 'user_teams'
   `);
   const names = new Set(cols.rows.map(r => r.column_name));
-  
+
   console.log('[COLUMN DETECTION] user_teams columns found:', Array.from(names));
-  
-  // PostgreSQL information_schema returns lowercase names for unquoted columns
-  // But when querying, we need to use quoted names if the table was created with quotes
-  // The restore SQL shows: "userId", "teamId" (quoted camelCase)
-  // So we always use quoted camelCase for this table
-  const userCol = '"userId"';
-  const teamCol = '"teamId"';
-  
-  // Check if timestamp columns exist at all
-  const hasCreatedAt = names.has('created_at') || names.has('createdAt') || names.has('createdat');
-  const hasUpdatedAt = names.has('updated_at') || names.has('updatedAt') || names.has('updatedat');
-  
-  const createdCol = null; // user_teams doesn't have timestamp columns based on restore SQL
+
+  const resolveColumnName = (preferred) => {
+    for (const name of preferred) {
+      if (names.has(name.lookup)) {
+        return name.output;
+      }
+    }
+    return preferred[0].output;
+  };
+
+  const userCol = resolveColumnName([
+    { lookup: 'userId', output: '"userId"' },
+    { lookup: 'user_id', output: 'user_id' },
+    { lookup: 'userid', output: '"userid"' }
+  ]);
+
+  const teamCol = resolveColumnName([
+    { lookup: 'teamId', output: '"teamId"' },
+    { lookup: 'team_id', output: 'team_id' },
+    { lookup: 'teamid', output: '"teamid"' }
+  ]);
+
+  const hasCompanyIdCamel = names.has('companyId');
+  const hasCompanyIdSnake = names.has('company_id');
+  const hasCompanyIdLower = names.has('companyid');
+
+  let companyCol = null;
+  if (hasCompanyIdCamel) {
+    companyCol = '"companyId"';
+  } else if (hasCompanyIdSnake) {
+    companyCol = 'company_id';
+  } else if (hasCompanyIdLower) {
+    companyCol = '"companyid"';
+  }
+
+  const createdCol = null;
   const updatedCol = null;
-  
-  console.log('[COLUMN DETECTION] Detected:', { userCol, teamCol, createdCol, updatedCol });
-  
-  return { userCol, teamCol, createdCol, updatedCol };
+
+  console.log('[COLUMN DETECTION] Detected:', { userCol, teamCol, createdCol, updatedCol, companyCol });
+
+  return { userCol, teamCol, createdCol, updatedCol, companyCol };
 }
 
 // Utility: detect teams column naming for timestamp columns
