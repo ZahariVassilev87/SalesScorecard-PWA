@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService, User } from '../services/api';
 import { useTranslation } from 'react-i18next';
+import { sanitizeText, sanitizeWithXSSDetection, validateInput } from '../utils/sanitize';
+import { offlineService } from '../utils/offlineService';
+import { notificationService } from '../utils/notificationService';
 
 interface EvaluationFormProps {
   onSuccess: () => void;
@@ -16,10 +19,13 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const isSubmittingRef = useRef(false); // Ref-based guard to prevent double submissions
   
   const [evaluatableUsers, setEvaluatableUsers] = useState<User[]>([]);
+  const [behaviorCategories, setBehaviorCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [pendingOfflineItems, setPendingOfflineItems] = useState(0);
 
   // Form state
   const [selectedUser, setSelectedUser] = useState('');
@@ -122,12 +128,455 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     loadData();
   }, [user?.id, t]);
 
+  // Monitor offline status and pending items
+  useEffect(() => {
+    const updateOfflineStatus = () => {
+      setIsOffline(!navigator.onLine);
+      const status = offlineService.getOfflineStatus();
+      setPendingOfflineItems(status.totalPending);
+    };
+
+    // Initial status
+    updateOfflineStatus();
+
+    // Listen for online/offline events
+    window.addEventListener('online', updateOfflineStatus);
+    window.addEventListener('offline', updateOfflineStatus);
+
+    // Check for pending items periodically - DISABLED TO FIX CONSTANT REFRESH
+    // const interval = setInterval(updateOfflineStatus, 5000);
+
+    return () => {
+      window.removeEventListener('online', updateOfflineStatus);
+      window.removeEventListener('offline', updateOfflineStatus);
+      // clearInterval(interval);
+    };
+  }, []);
+
   const getEvaluationTitle = () => {
+    // Check if user is Regional Manager - show coaching title by default
+    if (user?.role === 'REGIONAL_SALES_MANAGER') {
+      // If a specific user is selected, check their role
+      if (selectedUser) {
+        const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+        // If evaluating a Sales Lead, show coaching title
+        if (selectedUserData?.role === 'SALES_LEAD') {
+          return t('coaching.title');
+        }
+        // If evaluating a Salesperson, show standard title
+        else {
+          return t('evaluation.title');
+        }
+      }
+      // If no user selected yet, show coaching title by default for Regional Managers
+      else {
+        return t('coaching.title');
+      }
+    }
     return t('evaluation.title');
   };
 
   const getEvaluationDescription = () => {
+    // Check if user is Regional Manager - show coaching description by default
+    if (user?.role === 'REGIONAL_SALES_MANAGER') {
+      // If a specific user is selected, check their role
+      if (selectedUser) {
+        const selectedUserData = evaluatableUsers.find(u => u.id === selectedUser);
+        // If evaluating a Sales Lead, show coaching description
+        if (selectedUserData?.role === 'SALES_LEAD') {
+          return t('coaching.description');
+        }
+        // If evaluating a Salesperson, show standard description
+        else {
+          return t('evaluation.description');
+        }
+      }
+      // If no user selected yet, show coaching description by default for Regional Managers
+      else {
+        return t('coaching.description');
+      }
+    }
     return t('evaluation.description');
+  };
+
+    const getCoachingCategories = () => {
+      return [
+        {
+          id: 'cluster1',
+          name: t('coaching.cluster1'),
+          color: '#3B82F6',
+          weight: 0.35, // 35% weight
+          items: [
+            { 
+              id: 'let-salesperson-lead', 
+              name: t('coaching.letSalespersonLead'),
+              descriptions: [
+                t('coaching.score1'),
+                t('coaching.score2'),
+                t('coaching.score3'),
+                t('coaching.score4')
+              ]
+            },
+            { 
+              id: 'provided-support', 
+              name: t('coaching.providedSupport'),
+              descriptions: [
+                t('coaching.support1'),
+                t('coaching.support2'),
+                t('coaching.support3'),
+                t('coaching.support4')
+              ]
+            },
+            { 
+              id: 'stepped-in-value', 
+              name: t('coaching.steppedInValue'),
+              descriptions: [
+                t('coaching.value1'),
+                t('coaching.value2'),
+                t('coaching.value3'),
+                t('coaching.value4')
+              ]
+            },
+            { 
+              id: 'actively-listened', 
+              name: t('coaching.activelyListened'),
+              descriptions: [
+                t('coaching.listen1'),
+                t('coaching.listen2'),
+                t('coaching.listen3'),
+                t('coaching.listen4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'cluster2',
+          name: t('coaching.cluster2'),
+          color: '#10B981',
+          weight: 0.2167, // 65% / 3 = 21.67% each
+          items: [
+            { 
+              id: 'calm-atmosphere', 
+              name: t('coaching.calmAtmosphere'),
+              descriptions: [
+                t('coaching.atmosphere1'),
+                t('coaching.atmosphere2'),
+                t('coaching.atmosphere3'),
+                t('coaching.atmosphere4')
+              ]
+            },
+            { 
+              id: 'asked-self-assessment', 
+              name: t('coaching.askedSelfAssessment'),
+              descriptions: [
+                t('coaching.assessment1'),
+                t('coaching.assessment2'),
+                t('coaching.assessment3'),
+                t('coaching.assessment4')
+              ]
+            },
+            { 
+              id: 'listened-attentively', 
+              name: t('coaching.listenedAttentively'),
+              descriptions: [
+                t('coaching.attentive1'),
+                t('coaching.attentive2'),
+                t('coaching.attentive3'),
+                t('coaching.attentive4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'cluster3',
+          name: t('coaching.cluster3'),
+          color: '#F59E0B',
+          weight: 0.2167,
+          items: [
+            { 
+              id: 'started-positive', 
+              name: t('coaching.startedPositive'),
+              descriptions: [
+                t('coaching.positive1'),
+                t('coaching.positive2'),
+                t('coaching.positive3'),
+                t('coaching.positive4')
+              ]
+            },
+            { 
+              id: 'concrete-examples', 
+              name: t('coaching.concreteExamples'),
+              descriptions: [
+                t('coaching.examples1'),
+                t('coaching.examples2'),
+                t('coaching.examples3'),
+                t('coaching.examples4')
+              ]
+            },
+            { 
+              id: 'identified-improvement', 
+              name: t('coaching.identifiedImprovement'),
+              descriptions: [
+                t('coaching.improvement1'),
+                t('coaching.improvement2'),
+                t('coaching.improvement3'),
+                t('coaching.improvement4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'cluster4',
+          name: t('coaching.cluster4'),
+          color: '#8B5CF6',
+          weight: 0.2167,
+          items: [
+            { 
+              id: 'set-clear-tasks', 
+              name: t('coaching.setClearTasks'),
+              descriptions: [
+                t('coaching.tasks1'),
+                t('coaching.tasks2'),
+                t('coaching.tasks3'),
+                t('coaching.tasks4')
+              ]
+            },
+            { 
+              id: 'reached-agreement', 
+              name: t('coaching.reachedAgreement'),
+              descriptions: [
+                t('coaching.agreement1'),
+                t('coaching.agreement2'),
+                t('coaching.agreement3'),
+                t('coaching.agreement4')
+              ]
+            },
+            { 
+              id: 'encouraged-goal', 
+              name: t('coaching.encouragedGoal'),
+              descriptions: [
+                t('coaching.goal1'),
+                t('coaching.goal2'),
+                t('coaching.goal3'),
+                t('coaching.goal4')
+              ]
+            }
+          ]
+        }
+      ];
+    };
+
+    const getLowWalletShareCategories = () => {
+      return [
+        {
+          id: 'preparation',
+          name: t('lowWalletShare.preparation'),
+          color: '#3B82F6',
+          items: [
+            { 
+              id: 'criteria1', 
+              name: t('lowWalletShare.criteria1'),
+              descriptions: [
+                t('lowWalletShare.score1_1'),
+                t('lowWalletShare.score1_2'),
+                t('lowWalletShare.score1_3'),
+                t('lowWalletShare.score1_4')
+              ]
+            },
+            { 
+              id: 'criteria2', 
+              name: t('lowWalletShare.criteria2'),
+              descriptions: [
+                t('lowWalletShare.score2_1'),
+                t('lowWalletShare.score2_2'),
+                t('lowWalletShare.score2_3'),
+                t('lowWalletShare.score2_4')
+              ]
+            },
+            { 
+              id: 'criteria3', 
+              name: t('lowWalletShare.criteria3'),
+              descriptions: [
+                t('lowWalletShare.score3_1'),
+                t('lowWalletShare.score3_2'),
+                t('lowWalletShare.score3_3'),
+                t('lowWalletShare.score3_4')
+              ]
+            },
+            { 
+              id: 'criteria4', 
+              name: t('lowWalletShare.criteria4'),
+              descriptions: [
+                t('lowWalletShare.score4_1'),
+                t('lowWalletShare.score4_2'),
+                t('lowWalletShare.score4_3'),
+                t('lowWalletShare.score4_4')
+              ]
+            },
+            { 
+              id: 'criteria5', 
+              name: t('lowWalletShare.criteria5'),
+              descriptions: [
+                t('lowWalletShare.score5_1'),
+                t('lowWalletShare.score5_2'),
+                t('lowWalletShare.score5_3'),
+                t('lowWalletShare.score5_4')
+              ]
+            },
+            { 
+              id: 'criteria6', 
+              name: t('lowWalletShare.criteria6'),
+              descriptions: [
+                t('lowWalletShare.score6_1'),
+                t('lowWalletShare.score6_2'),
+                t('lowWalletShare.score6_3'),
+                t('lowWalletShare.score6_4')
+              ]
+            },
+            { 
+              id: 'criteria7', 
+              name: t('lowWalletShare.criteria7'),
+              descriptions: [
+                t('lowWalletShare.score7_1'),
+                t('lowWalletShare.score7_2'),
+                t('lowWalletShare.score7_3'),
+                t('lowWalletShare.score7_4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'problemDefinition',
+          name: t('lowWalletShare.problemDefinition'),
+          color: '#10B981',
+          items: [
+            { 
+              id: 'criteria8', 
+              name: t('lowWalletShare.criteria8'),
+              descriptions: [
+                t('lowWalletShare.score8_1'),
+                t('lowWalletShare.score8_2'),
+                t('lowWalletShare.score8_3'),
+                t('lowWalletShare.score8_4')
+              ]
+            },
+            { 
+              id: 'criteria9', 
+              name: t('lowWalletShare.criteria9'),
+              descriptions: [
+                t('lowWalletShare.score9_1'),
+                t('lowWalletShare.score9_2'),
+                t('lowWalletShare.score9_3'),
+                t('lowWalletShare.score9_4')
+              ]
+            },
+            { 
+              id: 'criteria10', 
+              name: t('lowWalletShare.criteria10'),
+              descriptions: [
+                t('lowWalletShare.score10_1'),
+                t('lowWalletShare.score10_2'),
+                t('lowWalletShare.score10_3'),
+                t('lowWalletShare.score10_4')
+              ]
+            },
+            { 
+              id: 'criteria11', 
+              name: t('lowWalletShare.criteria11'),
+              descriptions: [
+                t('lowWalletShare.score11_1'),
+                t('lowWalletShare.score11_2'),
+                t('lowWalletShare.score11_3'),
+                t('lowWalletShare.score11_4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'objections',
+          name: t('lowWalletShare.objections'),
+          color: '#F59E0B',
+          items: [
+            { 
+              id: 'criteria12', 
+              name: t('lowWalletShare.criteria12'),
+              descriptions: [
+                t('lowWalletShare.score12_1'),
+                t('lowWalletShare.score12_2'),
+                t('lowWalletShare.score12_3'),
+                t('lowWalletShare.score12_4')
+              ]
+            },
+            { 
+              id: 'criteria13', 
+              name: t('lowWalletShare.criteria13'),
+              descriptions: [
+                t('lowWalletShare.score13_1'),
+                t('lowWalletShare.score13_2'),
+                t('lowWalletShare.score13_3'),
+                t('lowWalletShare.score13_4')
+              ]
+            },
+            { 
+              id: 'criteria14', 
+              name: t('lowWalletShare.criteria14'),
+              descriptions: [
+                t('lowWalletShare.score14_1'),
+                t('lowWalletShare.score14_2'),
+                t('lowWalletShare.score14_3'),
+                t('lowWalletShare.score14_4')
+              ]
+            }
+          ]
+        },
+        {
+          id: 'commercialProposal',
+          name: t('lowWalletShare.commercialProposal'),
+          color: '#8B5CF6',
+          items: [
+            { 
+              id: 'criteria15', 
+              name: t('lowWalletShare.criteria15'),
+              descriptions: [
+                t('lowWalletShare.score15_1'),
+                t('lowWalletShare.score15_2'),
+                t('lowWalletShare.score15_3'),
+                t('lowWalletShare.score15_4')
+              ]
+            },
+            { 
+              id: 'criteria16', 
+              name: t('lowWalletShare.criteria16'),
+              descriptions: [
+                t('lowWalletShare.score16_1'),
+                t('lowWalletShare.score16_2'),
+                t('lowWalletShare.score16_3'),
+                t('lowWalletShare.score16_4')
+              ]
+            },
+            { 
+              id: 'criteria17', 
+              name: t('lowWalletShare.criteria17'),
+              descriptions: [
+                t('lowWalletShare.score17_1'),
+                t('lowWalletShare.score17_2'),
+                t('lowWalletShare.score17_3'),
+                t('lowWalletShare.score17_4')
+              ]
+            },
+            { 
+              id: 'criteria18', 
+              name: t('lowWalletShare.criteria18'),
+              descriptions: [
+                t('lowWalletShare.score18_1'),
+                t('lowWalletShare.score18_2'),
+                t('lowWalletShare.score18_3'),
+                t('lowWalletShare.score18_4')
+              ]
+            }
+          ]
+        }
+      ];
   };
 
   const getEvaluationCategories = () => {
@@ -150,9 +599,39 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         name: t('evaluation.discovery'),
         color: '#3B82F6',
         items: [
-          { id: 'discovery-open-questions', name: t('evaluation.openQuestions') },
-          { id: 'discovery-pain-points', name: t('evaluation.painPoints') },
-          { id: 'discovery-decision-makers', name: t('evaluation.decisionMakers') }
+          { 
+            id: 'discovery-open-questions', 
+            name: t('evaluation.openQuestions'),
+            descriptions: [
+              t('evaluation.openQuestions1'),
+              t('evaluation.openQuestions2'),
+              t('evaluation.openQuestions3'),
+              t('evaluation.openQuestions4'),
+              t('evaluation.openQuestions5')
+            ]
+          },
+          { 
+            id: 'discovery-pain-points', 
+            name: t('evaluation.painPoints'),
+            descriptions: [
+              t('evaluation.painPoints1'),
+              t('evaluation.painPoints2'),
+              t('evaluation.painPoints3'),
+              t('evaluation.painPoints4'),
+              t('evaluation.painPoints5')
+            ]
+          },
+          { 
+            id: 'discovery-decision-makers', 
+            name: t('evaluation.decisionMakers'),
+            descriptions: [
+              t('evaluation.decisionMakers1'),
+              t('evaluation.decisionMakers2'),
+              t('evaluation.decisionMakers3'),
+              t('evaluation.decisionMakers4'),
+              t('evaluation.decisionMakers5')
+            ]
+          }
         ]
       },
       {
@@ -160,9 +639,39 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         name: t('evaluation.solution'),
         color: '#10B981',
         items: [
-          { id: 'solution-tailors', name: t('evaluation.tailors') },
-          { id: 'solution-value-prop', name: t('evaluation.valueProp') },
-          { id: 'solution-product-knowledge', name: t('evaluation.productKnowledge') }
+          { 
+            id: 'solution-tailors', 
+            name: t('evaluation.tailors'),
+            descriptions: [
+              t('evaluation.tailors1'),
+              t('evaluation.tailors2'),
+              t('evaluation.tailors3'),
+              t('evaluation.tailors4'),
+              t('evaluation.tailors5')
+            ]
+          },
+          { 
+            id: 'solution-value-prop', 
+            name: t('evaluation.valueProp'),
+            descriptions: [
+              t('evaluation.valueProp1'),
+              t('evaluation.valueProp2'),
+              t('evaluation.valueProp3'),
+              t('evaluation.valueProp4'),
+              t('evaluation.valueProp5')
+            ]
+          },
+          { 
+            id: 'solution-product-knowledge', 
+            name: t('evaluation.productKnowledge'),
+            descriptions: [
+              t('evaluation.productKnowledge1'),
+              t('evaluation.productKnowledge2'),
+              t('evaluation.productKnowledge3'),
+              t('evaluation.productKnowledge4'),
+              t('evaluation.productKnowledge5')
+            ]
+          }
         ]
       },
       {
@@ -170,9 +679,39 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         name: t('evaluation.closing'),
         color: '#F59E0B',
         items: [
-          { id: 'closing-clear-asks', name: t('evaluation.clearAsks') },
-          { id: 'closing-next-steps', name: t('evaluation.nextSteps') },
-          { id: 'closing-commitments', name: t('evaluation.commitments') }
+          { 
+            id: 'closing-clear-asks', 
+            name: t('evaluation.clearAsks'),
+            descriptions: [
+              t('evaluation.clearAsks1'),
+              t('evaluation.clearAsks2'),
+              t('evaluation.clearAsks3'),
+              t('evaluation.clearAsks4'),
+              t('evaluation.clearAsks5')
+            ]
+          },
+          { 
+            id: 'closing-next-steps', 
+            name: t('evaluation.nextSteps'),
+            descriptions: [
+              t('evaluation.nextSteps1'),
+              t('evaluation.nextSteps2'),
+              t('evaluation.nextSteps3'),
+              t('evaluation.nextSteps4'),
+              t('evaluation.nextSteps5')
+            ]
+          },
+          { 
+            id: 'closing-commitments', 
+            name: t('evaluation.commitments'),
+            descriptions: [
+              t('evaluation.commitments1'),
+              t('evaluation.commitments2'),
+              t('evaluation.commitments3'),
+              t('evaluation.commitments4'),
+              t('evaluation.commitments5')
+            ]
+          }
         ]
       },
       {
@@ -180,9 +719,39 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         name: t('evaluation.professionalism'),
         color: '#8B5CF6',
         items: [
-          { id: 'professionalism-prepared', name: t('evaluation.prepared') },
-          { id: 'professionalism-time', name: t('evaluation.timeManagement') },
-          { id: 'professionalism-demeanor', name: t('evaluation.demeanor') }
+          { 
+            id: 'professionalism-prepared', 
+            name: t('evaluation.prepared'),
+            descriptions: [
+              t('evaluation.prepared1'),
+              t('evaluation.prepared2'),
+              t('evaluation.prepared3'),
+              t('evaluation.prepared4'),
+              t('evaluation.prepared5')
+            ]
+          },
+          { 
+            id: 'professionalism-time', 
+            name: t('evaluation.timeManagement'),
+            descriptions: [
+              t('evaluation.timeManagement1'),
+              t('evaluation.timeManagement2'),
+              t('evaluation.timeManagement3'),
+              t('evaluation.timeManagement4'),
+              t('evaluation.timeManagement5')
+            ]
+          },
+          { 
+            id: 'professionalism-demeanor', 
+            name: t('evaluation.demeanor'),
+            descriptions: [
+              t('evaluation.demeanor1'),
+              t('evaluation.demeanor2'),
+              t('evaluation.demeanor3'),
+              t('evaluation.demeanor4'),
+              t('evaluation.demeanor5')
+            ]
+          }
         ]
       }
     ];
@@ -193,7 +762,54 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   };
 
   const handleCommentChange = (criteriaId: string, comment: string) => {
-    setComments(prev => ({ ...prev, [criteriaId]: comment }));
+    const validation = validateInput(comment, 500);
+    if (validation.isValid) {
+      setComments(prev => ({ ...prev, [criteriaId]: validation.sanitized }));
+    } else {
+      console.warn('Invalid comment input detected:', validation.errors);
+      setComments(prev => ({ ...prev, [criteriaId]: validation.sanitized }));
+    }
+  };
+
+  const handleExampleChange = (itemId: string, value: string) => {
+    const validation = validateInput(value, 1000);
+    if (validation.isValid) {
+      setExamples(prev => ({
+        ...prev,
+        [itemId]: validation.sanitized
+      }));
+    } else {
+      console.warn('Invalid example input detected:', validation.errors);
+      setExamples(prev => ({
+        ...prev,
+        [itemId]: validation.sanitized
+      }));
+    }
+  };
+
+  const calculateClusterScore = (clusterId: string) => {
+    const categories = getEvaluationCategories();
+    const cluster = categories.find(c => c.id === clusterId);
+    if (!cluster) return 0;
+
+    const clusterScores = cluster.items.map((item: any) => scores[item.id] || 0);
+    const totalScore = clusterScores.reduce((sum: number, score: number) => sum + score, 0);
+    return clusterScores.length > 0 ? totalScore / clusterScores.length : 0; // Return average score (1-4)
+  };
+
+  const calculateOverallScore = () => {
+    const categories = getEvaluationCategories();
+    let weightedSum = 0;
+    let totalWeight = 0;
+    
+    categories.forEach(category => {
+      const clusterScore = calculateClusterScore(category.id);
+      const weight = (category as any).weight || 0.25; // Default weight if not specified
+      weightedSum += clusterScore * weight;
+      totalWeight += weight;
+    });
+    
+    return totalWeight > 0 ? weightedSum / totalWeight : 0; // Return weighted average
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -216,7 +832,11 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     setError('');
     setSuccessMessage('');
 
+    // Prepare evaluation data (moved outside try block for catch block access)
+    let evaluationData: any = null;
+
     try {
+      // Use the correct categories based on user role and selected user
       const categories = getEvaluationCategories();
       const evaluationItems = categories.flatMap(category => 
         category.items.map((item: any) => ({
@@ -272,6 +892,23 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         return;
       }
     } catch (err) {
+      console.error('❌ Failed to submit evaluation:', err);
+      
+      // If online submission fails, try to store offline
+      if (navigator.onLine && !isOffline) {
+        console.log('🔄 Online submission failed - attempting offline storage');
+        try {
+          const token = localStorage.getItem('userToken');
+          if (token && evaluationData) {
+            await offlineService.storeEvaluationOffline(evaluationData, token);
+            setSuccessMessage(`📴 ${t('evaluation.offlineStored')} - Will sync when online`);
+            return;
+          }
+        } catch (offlineError) {
+          console.error('❌ Failed to store offline:', offlineError);
+        }
+      }
+      
       setError(err instanceof Error ? err.message : t('evaluation.error'));
       isSubmittingRef.current = false;
     } finally {
@@ -304,6 +941,35 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       <div className="form-header">
         <h2>{getEvaluationTitle()}</h2>
         <p>{getEvaluationDescription()}</p>
+        
+        {/* Offline Status Indicator */}
+        <div className="offline-status">
+          {isOffline ? (
+            <div className="offline-indicator">
+              <span className="offline-icon">📴</span>
+              <span className="offline-text">Offline Mode - Data will sync when online</span>
+            </div>
+          ) : (
+            <div className="online-indicator">
+              <span className="online-icon">🌐</span>
+              <span className="online-text">Online</span>
+            </div>
+          )}
+          
+          {pendingOfflineItems > 0 && (
+            <div className="pending-sync">
+              <span className="sync-icon">🔄</span>
+              <span className="sync-text">{pendingOfflineItems} items pending sync</span>
+              <button 
+                className="sync-button"
+                onClick={() => offlineService.triggerSync()}
+                disabled={isOffline}
+              >
+                Sync Now
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -435,12 +1101,21 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
 
         <div className="form-section">
           <h3>{t('evaluation.form')}</h3>
-          <p>{t('evaluation.rating')}</p>
+          <p>
+            {user?.role === 'REGIONAL_SALES_MANAGER' && 
+             (!selectedUser || evaluatableUsers.find(u => u.id === selectedUser)?.role === 'SALES_LEAD')
+              ? "Rate each behavior on a scale of 1-4 (1 = Poor, 4 = Excellent)"
+              : t('evaluation.rating')
+            }
+          </p>
 
           {getEvaluationCategories().map(category => (
             <div key={category.id} className="evaluation-category" style={{ backgroundColor: `${category.color}10` }}>
               <h4 className="category-title" style={{ color: category.color }}>
                 {category.name}
+                {(category as any).weight && (
+                  <span className="category-weight"> (Weight: {((category as any).weight * 100).toFixed(1)}%)</span>
+                )}
               </h4>
               
               {category.items.map((item: any) => (
@@ -448,8 +1123,11 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                   <div className="item-header">
                     <label className="item-label">{item.name}</label>
                     <div className="score-input">
-                      {[1, 2, 3, 4, 5].map(score => (
-                        <label key={score} className="score-option">
+                      {[1, 2, 3, 4].map(score => (
+                        <label 
+                          key={score} 
+                          className={`score-option ${scores[item.id] === score ? 'checked' : ''}`}
+                        >
                           <input
                             type="radio"
                             name={`score-${item.id}`}
@@ -462,13 +1140,29 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                       ))}
                     </div>
                   </div>
-                  <textarea
-                    placeholder={t('evaluation.explainRating')}
-                    value={comments[item.id] || ''}
-                    onChange={(e) => handleCommentChange(item.id, e.target.value)}
-                    rows={2}
-                    className="item-comment"
-                  />
+                  {scores[item.id] && (
+                    <div className="score-description-container">
+                      <p className="score-description-text">
+                        {(item as any).descriptions && (item as any).descriptions[scores[item.id] - 1] 
+                          ? (item as any).descriptions[scores[item.id] - 1]
+                          : `Score: ${scores[item.id]} (${scores[item.id] === 1 ? 'Poor' : scores[item.id] === 2 ? 'Fair' : scores[item.id] === 3 ? 'Good' : 'Excellent'})`
+                        }
+                      </p>
+                    </div>
+                  )}
+                  {/* Example field for Regional Managers and Sales Managers */}
+                  {(user?.role === 'REGIONAL_SALES_MANAGER' || user?.role === 'SALES_LEAD') && (
+                    <div className="example-field">
+                      <label className="example-label">{t('evaluation.provideExample')}</label>
+                      <textarea
+                        placeholder={t('evaluation.examplePlaceholder')}
+                        value={examples[item.id] || ''}
+                        onChange={(e) => handleExampleChange(item.id, e.target.value)}
+                        rows={2}
+                        className="item-example"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -482,7 +1176,15 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
             <textarea
               id="overallComment"
               value={overallComment}
-              onChange={(e) => setOverallComment(e.target.value)}
+              onChange={(e) => {
+                const validation = validateInput(e.target.value, 2000);
+                if (validation.isValid) {
+                  setOverallComment(validation.sanitized);
+                } else {
+                  console.warn('Invalid overall comment input detected:', validation.errors);
+                  setOverallComment(validation.sanitized);
+                }
+              }}
               placeholder={t('evaluation.provideFeedback')}
               rows={4}
             />

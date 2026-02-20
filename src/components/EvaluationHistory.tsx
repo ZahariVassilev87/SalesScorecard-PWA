@@ -371,7 +371,7 @@ const EvaluationHistory: React.FC = () => {
   if (isLoading) {
     return (
       <div className="evaluation-history">
-        <div className="loading">Loading evaluations...</div>
+        <div className="loading">{t('history.loading')}</div>
       </div>
     );
   }
@@ -509,7 +509,7 @@ const EvaluationHistory: React.FC = () => {
                 className="close-button"
                 onClick={() => setSelectedEvaluation(null)}
               >
-                ×
+                {t('history.close')}
               </button>
             </div>
             

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { User, apiService } from '../services/api';
+import { userStorage, tokenStorage, securityUtils } from '../utils/secureStorage';
 
 interface AuthContextType {
   user: User | null;

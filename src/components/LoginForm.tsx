@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from './LanguageSwitcher';
+import { sanitizeEmail } from '../utils/sanitize';
 
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');

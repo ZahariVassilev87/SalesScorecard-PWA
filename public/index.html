@@ -10,6 +10,28 @@
     <meta name="theme-color" content="#667eea" />
     <meta name="description" content="Sales Scorecard - Progressive Web Application for sales management and evaluation" />
     
+    <!-- Enhanced Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" 
+          content="default-src 'self'; 
+                   script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.instorm.io; 
+                   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
+                   img-src 'self' data: https: blob:; 
+                   connect-src 'self' https://api.instorm.io wss:; 
+                   font-src 'self' data: https://fonts.gstatic.com; 
+                   manifest-src 'self'; 
+                   worker-src 'self' blob:; 
+                   base-uri 'self'; 
+                   form-action 'self' https://api.instorm.io; 
+                   object-src 'none'; 
+                   media-src 'self'; 
+                   child-src 'self' blob:;">
+    
+    <!-- Additional Security Headers (Note: frame-ancestors and X-Frame-Options should be set via HTTP headers) -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
+    
     <!-- Force cache refresh for mobile browsers -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
@@ -42,7 +64,16 @@
     <!-- Preconnect to API -->
     <link rel="preconnect" href="https://api.instorm.io">
     
-    <title>Sales Scorecard PWA - Customer Type Added</title>
+    <!-- DNS prefetch for better performance -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com">
+    <link rel="dns-prefetch" href="//api.instorm.io">
+    
+    <!-- Preload critical resources for better LCP -->
+    <link rel="preload" href="/static/css/main.css" as="style">
+    <link rel="preload" href="/static/js/bundle.js" as="script">
+    <link rel="preload" href="/manifest.json" as="manifest">
+    
+    <title>Sales Scorecard PWA - Push Notifications Enabled v1.2.1</title>
     
     <!-- Mobile Debug Script -->
     <script>

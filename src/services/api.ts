@@ -23,7 +23,15 @@ export interface Team {
 
 export interface LoginResponse {
   token: string;
+  refreshToken?: string;
   user: User;
+  expiresIn?: number;
+}
+
+export interface RefreshTokenResponse {
+  token: string;
+  refreshToken?: string;
+  expiresIn?: number;
 }
 
 export interface SalesData {
@@ -155,21 +163,137 @@ class ApiService {
       ...(options.headers as Record<string, string>),
     };
 
-    if (this.token) {
-      headers.Authorization = `Bearer ${this.token}`;
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        console.warn('Token refresh failed:', response.status);
+        return false;
+      }
+
+      const data: RefreshTokenResponse = await response.json();
+      
+      // Update tokens
+      this.setToken(data.token);
+      if (data.refreshToken) {
+        tokenStorage.setRefreshToken(data.refreshToken);
+      }
+      if (data.expiresIn) {
+        tokenStorage.setTokenExpiry(Date.now() + (data.expiresIn * 1000));
+      }
+
+      console.log('✅ Token refreshed successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Token refresh error:', error);
+      return false;
     }
+  }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+  // Check if token is expired or about to expire
+  isTokenExpired(): boolean {
+    const expiry = tokenStorage.getTokenExpiry();
+    if (!expiry) return false;
+    
+    // Consider token expired if it expires within the next 5 minutes
+    const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
+    return expiry < fiveMinutesFromNow;
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error: ${response.status} ${errorText}`);
+  private async request<T>(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
+    try {
+      // Check if token is expired and refresh if needed
+      if (this.token && this.isTokenExpired() && retryCount === 0) {
+        console.log('🔄 Token expired, attempting refresh...');
+        const refreshed = await this.refreshToken();
+        if (!refreshed) {
+          console.warn('⚠️ Token refresh failed, clearing auth data');
+          this.clearToken();
+          throw new Error('Authentication expired. Please log in again.');
+        }
+      }
+
+      const url = `${API_BASE}${endpoint}`;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string>),
+      };
+
+      if (this.token) {
+        headers.Authorization = `Bearer ${this.token}`;
+      }
+
+      console.log('🔍 [REQUEST DEBUG] Making request to:', url);
+      console.log('🔍 [REQUEST DEBUG] Method:', options.method || 'GET');
+      console.log('🔍 [REQUEST DEBUG] Headers:', headers);
+      console.log('🔍 [REQUEST DEBUG] Body:', options.body);
+
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
+
+      console.log('🔍 [REQUEST DEBUG] Response status:', response.status);
+      console.log('🔍 [REQUEST DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
+
+      // Handle 401 Unauthorized - try token refresh once
+      if (response.status === 401 && retryCount === 0 && this.token) {
+        console.log('🔄 Received 401, attempting token refresh...');
+        const refreshed = await this.refreshToken();
+        if (refreshed) {
+          console.log('✅ Token refreshed, retrying request...');
+          return this.request<T>(endpoint, options, retryCount + 1);
+        } else {
+          console.warn('⚠️ Token refresh failed, clearing auth data');
+          this.clearToken();
+          throw new Error('Authentication expired. Please log in again.');
+        }
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔍 [REQUEST DEBUG] Error response body:', errorText);
+        
+        // Create a structured error object for better handling
+        const error = {
+          response: {
+            status: response.status,
+            data: errorText
+          },
+          message: `API Error: ${response.status} ${errorText}`
+        };
+        
+        const appError = handleApiError(error, `API request to ${endpoint}`);
+        logError(appError, error);
+        throw appError;
+      }
+
+      const responseData = await response.json();
+      console.log('🔍 [REQUEST DEBUG] Success response:', responseData);
+      return responseData;
+    } catch (error) {
+      // Handle network errors and other exceptions
+      if (error instanceof Error && error.name === 'TypeError' && error.message.includes('fetch')) {
+        const networkError = handleApiError(error, `Network error for ${endpoint}`);
+        logError(networkError, error);
+        throw networkError;
+      }
+      
+      // Re-throw if it's already an AppError
+      if (error && typeof error === 'object' && 'code' in error) {
+        throw error;
+      }
+      
+      // Handle other errors
+      const appError = handleApiError(error, `Unexpected error for ${endpoint}`);
+      logError(appError, error);
+      throw appError;
     }
-
-    return response.json();
   }
 
   async login(email: string, password: string): Promise<LoginResponse> {
@@ -525,15 +649,31 @@ class ApiService {
       behaviorItemId: string;
       rating: number; // Backend expects 'rating' not 'score'
       comment?: string;
+      example?: string;
     }>;
+    evaluationType?: string;
+    clusterScores?: Array<{
+      clusterId: string;
+      score: number;
+      weight: number;
+    }>;
+    overallScore?: number;
   }): Promise<Evaluation> {
     try {
-      return await this.request<Evaluation>('/evaluations', {
+      console.log('🔍 [API DEBUG] createEvaluation called with:', JSON.stringify(evaluationData, null, 2));
+      console.log('🔍 [API DEBUG] Request URL:', `${API_BASE}/evaluations`);
+      console.log('🔍 [API DEBUG] Request method: POST');
+      
+      const result = await this.request<Evaluation>('/evaluations', {
         method: 'POST',
         body: JSON.stringify(evaluationData)
       });
+      
+      console.log('🔍 [API DEBUG] createEvaluation success:', result);
+      return result;
     } catch (error) {
-      console.error('Failed to submit evaluation:', error);
+      console.error('🔍 [API DEBUG] createEvaluation failed:', error);
+      console.error('🔍 [API DEBUG] Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
   }
@@ -641,9 +781,8 @@ class ApiService {
   }
 
   private getCurrentUserId(): string {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
+    const user = userStorage.getUser();
+    if (user) {
       return user.id;
     }
     return '';

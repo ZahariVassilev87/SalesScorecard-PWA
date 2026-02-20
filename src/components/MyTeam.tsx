@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { apiService, Team } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const MyTeam: React.FC = () => {
   const { user } = useAuth();

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { apiService, Evaluation } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const AnalyticsView: React.FC = () => {
   const { user } = useAuth();
@@ -342,7 +343,7 @@ const AnalyticsView: React.FC = () => {
   if (isLoading) {
     return (
       <div className="analytics-view">
-        <div className="loading">Loading analytics...</div>
+        <div className="loading">{t('analytics.loading')}</div>
       </div>
     );
   }
@@ -467,7 +468,7 @@ const AnalyticsView: React.FC = () => {
         <div className="analytics-grid">
           <div className="analytics-card">
             <div className="card-header">
-              <h3>Team Performance</h3>
+              <h3>{t('analytics.teamPerformance')}</h3>
               <span className="card-icon">👥</span>
             </div>
             <div className="card-content">

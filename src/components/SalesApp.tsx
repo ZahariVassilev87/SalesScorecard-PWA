@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import Dashboard from './Dashboard';
@@ -17,8 +17,22 @@ import MobileDebugPanel from './MobileDebugPanel';
 const SalesApp: React.FC = () => {
   const { user, logout } = useAuth();
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    // Try to get the last selected tab from localStorage
+    const savedTab = localStorage.getItem('lastActiveTab');
+    return savedTab || 'dashboard';
+  });
+  const hasInitialized = useRef(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(false);
+
+  // Save active tab to localStorage whenever it changes
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    localStorage.setItem('lastActiveTab', tab);
+  };
+
+  // Performance dashboard state management
 
   const handleLogout = () => {
     logout();
@@ -56,7 +70,7 @@ const SalesApp: React.FC = () => {
     return userRole === 'SALES_DIRECTOR';
   };
 
-  // Set initial tab based on user role
+  // Set initial tab based on user role (only if no saved tab exists)
   useEffect(() => {
     if (user?.role) {
       if (user.role === 'SALES_DIRECTOR') {
@@ -70,8 +84,41 @@ const SalesApp: React.FC = () => {
     }
   }, [user?.role]);
 
+  // Initialize notification service and offline monitoring
+  useEffect(() => {
+    const initializeServices = async () => {
+      try {
+        // Initialize notification service
+        await notificationService.initialize();
+        
+        // Set up offline/online event listeners
+        const handleOnline = () => {
+          notificationService.showOnlineNotification();
+          offlineService.triggerSync();
+        };
+        
+        const handleOffline = () => {
+          notificationService.showOfflineNotification();
+        };
+        
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        
+        // Cleanup
+        return () => {
+          window.removeEventListener('online', handleOnline);
+          window.removeEventListener('offline', handleOffline);
+        };
+      } catch (error) {
+        console.error('Failed to initialize services:', error);
+      }
+    };
+    
+    initializeServices();
+  }, []);
+
   const handleEvaluationSuccess = () => {
-    setActiveTab('history');
+    handleTabChange('history');
   };
 
   return (
@@ -90,6 +137,80 @@ const SalesApp: React.FC = () => {
           <h1>🎯 Sales Scorecard</h1>
         </div>
         <div className="header-right">
+          {/* Performance Dashboard - Admin Only */}
+          {user?.role === 'ADMIN' && (
+            <button 
+              onClick={() => {
+                console.log('Performance button clicked!');
+                setShowPerformanceDashboard(true);
+              }} 
+              className="performance-button"
+              title="Performance Dashboard"
+            style={{
+              background: '#ff6b6b',
+              color: 'white',
+              border: '2px solid #ff0000',
+              fontSize: '18px',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '50px',
+              height: '50px',
+              zIndex: 9999,
+              position: 'relative'
+            }}
+          >
+            🚀
+          </button>
+          )}
+          
+          {/* Notification Settings - Hidden on mobile */}
+            <button 
+              onClick={async () => {
+                try {
+                  const isSubscribed = await notificationService.getSubscription();
+                  if (isSubscribed) {
+                    await notificationService.unsubscribeFromPush();
+                    notificationService.showNotification('🔔 Notifications Disabled', {
+                      body: 'You have been unsubscribed from push notifications.'
+                    });
+                  } else {
+                    const subscription = await notificationService.subscribeToPush();
+                    if (subscription) {
+                      notificationService.showNotification('🔔 Notifications Enabled', {
+                        body: 'You will now receive push notifications for important updates.'
+                      });
+                    }
+                  }
+                } catch (error) {
+                  console.error('Failed to toggle notifications:', error);
+                }
+              }}
+              className="notification-button desktop-only"
+              title="Toggle Notifications"
+              style={{
+                background: '#28a745',
+                color: 'white',
+              border: 'none',
+              fontSize: '16px',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '40px',
+              height: '40px',
+              marginRight: '8px'
+            }}
+          >
+            🔔
+          </button>
+          
+          {/* <ThemeToggle /> - Dark mode disabled */}
           <LanguageSwitcher />
           <button 
             onClick={() => window.location.reload()} 
@@ -127,7 +248,7 @@ const SalesApp: React.FC = () => {
             <button
               className={activeTab === 'dashboard' ? 'nav-button active' : 'nav-button'}
               onClick={() => {
-                setActiveTab('dashboard');
+                handleTabChange('dashboard');
                 closeMobileMenu();
               }}
             >
@@ -154,7 +275,7 @@ const SalesApp: React.FC = () => {
               <button
                 className={activeTab === 'evaluation' ? 'nav-button active' : 'nav-button'}
                 onClick={() => {
-                  setActiveTab('evaluation');
+                  handleTabChange('evaluation');
                   closeMobileMenu();
                 }}
               >
@@ -166,7 +287,7 @@ const SalesApp: React.FC = () => {
             <button
               className={activeTab === 'history' ? 'nav-button active' : 'nav-button'}
               onClick={() => {
-                setActiveTab('history');
+                handleTabChange('history');
                 closeMobileMenu();
               }}
             >
@@ -178,7 +299,7 @@ const SalesApp: React.FC = () => {
               <button
                 className={activeTab === 'analytics' ? 'nav-button active' : 'nav-button'}
                 onClick={() => {
-                  setActiveTab('analytics');
+                  handleTabChange('analytics');
                   closeMobileMenu();
                 }}
               >
@@ -203,7 +324,7 @@ const SalesApp: React.FC = () => {
             <button
               className={activeTab === 'dashboard' ? 'nav-button active' : 'nav-button'}
               onClick={() => {
-                setActiveTab('dashboard');
+                handleTabChange('dashboard');
                 closeMobileMenu();
               }}
             >
@@ -214,7 +335,7 @@ const SalesApp: React.FC = () => {
             <button
               className={activeTab === 'team' ? 'nav-button active' : 'nav-button'}
               onClick={() => {
-                setActiveTab('team');
+                handleTabChange('team');
                 closeMobileMenu();
               }}
             >
@@ -226,7 +347,7 @@ const SalesApp: React.FC = () => {
               <button
                 className={activeTab === 'teams' ? 'nav-button active' : 'nav-button'}
                 onClick={() => {
-                  setActiveTab('teams');
+                  handleTabChange('teams');
                   closeMobileMenu();
                 }}
               >
@@ -234,6 +355,18 @@ const SalesApp: React.FC = () => {
                 <span>{t('navigation.teams')}</span>
               </button>
             )}
+            
+            {/* Mobile Notification Settings */}
+            <button
+              className={activeTab === 'notifications' ? 'nav-button active mobile-notification-button' : 'nav-button mobile-notification-button'}
+              onClick={() => {
+                handleTabChange('notifications');
+                closeMobileMenu();
+              }}
+            >
+              <span>🔔</span>
+              <span>Notifications</span>
+            </button>
           </>
         )}
       </nav>

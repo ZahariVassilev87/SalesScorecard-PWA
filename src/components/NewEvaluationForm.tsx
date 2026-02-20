@@ -161,7 +161,7 @@ const NewEvaluationForm: React.FC<NewEvaluationFormProps> = ({ onSuccess, onCanc
 
         <div className="form-section">
           <h3>Behavior Evaluation</h3>
-          <p>Rate each behavior on a scale of 1-5 (1 = Poor, 5 = Excellent)</p>
+          <p>Rate each behavior on a scale of 1-4 (1 = Poor, 4 = Excellent)</p>
 
           {categories.map(category => (
             <div key={category.id} className="category-section">
@@ -173,7 +173,7 @@ const NewEvaluationForm: React.FC<NewEvaluationFormProps> = ({ onSuccess, onCanc
                   <div className="item-header">
                     <label>{item.name}</label>
                     <div className="score-input">
-                      {[1, 2, 3, 4, 5].map(score => (
+                      {[1, 2, 3, 4].map(score => (
                         <label key={score} className="score-option">
                           <input
                             type="radio"

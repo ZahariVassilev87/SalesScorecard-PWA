@@ -1,6 +1,6 @@
 {
   "name": "sales-scorecard-pwa",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "description": "Progressive Web Application for Sales Scorecard platform",
   "private": true,
   "homepage": ".",
@@ -19,7 +19,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-i18next": "^16.0.0",
-    "react-scripts": "5.0.1",
+    "react-scripts": "^5.0.1",
     "typescript": "^4.9.4",
     "web-vitals": "^2.1.4"
   },
