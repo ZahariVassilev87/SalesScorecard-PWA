@@ -13,6 +13,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const { t } = useTranslation();
   const lastUserIdRef = useRef<string | null>(null);
   const hasLoadedRef = useRef(false);
+  const isSubmittingRef = useRef(false); // Ref-based guard to prevent double submissions
   
   const [evaluatableUsers, setEvaluatableUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,6 +108,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         }
         
         // Load evaluation categories from backend (role-based)
+        // Note: customerType will be loaded separately when user selects it
         const behaviorCategories = await apiService.getBehaviorCategories();
         setCategories(behaviorCategories);
       } catch (err) {
@@ -196,11 +198,20 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission using ref guard
+    if (isSubmittingRef.current) {
+      console.log('⚠️ Submission already in progress, ignoring duplicate click');
+      return;
+    }
+    
     if (!selectedUser) {
       setError(t('evaluation.selectTeamMember'));
       return;
     }
 
+    // Set both state and ref immediately to prevent double submissions
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError('');
     setSuccessMessage('');
@@ -249,18 +260,26 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         setTimeout(() => {
           console.log('Navigating to history tab...');
           onSuccess();
+          // Reset ref after navigation
+          isSubmittingRef.current = false;
         }, 3000);
       } catch (onlineError) {
         // Show error - no offline mode for now
         console.error('Evaluation submission failed:', onlineError);
         setError(onlineError instanceof Error ? onlineError.message : t('evaluation.error'));
+        isSubmittingRef.current = false;
         setIsSubmitting(false);
         return;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('evaluation.error'));
+      isSubmittingRef.current = false;
     } finally {
       setIsSubmitting(false);
+      // Ensure ref is reset even if something goes wrong
+      if (!isSubmittingRef.current) {
+        // Already reset, but this ensures cleanup
+      }
     }
   };
 
@@ -343,9 +362,49 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
             <select
               id="customerType"
               value={customerType}
-              onChange={(e) => {
-                console.log('🔍 [PWA] Customer type changed:', e.target.value);
-                setCustomerType(e.target.value);
+              onChange={async (e) => {
+                const newCustomerType = e.target.value;
+                console.log('🔍 [PWA] Customer type changed:', newCustomerType);
+                console.log('🔍 [PWA] Previous customerType:', customerType);
+                setCustomerType(newCustomerType);
+                
+                // Reload categories based on customerType
+                if (newCustomerType) {
+                  try {
+                    console.log('🔍 [PWA] Loading categories for customerType:', newCustomerType);
+                    setIsLoading(true);
+                    const behaviorCategories = await apiService.getBehaviorCategories(newCustomerType);
+                    console.log('🔍 [PWA] Received categories:', behaviorCategories.length, 'categories');
+                    console.log('🔍 [PWA] First category:', behaviorCategories[0]?.name);
+                    setCategories(behaviorCategories);
+                    // Reset scores and comments when categories change
+                    setScores({});
+                    setComments({});
+                    console.log('✅ [PWA] Loaded categories for customerType:', newCustomerType, behaviorCategories.length);
+                  } catch (err) {
+                    console.error('❌ [PWA] Failed to reload categories:', err);
+                    setError(t('evaluation.error'));
+                  } finally {
+                    setIsLoading(false);
+                  }
+                } else {
+                  // Reset to default categories
+                  try {
+                    console.log('🔍 [PWA] Loading default categories');
+                    setIsLoading(true);
+                    const behaviorCategories = await apiService.getBehaviorCategories();
+                    console.log('🔍 [PWA] Received default categories:', behaviorCategories.length);
+                    setCategories(behaviorCategories);
+                    // Reset scores and comments when categories change
+                    setScores({});
+                    setComments({});
+                    console.log('✅ [PWA] Loaded default categories');
+                  } catch (err) {
+                    console.error('❌ [PWA] Failed to reload default categories:', err);
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }
               }}
               autoComplete="off"
               required

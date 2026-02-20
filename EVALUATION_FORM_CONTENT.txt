@@ -1,0 +1,325 @@
+
+================================================================================
+ SALESPERSON EVALUATION FORM
+(For Sales Leads evaluating Salespeople)
+================================================================================
+
+FORM TITLE (Bulgarian):
+Оценка на Търговец
+
+FORM SUBTITLE (Bulgarian):
+Оценете представянето на търговеца по време на среща с клиент
+
+FORM TITLE (English):
+Salesperson Evaluation
+
+FORM SUBTITLE (English):
+Evaluate salesperson performance during client meetings
+
+--------------------------------------------------------------------------------
+CLUSTER 1: Preparation Before the Meeting
+(Bulgarian: Подготовка преди срещата)
+--------------------------------------------------------------------------------
+
+QUESTION 1: Identify core products the client uses (in their menu) but does not buy from METRO
+(Bulgarian: Идентифицира ли основни продукти които клиентът използва (в менюто си) но не купува от МЕТРО)
+
+Score 1 (Bulgarian): Без подготовка, няма идея какво използва клиентът
+Score 1 (English): No preparation, no idea what client uses
+
+Score 2 (Bulgarian): Знае 1-2 продукта неясно
+Score 2 (English): Knows 1–2 products vaguely
+
+Score 3 (Bulgarian): Знае няколко продукта, но не напълно точно
+Score 3 (English): Knows several products, but not fully accurate
+
+Score 4 (Bulgarian): Ясен списък на ключови продукти липсващи от МЕТРО поръчки
+Score 4 (English): Clear list of key products missing from METRO orders
+
+--------------------------------------------------------------------------------
+
+QUESTION 2: Determined type of establishment (restaurant/hotel) and cuisine style
+(Bulgarian: Определи ли типа обект (ресторант/хотел) и стил на кухня)
+
+Score 1 (Bulgarian): Без информация за типа клиент
+Score 1 (English): No info about the client type
+
+Score 2 (Bulgarian): Обща информация, не прецизна (напр. "ресторант")
+Score 2 (English): Generic info, not precise (e.g. "restaurant")
+
+Score 3 (Bulgarian): Знае типа и някои детайли за кухнята
+Score 3 (English): Knows type and some details about cuisine
+
+Score 4 (Bulgarian): Ясен профил: тип + кухня + позициониране
+Score 4 (English): Clear profile: type + cuisine + positioning
+
+--------------------------------------------------------------------------------
+
+QUESTION 3: Selected 1–2 focus products for the meeting
+(Bulgarian: Избра ли 1-2 фокусни продукта за срещата)
+
+Score 1 (Bulgarian): Без избрани фокусни продукти
+Score 1 (English): No chosen focus products
+
+Score 2 (Bulgarian): Спомена продукт но без стратегия
+Score 2 (English): Mentioned a product but without strategy
+
+Score 3 (Bulgarian): Избра продукти но слабо съответствие с нуждите на клиента
+Score 3 (English): Selected products but weak alignment with client needs
+
+Score 4 (Bulgarian): Ясен избор на 1-2 продукта релевантни за клиента + МЕТРО цели
+Score 4 (English): Clear choice of 1–2 products relevant for client + METRO goals
+
+--------------------------------------------------------------------------------
+
+QUESTION 4: Knows where the client currently orders from and why
+(Bulgarian: Знае ли откъде клиентът поръчва в момента и защо)
+
+Score 1 (Bulgarian): Без информация
+Score 1 (English): No information
+
+Score 2 (Bulgarian): Предположения, много обща информация
+Score 2 (English): Guessing, very general knowledge
+
+Score 3 (Bulgarian): Знае източника но неясни причини
+Score 3 (English): Knows source but unclear reasons
+
+Score 4 (Bulgarian): Знае доставчика + точни причини за избора (цена, доставка, качество)
+Score 4 (English): Knows supplier + exact reasons for choice (price, delivery, quality)
+
+--------------------------------------------------------------------------------
+
+QUESTION 5: Analyzed client's restaurant prices and quality/price preferences
+(Bulgarian: Анализира ли цените в ресторанта на клиента и предпочитания качество/цена)
+
+Score 1 (Bulgarian): Без проверка на цени или предпочитания
+Score 1 (English): No check on prices or preferences
+
+Score 2 (Bulgarian): Приблизителна представа, не потвърдена
+Score 2 (English): Rough idea, not confirmed
+
+Score 3 (Bulgarian): Провери частично (цени ИЛИ предпочитания)
+Score 3 (English): Checked partially (prices OR preferences)
+
+Score 4 (Bulgarian): Ясно познаване на ценово ниво + баланс качество/цена на клиента
+Score 4 (English): Clear knowledge of price level + client's price/quality balance
+
+--------------------------------------------------------------------------------
+
+QUESTION 6: Prepared strategy for focus product (e.g. which mozzarella, which brand)
+(Bulgarian: Подготви ли стратегия за фокусния продукт (напр. коя моцарела, коя марка))
+
+Score 1 (Bulgarian): Без подготвена стратегия
+Score 1 (English): No strategy prepared
+
+Score 2 (Bulgarian): Много обще предложение (напр. "предложи моцарела")
+Score 2 (English): Very generic proposal (e.g. "offer mozzarella")
+
+Score 3 (Bulgarian): Избра продукт но не напълно обоснован
+Score 3 (English): Selected product but not fully justified
+
+Score 4 (Bulgarian): Ясна стратегия: конкретен продукт + съответствие с консумация на клиента и цели на МЕТРО
+Score 4 (English): Clear strategy: specific product + aligned with client consumption and METRO targets
+
+--------------------------------------------------------------------------------
+
+QUESTION 7: Visit aligned with METRO contact model
+(Bulgarian: Посещението беше ли в съответствие с МЕТРО контактния модел)
+
+Score 1 (Bulgarian): Случайно посещение, без съответствие
+Score 1 (English): Random visit, no alignment
+
+Score 2 (Bulgarian): Частично съответствие, слаба връзка с модела
+Score 2 (English): Partially aligned, weak link to model
+
+Score 3 (Bulgarian): Съответства но изпълнението непълно
+Score 3 (English): Aligned but execution incomplete
+
+Score 4 (Bulgarian): Напълно съответства с контактния модел и сегментационната стратегия
+Score 4 (English): Fully aligned with contact model and segmentation strategy
+
+--------------------------------------------------------------------------------
+CLUSTER 2: Problem Definition
+(Bulgarian: Дефиниране на проблема)
+--------------------------------------------------------------------------------
+
+QUESTION 1: Did the salesperson ask about opportunities to improve collaboration with METRO?
+(Bulgarian: Попита ли клиента за възможности за подобрение в сътрудничеството с МЕТРО?)
+
+Score 1 (Bulgarian): Не попита
+Score 1 (English): Did not ask
+
+Score 2 (Bulgarian): Попита повърхностно, без изслушване
+Score 2 (English): Asked superficially, no listening
+
+Score 3 (Bulgarian): Попита правилно но без дълбочина
+Score 3 (English): Asked properly but no depth
+
+Score 4 (Bulgarian): Идентифицира ясни възможности
+Score 4 (English): Identified improvement opportunities
+
+--------------------------------------------------------------------------------
+
+QUESTION 2: Did the salesperson propose specific products (prepared in advance) for the customer to start sourcing from METRO?
+(Bulgarian: Предложи ли конкретни продукти (след подготовка), които клиентът да започне да взима от МЕТРО?)
+
+Score 1 (Bulgarian): Няма предложение
+Score 1 (English): No proposal
+
+Score 2 (Bulgarian): Общи/неподготвени предложения
+Score 2 (English): Generic or unprepared proposal
+
+Score 3 (Bulgarian): Подготвени и релевантни предложения
+Score 3 (English): Prepared and relevant proposal
+
+Score 4 (Bulgarian): Стратегически предложения, свързани с клиента
+Score 4 (English): Strategic proposal aligned with customer needs
+
+--------------------------------------------------------------------------------
+
+QUESTION 3: Did the salesperson connect the customer’s long-term goals with the proposed new products?
+(Bulgarian: Свърза ли дългосрочните цели на клиента с предложените нови продукти?)
+
+Score 1 (Bulgarian): Без връзка 
+Score 1 (English): No connection
+
+Score 2 (Bulgarian): Частична връзка
+Score 2 (English): Weak connection
+
+Score 3 (Bulgarian): Ясна връзка с ползите
+Score 3 (English): Clear link to customer benefits
+
+Score 4 (Bulgarian):  Убедителна стратегическа връзка
+Score 4 (English): Strong strategic alignment, persuasive
+
+
+
+--------------------------------------------------------------------------------
+CLUSTER 3: Handling Objections
+(Bulgarian: Работа с възражения)
+--------------------------------------------------------------------------------
+
+QUESTION 1: Listened fully to objection without interrupting
+(Bulgarian: Слуша ли напълно възражението без да прекъсва)
+
+Score 1 (Bulgarian): Прекъсна
+Score 1 (English): Interrupted
+
+Score 2 (Bulgarian): Слуша частично
+Score 2 (English): Listened partially
+
+Score 3 (Bulgarian): Слуша но слаба реакция
+Score 3 (English): Listened but weak reaction
+
+Score 4 (Bulgarian): Пълно, спокойно слушане
+Score 4 (English): Full, calm listening
+
+--------------------------------------------------------------------------------
+
+QUESTION 2: Validated client's perspective
+(Bulgarian: Валидира ли гледната точка на клиента)
+
+Score 1 (Bulgarian): Игнорира
+Score 1 (English): Ignored
+
+Score 2 (Bulgarian): Защитен отговор
+Score 2 (English): Defensive response
+
+Score 3 (Bulgarian): Частично признание
+Score 3 (English): Partial acknowledgement
+
+Score 4 (Bulgarian): Пълна валидация, емпатия
+Score 4 (English): Full validation, empathy
+
+--------------------------------------------------------------------------------
+
+QUESTION 3: Put objection in market context & showed METRO's response
+(Bulgarian: Постави ли възражението в пазарен контекст и показа отговора на МЕТРО)
+
+Score 1 (Bulgarian): Игнорира контекста
+Score 1 (English): Ignored context
+
+Score 2 (Bulgarian): Спомена неясно
+Score 2 (English): Mentioned vaguely
+
+Score 3 (Bulgarian): Слаб пример
+Score 3 (English): Weak example
+
+Score 4 (Bulgarian): Ясно обяснение, показа подхода на МЕТРО
+Score 4 (English): Clear explanation, showed METRO's approach
+
+--------------------------------------------------------------------------------
+CLUSTER 4: Commercial Proposal
+(Bulgarian: Комерсиално предложение)
+--------------------------------------------------------------------------------
+
+QUESTION 1: Did the salesperson present a product/service as a sustainable partnership solution with METRO?
+(Bulgarian: Представи ли продукт или услуга като устойчиво решение в партньорството с МЕТРО?)
+
+Score 1 (Bulgarian): Без представяне
+Score 1 (English): No value presentation
+
+Score 2 (Bulgarian): Повърхностно
+Score 2 (English): Generic message
+
+Score 3 (Bulgarian): Ясно позиционирана стойност
+Score 3 (English): Clear value positioning
+
+Score 4 (Bulgarian): Силно и доказано партньорско решение
+Score 4 (English): Strong, credible partnership solution
+
+--------------------------------------------------------------------------------
+
+QUESTION 2: Did the salesperson emphasize the customer benefits of adding more products?
+(Bulgarian: Акцентира ли върху ползите за клиента при добавяне на повече продукти?)
+
+Score 1 (Bulgarian): Без ползи
+Score 1 (English): No benefits explained
+
+Score 2 (Bulgarian): Общи ползи
+Score 2 (English):  General benefits only
+
+Score 3 (Bulgarian): Конкретни и релевантни ползи
+Score 3 (English): Clear and relevant benefits
+
+Score 4 (Bulgarian): Персонализирани и мотивиращи ползи
+Score 4 (English): CTailored and motivating benefits
+
+--------------------------------------------------------------------------------
+
+QUESTION 3: Proposed test of key products
+(Bulgarian: Предложи ли тест на ключови продукти)
+
+Score 1 (Bulgarian): Не предложи
+Score 1 (English): Did not propose
+
+Score 2 (Bulgarian): Спомена без детайл
+Score 2 (English): Mentioned without detail
+
+Score 3 (Bulgarian): Предложи но слабо
+Score 3 (English): Proposed but weakly
+
+Score 4 (Bulgarian): Силно, уверено предложение за тест
+Score 4 (English): Strong, confident proposal for test
+
+--------------------------------------------------------------------------------
+
+QUESTION 4: Did the salesperson agree on a next step with a longer-term perspective?
+(Bulgarian: Договори ли следваща стъпка в по-дългосрочен план?)
+
+Score 1 (Bulgarian): Без следваща стъпка
+Score 1 (English): No next step
+
+Score 2 (Bulgarian): Неясно споменаване
+Score 2 (English): Vague mention
+
+Score 3 (Bulgarian): Споразумение но неясно
+Score 3 (English): Agreement but unclear
+
+Score 4 (Bulgarian): Ясна, конкретна следваща стъпка договорена
+Score 4 (English): Clear, specific next step agreed
+
+================================================================================
+END OF EVALUATION FORM CONTENT
+================================================================================
+

@@ -147,6 +147,38 @@
   "Presented product as solution to specific problem": "Presented product as solution to specific problem",
   "Demonstrated product benefits with concrete examples": "Demonstrated product benefits with concrete examples",
   "Proposed test of key products": "Proposed test of key products",
-  "Agreed on clear next step": "Agreed on clear next step"
+  "Agreed on clear next step": "Agreed on clear next step",
+  
+  "Did the salesperson ask about opportunities to improve collaboration with METRO?": "Did the salesperson ask about opportunities to improve collaboration with METRO?",
+  "Did the salesperson propose specific products (prepared in advance) for the customer to start sourcing from METRO?": "Did the salesperson propose specific products (prepared in advance) for the customer to start sourcing from METRO?",
+  "Did the salesperson connect the customer's long-term goals with the proposed new products?": "Did the salesperson connect the customer's long-term goals with the proposed new products?",
+  "Did the salesperson present a product/service as a sustainable partnership solution with METRO?": "Did the salesperson present a product/service as a sustainable partnership solution with METRO?",
+  "Did the salesperson emphasize the customer benefits of adding more products?": "Did the salesperson emphasize the customer benefits of adding more products?",
+  "Did the salesperson agree on a next step with a longer-term perspective?": "Did the salesperson agree on a next step with a longer-term perspective?",
+  
+  "highshare_prob1_1": "Did not ask",
+  "highshare_prob1_2": "Asked superficially, no listening",
+  "highshare_prob1_3": "Asked properly but no depth",
+  "highshare_prob1_4": "Identified improvement opportunities",
+  
+  "highshare_prob2_1": "No proposal",
+  "highshare_prob2_2": "Generic or unprepared proposal",
+  "highshare_prob2_3": "Prepared and relevant proposal",
+  "highshare_prob2_4": "Strategic proposal aligned with customer needs",
+  
+  "highshare_prob3_1": "No connection",
+  "highshare_prob3_2": "Weak connection",
+  "highshare_prob3_3": "Clear link to customer benefits",
+  "highshare_prob3_4": "Strong strategic alignment, persuasive",
+  
+  "highshare_prop1_1": "No value presentation",
+  "highshare_prop1_2": "Generic message",
+  "highshare_prop1_3": "Clear value positioning",
+  "highshare_prop1_4": "Strong, credible partnership solution",
+  
+  "highshare_prop2_1": "No benefits explained",
+  "highshare_prop2_2": "General benefits only",
+  "highshare_prop2_3": "Clear and relevant benefits",
+  "highshare_prop2_4": "Tailored and motivating benefits"
 }
 

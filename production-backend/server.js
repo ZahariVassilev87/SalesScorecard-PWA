@@ -9,6 +9,72 @@ let webpush = null;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DEFAULT_COMPANY_ID = 'company_metro';
+
+/**
+ * Resolve company context for a request.
+ * - Non super-admins are always scoped to their own company.
+ * - Super-admins can pass ?companyId=<id> (or "all") on the query string,
+ *   or provide companyId in the request body / header.
+ */
+function resolveCompanyContext(req) {
+  const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
+
+  const queryCompanyId = typeof req.query?.companyId === 'string' ? req.query.companyId.trim() : undefined;
+  const bodyCompanyId = typeof req.body === 'object' && req.body !== null && typeof req.body.companyId === 'string'
+    ? req.body.companyId.trim()
+    : undefined;
+  const headerCompanyId = typeof req.headers['x-company-id'] === 'string'
+    ? req.headers['x-company-id'].trim()
+    : undefined;
+
+  const explicitCompanyId = queryCompanyId || bodyCompanyId || headerCompanyId;
+
+  if (isSuperAdmin) {
+    if (explicitCompanyId && explicitCompanyId.toLowerCase() === 'all') {
+      return { companyId: null, includeAllCompanies: true };
+    }
+    if (explicitCompanyId) {
+      return { companyId: explicitCompanyId, includeAllCompanies: false };
+    }
+    // Default for super-admins with no explicit selection: include all.
+    return { companyId: null, includeAllCompanies: true };
+  }
+
+  return {
+    companyId: req.user?.companyId || DEFAULT_COMPANY_ID,
+    includeAllCompanies: false
+  };
+}
+
+function normalizeCompanyId(rawId) {
+  if (typeof rawId !== 'string') {
+    return null;
+  }
+  const trimmed = rawId.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed.toLowerCase().replace(/\s+/g, '_');
+  if (!/^[a-z0-9_-]+$/.test(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+function slugifyCompanyName(rawName) {
+  if (typeof rawName !== 'string') {
+    return null;
+  }
+  const slug = rawName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+  return slug || null;
+}
 
 // Database connection
 const pool = new Pool({
@@ -105,6 +171,8 @@ app.use(cors({
   origin: [
     'https://d2tuhgmig1r5ut.cloudfront.net', // CloudFront domain
     'https://scorecard.instorm.io', // Scorecard domain
+    'https://api.scorecard.instorm.io', // API domain
+    'https://api.instorm.io', // Legacy API/hosted admin domain
     'https://instorm.io', // Main domain
     'https://www.instorm.io', // WWW domain
     'http://localhost:3000' // Development
@@ -200,7 +268,7 @@ try {
 }
 
 // Authentication middleware
-const authenticateToken = (req, res, next) => {
+function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -213,10 +281,13 @@ const authenticateToken = (req, res, next) => {
       console.log('Token verification failed:', err.message);
       return res.status(403).json({ message: 'Forbidden', statusCode: 403 });
     }
-    req.user = user;
+    req.user = {
+      ...user,
+      companyId: user.companyId || DEFAULT_COMPANY_ID
+    };
     next();
   });
-};
+}
 
 // Authorization middleware for evaluation creation
 const authorizeEvaluationCreation = (req, res, next) => {
@@ -652,7 +723,7 @@ app.post('/auth/login', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT id, email, password, role, "displayName", "isActive" FROM users WHERE email = $1 AND "isActive" = true',
+      'SELECT id, email, password, role, "displayName", "isActive", "companyId" FROM users WHERE email = $1 AND "isActive" = true',
       [email]
     );
 
@@ -683,14 +754,19 @@ app.post('/auth/login', async (req, res) => {
         id: user.id, 
         email: user.email, 
         role: user.role,
-        displayName: user.displayName 
+        displayName: user.displayName,
+        companyId: user.companyId || DEFAULT_COMPANY_ID
       },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
     const refreshToken = jwt.sign(
-      { id: user.id, email: user.email },
+      { 
+        id: user.id, 
+        email: user.email,
+        companyId: user.companyId || DEFAULT_COMPANY_ID 
+      },
       REFRESH_SECRET,
       { expiresIn: '7d' }
     );
@@ -705,7 +781,8 @@ app.post('/auth/login', async (req, res) => {
         email: user.email,
         displayName: user.displayName,
         role: user.role,
-        isActive: user.isActive
+        isActive: user.isActive,
+        companyId: user.companyId || DEFAULT_COMPANY_ID
       }
     });
   } catch (error) {
@@ -726,23 +803,42 @@ app.post('/auth/refresh', (req, res) => {
     return res.status(401).json({ message: 'No refresh token provided' });
   }
 
-  jwt.verify(refreshToken, REFRESH_SECRET, (err, user) => {
+  jwt.verify(refreshToken, REFRESH_SECRET, async (err, tokenPayload) => {
     if (err) {
       return res.status(403).json({ message: 'Invalid refresh token' });
     }
 
-    const newToken = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
-        role: 'REGIONAL_SALES_MANAGER',
-        displayName: 'User' 
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    try {
+      const result = await pool.query(
+        'SELECT id, email, role, \"displayName\", \"companyId\" FROM users WHERE id = $1 AND \"isActive\" = true',
+        [tokenPayload.id]
+      );
 
-    res.json({ token: newToken });
+      if (result.rows.length === 0) {
+        return res.status(401).json({ message: 'User not found or inactive' });
+      }
+
+      const user = result.rows[0];
+      const payload = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        displayName: user.displayName,
+        companyId: user.companyId || DEFAULT_COMPANY_ID
+      };
+
+      const newToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+      const newRefreshToken = jwt.sign(
+        { id: user.id, email: user.email, companyId: user.companyId || DEFAULT_COMPANY_ID },
+        REFRESH_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      res.json({ token: newToken, refreshToken: newRefreshToken });
+    } catch (dbError) {
+      console.error('Error refreshing token:', dbError);
+      res.status(500).json({ message: 'Failed to refresh token' });
+    }
   });
 });
 
@@ -845,8 +941,11 @@ app.post('/evaluations', authenticateToken, authorizeEvaluationCreation, async (
   console.log('🔍 SalespersonId being submitted:', req.body.salespersonId);
   
   try {
+    const { companyId: resolvedCompanyId } = resolveCompanyContext(req);
+    const companyId = resolvedCompanyId || req.user?.companyId || DEFAULT_COMPANY_ID;
+
     // Verify the salespersonId exists in database
-    const userCheck = await pool.query('SELECT id, "displayName", role FROM users WHERE id = $1', [req.body.salespersonId]);
+    const userCheck = await pool.query('SELECT id, "displayName", role, "companyId" FROM users WHERE id = $1', [req.body.salespersonId]);
     if (userCheck.rows.length === 0) {
       console.error('❌ Invalid salespersonId:', req.body.salespersonId);
       return res.status(400).json({ 
@@ -855,17 +954,97 @@ app.post('/evaluations', authenticateToken, authorizeEvaluationCreation, async (
       });
     }
     console.log('✅ Valid salesperson found:', userCheck.rows[0]);
+
+    if (userCheck.rows[0].companyId !== companyId) {
+      console.error('❌ Company mismatch between manager and salesperson', {
+        managerCompany: companyId,
+        salespersonCompany: userCheck.rows[0].companyId
+      });
+      return res.status(403).json({
+        message: 'Salesperson belongs to a different company',
+        error: 'COMPANY_MISMATCH'
+      });
+    }
   
-  const evaluationId = `eval_${Date.now()}`;
+    // Check for duplicate evaluation (same manager, salesperson, visitDate, and customerName)
+    const duplicateCheck = await pool.query(`
+      SELECT id, "createdAt"
+      FROM evaluations
+      WHERE "managerId" = $1
+        AND "salespersonId" = $2
+        AND DATE("visitDate") = DATE($3)
+        AND COALESCE("customerName", '') = COALESCE($4, '')
+        AND "companyId" = $5
+      ORDER BY "createdAt" DESC
+      LIMIT 1
+    `, [
+      req.user.id,
+      req.body.salespersonId,
+      req.body.visitDate,
+      req.body.customerName || null,
+      companyId
+    ]);
+    
+    if (duplicateCheck.rows.length > 0) {
+      const duplicate = duplicateCheck.rows[0];
+      const timeDiff = Date.now() - new Date(duplicate.createdAt).getTime();
+      // If duplicate was created within last 5 seconds, it's likely a double-submit
+      if (timeDiff < 5000) {
+        console.log(`⚠️ Duplicate evaluation detected (created ${timeDiff}ms ago), returning existing evaluation`);
+        return res.status(200).json({
+          message: 'Evaluation already exists',
+          id: duplicate.id,
+          duplicate: true
+        });
+      }
+    }
+  
+  // Validate that all items have valid scores (1-4) BEFORE creating evaluation
+    if (!req.body.items || req.body.items.length === 0) {
+      return res.status(400).json({ 
+        message: 'Evaluation must contain at least one item with a valid score (1-4)', 
+        error: 'INVALID_EVALUATION_DATA' 
+      });
+    }
+    
+    // Validate all items have valid scores before proceeding
+    for (let i = 0; i < req.body.items.length; i++) {
+      const item = req.body.items[i];
+      const score = item.rating || item.score;
+      
+      // Validate score is between 1 and 4
+      if (!score || score < 1 || score > 4) {
+        console.error(`❌ Invalid score for item ${item.behaviorItemId}: ${score}`);
+        return res.status(400).json({ 
+          message: `All evaluation items must have a valid score between 1 and 4. Item ${item.behaviorItemId} has invalid score: ${score}`, 
+          error: 'INVALID_SCORE',
+          itemId: item.behaviorItemId,
+          score: score
+        });
+      }
+    }
+  
+  const evaluationId = `eval_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Calculate overallScore AFTER validation (so we know all items are valid)
     const overallScore = calculateOverallScore(req.body.items);
+    
+    // Ensure overallScore is valid (between 1 and 4)
+    if (!overallScore || overallScore < 1 || overallScore > 4) {
+      console.error(`❌ Calculated overallScore is invalid: ${overallScore}`);
+      return res.status(400).json({ 
+        message: 'Failed to calculate overall score. Please ensure all items have valid scores between 1 and 4.', 
+        error: 'INVALID_OVERALL_SCORE',
+        calculatedScore: overallScore
+      });
+    }
     
     // Insert into evaluations table
     await pool.query(`
       INSERT INTO evaluations (
         id, "salespersonId", "managerId", "visitDate", 
         "customerName", "customerType", location, "overallComment", "overallScore",
-        version, "createdAt", "updatedAt"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+        version, "companyId", "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
     `, [
       evaluationId,
       req.body.salespersonId,
@@ -876,12 +1055,14 @@ app.post('/evaluations', authenticateToken, authorizeEvaluationCreation, async (
       req.body.location || null,
       req.body.overallComment || null,
       overallScore,
-      1
+      1,
+      companyId
     ]);
     
-    // Insert evaluation items
+    // Insert evaluation items (already validated above)
     for (let i = 0; i < req.body.items.length; i++) {
       const item = req.body.items[i];
+      const score = item.rating || item.score; // Already validated above
       
       await pool.query(`
         INSERT INTO evaluation_items (
@@ -892,7 +1073,7 @@ app.post('/evaluations', authenticateToken, authorizeEvaluationCreation, async (
         `item_${evaluationId}_${i}`,
         evaluationId,
         item.behaviorItemId,
-        item.rating || item.score || 0, // Support both 'rating' and 'score' for backward compatibility
+        score, // Use validated score (1-4)
         item.comment || '' // Store the actual user's comment text
       ]);
     }
@@ -917,20 +1098,78 @@ app.get('/evaluations/my', authenticateToken, async (req, res) => {
   console.log('My evaluations request from user:', req.user.email);
   
   try {
+    const { companyId, includeAllCompanies } = resolveCompanyContext(req);
+    const { userCol, teamCol } = await getUserTeamsColumns(pool);
+
+    const managerIds = new Set([req.user.id]);
+    const salespersonIds = new Set([req.user.id]);
+
+    if (req.user.role === 'REGIONAL_MANAGER' || req.user.role === 'REGIONAL_SALES_MANAGER') {
+      const teamParams = [req.user.id];
+      let teamQuery = `
+        SELECT id FROM teams
+        WHERE "managerId" = $1
+      `;
+      if (!includeAllCompanies) {
+        teamParams.push(companyId);
+        teamQuery += ` AND "companyId" = $${teamParams.length}`;
+      }
+      const teamResult = await pool.query(teamQuery, teamParams);
+      const teamIds = teamResult.rows.map(row => row.id);
+
+      if (teamIds.length > 0) {
+        const memberParams = [teamIds];
+        let membersQuery = `
+          SELECT DISTINCT u.id
+          FROM user_teams ut
+          JOIN users u ON u.id = ut.${userCol}
+          WHERE ut.${teamCol} = ANY($1::text[])
+            AND u.role = 'SALES_LEAD'
+        `;
+        if (!includeAllCompanies) {
+          memberParams.push(companyId);
+          membersQuery += ` AND u."companyId" = $${memberParams.length}`;
+        }
+        const membersResult = await pool.query(membersQuery, memberParams);
+        membersResult.rows.forEach(row => {
+          if (row.id) {
+            managerIds.add(row.id);
+            salespersonIds.add(row.id);
+          }
+        });
+      }
+    }
+
+    const managerIdArray = Array.from(managerIds);
+    const salespersonIdArray = Array.from(salespersonIds);
+    const evalParams = [managerIdArray, salespersonIdArray];
+
+    let companyFilter = '';
+    if (!includeAllCompanies) {
+      evalParams.push(companyId);
+      companyFilter = ` AND e."companyId" = $${evalParams.length}`;
+    }
+
     // Get evaluations created by this user OR evaluations about this user
     const evaluationsResult = await pool.query(`
       SELECT 
         e.id, e."salespersonId", e."managerId", e."visitDate",
         e."customerName", e.location, e."overallComment", e."overallScore",
-        e.version, e."createdAt", e."updatedAt",
+        e.version, e."createdAt", e."updatedAt", e."companyId",
         sp."displayName" as salesperson_name, sp.email as salesperson_email,
-        mg."displayName" as manager_name, mg.email as manager_email
+        sp.role as salesperson_role, sp."companyId" as salesperson_company_id, sp."isActive" as salesperson_is_active,
+        mg."displayName" as manager_name, mg.email as manager_email,
+        mg.role as manager_role, mg."companyId" as manager_company_id, mg."isActive" as manager_is_active
       FROM evaluations e
       LEFT JOIN users sp ON sp.id = e."salespersonId"
       LEFT JOIN users mg ON mg.id = e."managerId"
-      WHERE e."managerId" = $1 OR e."salespersonId" = $1
+      WHERE (
+        e."managerId"::text = ANY($1::text[])
+        OR e."salespersonId"::text = ANY($2::text[])
+      )
+      ${companyFilter}
       ORDER BY e."createdAt" DESC
-    `, [req.user.id]);
+    `, evalParams);
     
     // Get evaluation items for each evaluation
     const evaluations = [];
@@ -955,13 +1194,19 @@ app.get('/evaluations/my', authenticateToken, async (req, res) => {
           displayName: evalRow.salesperson_name,
           firstName: evalRow.salesperson_name?.split(' ')[0] || '',
           lastName: evalRow.salesperson_name?.split(' ').slice(1).join(' ') || '',
-          email: evalRow.salesperson_email
+          email: evalRow.salesperson_email,
+          role: evalRow.salesperson_role || 'SALESPERSON',
+          isActive: typeof evalRow.salesperson_is_active === 'boolean' ? evalRow.salesperson_is_active : true,
+          companyId: evalRow.salesperson_company_id || null
         },
         managerId: evalRow.managerId,
         manager: {
           id: evalRow.managerId,
           displayName: evalRow.manager_name,
-          email: evalRow.manager_email
+          email: evalRow.manager_email,
+          role: evalRow.manager_role || (evalRow.managerId === req.user.id ? req.user.role : 'SALES_LEAD'),
+          isActive: typeof evalRow.manager_is_active === 'boolean' ? evalRow.manager_is_active : true,
+          companyId: evalRow.manager_company_id || null
         },
         visitDate: evalRow.visitDate,
         customerName: evalRow.customerName,
@@ -971,6 +1216,7 @@ app.get('/evaluations/my', authenticateToken, async (req, res) => {
         version: evalRow.version,
         createdAt: evalRow.createdAt,
         updatedAt: evalRow.updatedAt,
+        companyId: evalRow.companyId,
         items: itemsResult.rows.map(item => {
           // Handle both old format (custom IDs) and new format (database IDs)
           let behaviorItemName = item.behavior_item_name;
@@ -1067,6 +1313,7 @@ app.get('/organizations/salespeople', authenticateToken, async (req, res) => {
   
   try {
     const { userCol, teamCol } = await getUserTeamsColumns(pool);
+    const { companyId, includeAllCompanies } = resolveCompanyContext(req);
     
     // Hierarchical filtering based on role
     // REGIONAL_MANAGER sees SALES_LEADs in their teams
@@ -1113,6 +1360,11 @@ app.get('/organizations/salespeople', authenticateToken, async (req, res) => {
       // Unknown role - return empty
       query += ` AND 1=0`;
       console.log('⚠️ Unknown role - returning empty list');
+    }
+
+    if (!includeAllCompanies) {
+      params.push(companyId);
+      query += ` AND u."companyId" = $${params.length}`;
     }
     
     console.log('📊 Query:', query);
@@ -1171,11 +1423,12 @@ app.get('/users/my-team', authenticateToken, async (req, res) => {
   console.log('My team request from user:', req.user.email, 'role:', req.user.role);
   
   try {
+    const { companyId, includeAllCompanies } = resolveCompanyContext(req);
     const { userCol, teamCol } = await getUserTeamsColumns(pool);
     
     // Find the user's team(s)
-    const userTeamsQuery = `
-      SELECT DISTINCT t.id, t.name, t."managerId", t."regionId",
+    let userTeamsQuery = `
+      SELECT t.id, t.name, t."managerId", t."regionId",
         r.name AS region_name,
         m.id AS manager_id, m.email AS manager_email, 
         m."displayName" AS manager_name, m.role AS manager_role
@@ -1184,28 +1437,53 @@ app.get('/users/my-team', authenticateToken, async (req, res) => {
       LEFT JOIN regions r ON r.id = t."regionId"
       LEFT JOIN users m ON m.id = t."managerId"
       WHERE ut.${userCol} = $1
-      LIMIT 1
+    `;
+    const userTeamsParams = [req.user.id];
+    if (!includeAllCompanies) {
+      userTeamsQuery += ` AND t."companyId" = $${userTeamsParams.length + 1}`;
+      userTeamsParams.push(companyId);
+    }
+    userTeamsQuery += `
+      ORDER BY CASE WHEN t."managerId" = $1 THEN 0 ELSE 1 END, t."updatedAt" DESC
     `;
     
-    const userTeamsResult = await pool.query(userTeamsQuery, [req.user.id]);
+    const userTeamsResult = await pool.query(userTeamsQuery, userTeamsParams);
     
     if (userTeamsResult.rows.length === 0) {
       console.log('⚠️ User has no team membership');
       return res.json(null);
     }
     
-    const teamRow = userTeamsResult.rows[0];
+    const managedTeam = userTeamsResult.rows.find(row => row.managerId === req.user.id);
+    const teamRow = managedTeam || userTeamsResult.rows[0];
     const teamId = teamRow.id;
     
     console.log(`✅ Found team: ${teamRow.name} (${teamId})`);
     
     // Get all members of this team
-    const membersQuery = `
+    const subordinateRolesMap = {
+      REGIONAL_MANAGER: ['SALES_LEAD'],
+      REGIONAL_SALES_MANAGER: ['SALES_LEAD'],
+      SALES_LEAD: ['SALESPERSON'],
+      SALES_DIRECTOR: ['REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER', 'SALES_LEAD', 'SALESPERSON'],
+      ADMIN: null,
+      SUPER_ADMIN: null
+    };
+    const subordinateRoles = subordinateRolesMap[req.user.role] ?? null;
+    
+    let membersQuery = `
       SELECT u.id, u.email, u."displayName", u.role, u."isActive"
       FROM users u
       INNER JOIN user_teams ut ON ut.${userCol} = u.id
       WHERE ut.${teamCol} = $1
         AND u."isActive" = true
+    `;
+    const memberParams = [teamId];
+    if (subordinateRoles && subordinateRoles.length > 0) {
+      memberParams.push(subordinateRoles);
+      membersQuery += ` AND u.role = ANY($${memberParams.length}::text[])`;
+    }
+    membersQuery += `
       ORDER BY 
         CASE u.role
           WHEN 'REGIONAL_MANAGER' THEN 1
@@ -1217,7 +1495,7 @@ app.get('/users/my-team', authenticateToken, async (req, res) => {
         u."displayName"
     `;
     
-    const membersResult = await pool.query(membersQuery, [teamId]);
+    const membersResult = await pool.query(membersQuery, memberParams);
     
     console.log(`✅ Found ${membersResult.rows.length} team members`);
     
@@ -1285,12 +1563,14 @@ app.get('/public-admin/teams', authenticateToken, async (req, res) => {
     `);
 
     // Fetch teams
-    const teamsResult = await pool.query(`
+    const { companyId, includeAllCompanies } = resolveCompanyContext(req);
+    let teamsQuery = `
       SELECT 
         t.id, 
         t.name, 
         t."regionId", 
         t."managerId", 
+        t."companyId",
         t."createdAt", 
         t."updatedAt",
         mu.id as mgr_id, 
@@ -1300,8 +1580,15 @@ app.get('/public-admin/teams', authenticateToken, async (req, res) => {
         COALESCE(mu."isActive", true) as mgr_active
       FROM teams t
       LEFT JOIN users mu ON mu.id = t."managerId"
-      ORDER BY t.name
-    `);
+    `;
+    const teamParams = [];
+    if (!includeAllCompanies) {
+      teamParams.push(companyId);
+      teamsQuery += `WHERE t."companyId" = $${teamParams.length}\n`;
+    }
+    teamsQuery += 'ORDER BY t.name';
+
+    const teamsResult = await pool.query(teamsQuery, teamParams);
 
     const teamIds = teamsResult.rows.map(r => r.id);
 
@@ -1346,6 +1633,7 @@ app.get('/public-admin/teams', authenticateToken, async (req, res) => {
       return {
         id: row.id,
         name: row.name,
+        companyId: row.companyId,
         region: row.regionId ? { id: row.regionId, name: row.regionId } : null,
         manager: row.managerId && row.mgr_id ? {
           id: row.mgr_id,
@@ -1664,13 +1952,21 @@ app.get('/public-admin/users', authenticateToken, async (req, res) => {
   console.log('Public admin users request from user:', req.user.email);
   
   try {
-    // Simple query that works with current database schema
-    const result = await pool.query(`
-      SELECT id, email, "displayName", role, "isActive", "createdAt", "updatedAt"
+    const { companyId, includeAllCompanies } = resolveCompanyContext(req);
+
+    let usersQuery = `
+      SELECT id, email, "displayName", role, "isActive", "companyId", "createdAt", "updatedAt"
       FROM users
       WHERE "isActive" = true
-      ORDER BY "displayName", email
-    `);
+    `;
+    const params = [];
+    if (!includeAllCompanies) {
+      params.push(companyId);
+      usersQuery += ` AND "companyId" = $${params.length}`;
+    }
+    usersQuery += ' ORDER BY "displayName", email';
+
+    const result = await pool.query(usersQuery, params);
     
     const users = result.rows.map(row => ({
       id: row.id,
@@ -1678,6 +1974,7 @@ app.get('/public-admin/users', authenticateToken, async (req, res) => {
       displayName: row.displayName,
       role: row.role,
       isActive: row.isActive,
+      companyId: row.companyId,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       teamId: null,
@@ -1706,7 +2003,10 @@ app.get('/users', authenticateToken, (req, res) => {
 
 // Scoring categories
 app.get('/scoring/categories', authenticateToken, async (req, res) => {
-  console.log('Scoring categories request from user:', req.user.email, 'role:', req.user.role);
+  const customerType = req.query.customerType || req.query.customer_type || null;
+  console.log('🔍 [CATEGORIES] Request from:', req.user.email, 'role:', req.user.role);
+  console.log('🔍 [CATEGORIES] Query params:', req.query);
+  console.log('🔍 [CATEGORIES] customerType:', customerType, 'type:', typeof customerType);
   
   try {
     // Determine which form to return based on user role
@@ -1714,28 +2014,54 @@ app.get('/scoring/categories', authenticateToken, async (req, res) => {
     // SALES_LEAD evaluates SALESPEOPLEs -> return SALESPERSON forms
     
     let targetRole = null;
+    let customerTypeFilter = null;
     
     if (req.user.role === 'REGIONAL_MANAGER' || req.user.role === 'REGIONAL_SALES_MANAGER') {
       targetRole = 'SALES_LEAD';
       console.log('🔍 Regional Manager - returning Sales Lead Coaching Evaluation');
-    } else if (req.user.role === 'SALES_LEAD') {
-      targetRole = 'SALESPERSON';
-      console.log('🔍 Sales Lead - returning Salesperson Evaluation');
     } else {
-      // Default to SALESPERSON form for others
+      // SALES_LEAD and others evaluate SALESPERSON
       targetRole = 'SALESPERSON';
-      console.log('🔍 Default - returning Salesperson Evaluation');
+      // Check customerType for SALESPERSON evaluations
+      if (customerType === 'high-share' || customerType === 'HIGH_SHARE' || customerType === 'high_share') {
+        customerTypeFilter = 'HIGH_SHARE';
+        console.log('🔍 Returning High Share Salesperson Evaluation for customerType:', customerType);
+      } else {
+        console.log('🔍 Returning Standard Salesperson Evaluation');
+      }
     }
     
-    // Get categories with their items from database
-    const categoriesQuery = `
-      SELECT bc.id, bc.name, bc."order", bc.weight
-      FROM behavior_categories bc
-      WHERE bc.name LIKE '%' || $1 || '%'
-      ORDER BY bc."order"
-    `;
+    // Build query based on customerType
+    let categoriesQuery;
+    let queryParams;
     
-    const categoriesResult = await pool.query(categoriesQuery, [targetRole]);
+    if (customerTypeFilter === 'HIGH_SHARE') {
+      // For high-share, look for categories with HIGH_SHARE in name or a specific marker
+      categoriesQuery = `
+        SELECT bc.id, bc.name, bc."order", bc.weight
+        FROM behavior_categories bc
+        WHERE (bc.name LIKE '%' || $1 || '%' AND bc.name LIKE '%HIGH_SHARE%')
+           OR (bc.name LIKE '%' || $1 || '%' AND bc.name LIKE '%High Share%')
+        ORDER BY bc."order"
+      `;
+      queryParams = [targetRole];
+    } else {
+      // Standard form - exclude high-share categories
+      categoriesQuery = `
+        SELECT bc.id, bc.name, bc."order", bc.weight
+        FROM behavior_categories bc
+        WHERE bc.name LIKE '%' || $1 || '%'
+          AND (bc.name NOT LIKE '%HIGH_SHARE%' AND bc.name NOT LIKE '%High Share%')
+        ORDER BY bc."order"
+      `;
+      queryParams = [targetRole];
+    }
+    
+    const categoriesResult = await pool.query(categoriesQuery, queryParams);
+    console.log('🔍 [CATEGORIES] Query returned', categoriesResult.rows.length, 'categories');
+    if (categoriesResult.rows.length > 0) {
+      console.log('🔍 [CATEGORIES] First category:', categoriesResult.rows[0].name);
+    }
     
     if (categoriesResult.rows.length === 0) {
       console.log('⚠️ No categories found, returning empty array');
@@ -1783,28 +2109,60 @@ app.get('/analytics/dashboard', authenticateToken, async (req, res) => {
     
     // Get comprehensive dashboard data for Sales Directors
     if (req.user.role === 'SALES_DIRECTOR') {
-      // Get total regions
-      const regionsResult = await pool.query('SELECT COUNT(*) as count FROM regions WHERE "isActive" = true');
-      const totalRegions = parseInt(regionsResult.rows[0].count) || 0;
+      const { companyId, includeAllCompanies } = resolveCompanyContext(req);
+      const companyParams = includeAllCompanies ? [] : [companyId];
+      const companyFilter = includeAllCompanies ? '' : ' AND r."companyId" = $1';
+      const userCompanyFilter = includeAllCompanies ? '' : ' AND u."companyId" = $1';
+      const evaluationCompanyFilter = includeAllCompanies ? '' : ' AND e."companyId" = $1';
+      const evaluationParams = companyParams.slice();
       
+      // Get total regions
+      const regionsResult = await pool.query(
+        `SELECT COUNT(*) as count FROM regions r WHERE r."isActive" = true${companyFilter}`,
+        companyParams
+      );
+      const totalRegions = parseInt(regionsResult.rows[0].count) || 0;
+
       // Get total team members (all active users)
-      const usersResult = await pool.query('SELECT COUNT(*) as count FROM users WHERE "isActive" = true');
+      const usersResult = await pool.query(
+        `SELECT COUNT(*) as count FROM users u WHERE u."isActive" = true${userCompanyFilter}`,
+        companyParams
+      );
       const totalTeamMembers = parseInt(usersResult.rows[0].count) || 0;
+
+      // Base evaluation query parts
+      const evaluationJoins = `
+        FROM evaluations e
+        LEFT JOIN users sp ON sp.id = e."salespersonId"
+        LEFT JOIN users mg ON mg.id = e."managerId"
+        WHERE sp."isActive" = true
+          AND mg."isActive" = true
+          AND sp."companyId" = e."companyId"
+          AND mg."companyId" = e."companyId"
+          ${evaluationCompanyFilter}
+      `;
       
       // Get total evaluations
-      const evaluationsResult = await pool.query('SELECT COUNT(*) as count FROM evaluations');
+      const evaluationsResult = await pool.query(
+        `SELECT COUNT(DISTINCT e.id) as count ${evaluationJoins}`,
+        evaluationParams
+      );
       const totalEvaluations = parseInt(evaluationsResult.rows[0].count) || 0;
       
       // Get average performance (average of all evaluation scores)
-      const avgScoreResult = await pool.query('SELECT AVG("overallScore") as avg_score FROM evaluations WHERE "overallScore" IS NOT NULL');
+      const avgScoreResult = await pool.query(
+        `SELECT AVG(e."overallScore") as avg_score ${evaluationJoins} AND e."overallScore" IS NOT NULL`,
+        evaluationParams
+      );
       const averagePerformance = avgScoreResult.rows[0].avg_score ? 
         Math.round((parseFloat(avgScoreResult.rows[0].avg_score) / 4) * 100) : 0;
       
       // Get evaluations completed this month
       const thisMonthResult = await pool.query(`
-        SELECT COUNT(*) as count FROM evaluations 
-        WHERE DATE_TRUNC('month', "createdAt") = DATE_TRUNC('month', CURRENT_DATE)
-      `);
+        SELECT COUNT(DISTINCT e.id) as count
+        ${evaluationJoins}
+        AND DATE_TRUNC('month', e."createdAt") = DATE_TRUNC('month', CURRENT_DATE)
+      `, evaluationParams);
       const evaluationsCompleted = parseInt(thisMonthResult.rows[0].count) || 0;
       
       // Get average score (1-4 scale)
@@ -1870,9 +2228,14 @@ app.get('/analytics/team', authenticateToken, (req, res) => {
 
 // Helper functions
 function calculateOverallScore(items) {
-  if (!items || items.length === 0) return 0;
-  const totalScore = items.reduce((sum, item) => sum + (item.rating || item.score || 0), 0);
-  return Math.round((totalScore / items.length) * 100) / 100;
+  if (!items || items.length === 0) return null; // Return null instead of 0 for invalid data
+  const validItems = items.filter(item => {
+    const score = item.rating || item.score;
+    return score && score >= 1 && score <= 4;
+  });
+  if (validItems.length === 0) return null; // No valid items
+  const totalScore = validItems.reduce((sum, item) => sum + (item.rating || item.score), 0);
+  return Math.round((totalScore / validItems.length) * 100) / 100;
 }
 
 function getBehaviorItemName(itemId) {
@@ -2054,6 +2417,7 @@ app.listen(PORT, () => {
   console.log('  GET /analytics/dashboard - Get dashboard analytics (requires auth)');
   console.log('  GET /analytics/team - Get team analytics (requires auth)');
   console.log('  GET /analytics/director-dashboard - Get Sales Director dashboard analytics (requires auth)');
+  console.log('  GET /public-admin/companies - Get companies (requires auth)');
   console.log('  GET /public-admin/regions - Get all regions (requires auth)');
   console.log('  POST /public-admin/regions - Create new region (requires ADMIN)');
   console.log('  PUT /public-admin/regions/:id - Update region name (requires ADMIN)');
@@ -2076,6 +2440,11 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
     console.log('📊 Sales Director dashboard request from:', req.user.email);
 
     const { userCol, teamCol } = await getUserTeamsColumns(pool);
+    const { companyId, includeAllCompanies } = resolveCompanyContext(req);
+    const queryParams = includeAllCompanies ? [] : [companyId];
+    const companyFilter = includeAllCompanies ? '' : ' AND e."companyId" = $1';
+    const regionalManagerFilter = includeAllCompanies ? '' : ' AND rm."companyId" = $1';
+    const managerCompanyFilter = includeAllCompanies ? '' : ' AND mg."companyId" = $1';
 
     // Get regional execution performance (salespeople evaluations by sales leads)
     const regionalExecutionQuery = `
@@ -2095,6 +2464,11 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
       WHERE e."overallScore" IS NOT NULL
         AND sp.role = 'SALESPERSON'
         AND mg.role = 'SALES_LEAD'
+        ${companyFilter}
+        AND sp."companyId" = e."companyId"
+        AND mg."companyId" = e."companyId"
+        AND sp."isActive" = true
+        AND mg."isActive" = true
       GROUP BY t."regionId", r.name
       ORDER BY avg_execution_score DESC
     `;
@@ -2117,12 +2491,17 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
       WHERE e."overallScore" IS NOT NULL
         AND sp.role = 'SALES_LEAD'
         AND mg.role IN ('REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER')
+        ${companyFilter}
+        AND sp."companyId" = e."companyId"
+        AND mg."companyId" = e."companyId"
+        AND sp."isActive" = true
+        AND mg."isActive" = true
       GROUP BY t."regionId", r.name
       ORDER BY avg_coaching_score DESC
     `;
 
-    const regionalExecutionResult = await pool.query(regionalExecutionQuery);
-    const regionalCoachingResult = await pool.query(regionalCoachingQuery);
+    const regionalExecutionResult = await pool.query(regionalExecutionQuery, queryParams);
+    const regionalCoachingResult = await pool.query(regionalCoachingQuery, queryParams);
     
     // Get salespeople execution performance (evaluations OF salespeople BY sales leads)
     const salespeopleExecutionQuery = `
@@ -2130,7 +2509,7 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
         mg.id as sales_lead_id,
         mg."displayName" as sales_lead_name,
         mg.email as sales_lead_email,
-        COUNT(e.id) as evaluations_created,
+        COUNT(DISTINCT e.id) as evaluations_created,
         AVG(e."overallScore") as avg_execution_score,
         t."regionId",
         r.name as region_name
@@ -2143,11 +2522,16 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
       WHERE mg.role = 'SALES_LEAD' 
         AND sp.role = 'SALESPERSON'
         AND e."overallScore" IS NOT NULL
+        ${companyFilter}
+        AND sp."companyId" = e."companyId"
+        AND mg."companyId" = e."companyId"
+        AND sp."isActive" = true
+        AND mg."isActive" = true
       GROUP BY mg.id, mg."displayName", mg.email, t."regionId", r.name
       ORDER BY avg_execution_score DESC
     `;
 
-    const salespeopleExecutionResult = await pool.query(salespeopleExecutionQuery);
+    const salespeopleExecutionResult = await pool.query(salespeopleExecutionQuery, queryParams);
 
     // Get sales lead coaching performance (evaluations OF sales leads by regional managers)
     const salesLeadCoachingQuery = `
@@ -2157,7 +2541,7 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
         sp.email as sales_lead_email,
         mg.id as regional_manager_id,
         mg."displayName" as regional_manager_name,
-        COUNT(e.id) as coaching_evaluations_received,
+        COUNT(DISTINCT e.id) as coaching_evaluations_received,
         AVG(e."overallScore") as avg_coaching_score,
         t."regionId",
         r.name as region_name
@@ -2170,11 +2554,16 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
       WHERE sp.role = 'SALES_LEAD' 
         AND mg.role IN ('REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER')
         AND e."overallScore" IS NOT NULL
+        ${companyFilter}
+        AND sp."companyId" = e."companyId"
+        AND mg."companyId" = e."companyId"
+        AND sp."isActive" = true
+        AND mg."isActive" = true
       GROUP BY sp.id, sp."displayName", sp.email, mg.id, mg."displayName", t."regionId", r.name
       ORDER BY avg_coaching_score DESC
     `;
 
-    const salesLeadCoachingResult = await pool.query(salesLeadCoachingQuery);
+    const salesLeadCoachingResult = await pool.query(salesLeadCoachingQuery, queryParams);
 
     // Get overall company execution metrics (salespeople evaluations)
     const companyExecutionMetricsQuery = `
@@ -2189,6 +2578,11 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
       WHERE e."overallScore" IS NOT NULL
         AND sp.role = 'SALESPERSON'
         AND mg.role = 'SALES_LEAD'
+        ${companyFilter}
+        AND sp."companyId" = e."companyId"
+        AND mg."companyId" = e."companyId"
+        AND sp."isActive" = true
+        AND mg."isActive" = true
     `;
 
     // Get overall company coaching metrics (sales leads evaluations)
@@ -2204,6 +2598,11 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
       WHERE e."overallScore" IS NOT NULL
         AND sp.role = 'SALES_LEAD'
         AND mg.role IN ('REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER')
+        ${companyFilter}
+        AND sp."companyId" = e."companyId"
+        AND mg."companyId" = e."companyId"
+        AND sp."isActive" = true
+        AND mg."isActive" = true
     `;
 
     // Get Share of Wallet distribution for sales behaviours evaluations (exclude COACHING type)
@@ -2220,6 +2619,11 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
         AND sp.role = 'SALESPERSON'
         AND mg.role = 'SALES_LEAD'
         AND COALESCE("customerType", 'LOW_SHARE') != 'COACHING'
+        ${companyFilter}
+        AND sp."companyId" = e."companyId"
+        AND mg."companyId" = e."companyId"
+        AND sp."isActive" = true
+        AND mg."isActive" = true
       GROUP BY COALESCE("customerType", 'LOW_SHARE')
       ORDER BY 
         CASE COALESCE("customerType", 'LOW_SHARE')
@@ -2238,12 +2642,13 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
         COUNT(DISTINCT CASE WHEN role = 'SALESPERSON' THEN id END) as total_salespeople
       FROM users
       WHERE "isActive" = true
+        ${includeAllCompanies ? '' : 'AND "companyId" = $1'}
     `;
 
-    const companyExecutionResult = await pool.query(companyExecutionMetricsQuery);
-    const companyCoachingResult = await pool.query(companyCoachingMetricsQuery);
-    const shareOfWalletResult = await pool.query(shareOfWalletQuery);
-    const userCountsResult = await pool.query(userCountsQuery);
+    const companyExecutionResult = await pool.query(companyExecutionMetricsQuery, queryParams);
+    const companyCoachingResult = await pool.query(companyCoachingMetricsQuery, queryParams);
+    const shareOfWalletResult = await pool.query(shareOfWalletQuery, queryParams);
+    const userCountsResult = await pool.query(userCountsQuery, queryParams);
 
     // Get recent execution trends (last 30 days)
     const executionTrendsQuery = `
@@ -2258,6 +2663,9 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
         AND e."overallScore" IS NOT NULL
         AND sp.role = 'SALESPERSON'
         AND mg.role = 'SALES_LEAD'
+        ${companyFilter}
+        AND sp."companyId" = e."companyId"
+        AND mg."companyId" = e."companyId"
       GROUP BY DATE(e."createdAt")
       ORDER BY evaluation_date DESC
       LIMIT 30
@@ -2276,13 +2684,16 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
         AND e."overallScore" IS NOT NULL
         AND sp.role = 'SALES_LEAD'
         AND mg.role IN ('REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER')
+        ${companyFilter}
+        AND sp."companyId" = e."companyId"
+        AND mg."companyId" = e."companyId"
       GROUP BY DATE(e."createdAt")
       ORDER BY evaluation_date DESC
       LIMIT 30
     `;
 
-    const executionTrendsResult = await pool.query(executionTrendsQuery);
-    const coachingTrendsResult = await pool.query(coachingTrendsQuery);
+    const executionTrendsResult = await pool.query(executionTrendsQuery, queryParams);
+    const coachingTrendsResult = await pool.query(coachingTrendsQuery, queryParams);
 
     // Get regional managers execution metrics (sales behaviours performance by regional manager)
     // This aggregates all sales behaviours evaluations done by sales leads under each regional manager
@@ -2309,6 +2720,10 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
       WHERE rm.role IN ('REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER')
         AND rm."isActive" = true
         AND e."overallScore" IS NOT NULL
+        ${companyFilter}
+        ${regionalManagerFilter}
+        AND sl."companyId" = e."companyId"
+        AND COALESCE(sp."companyId", e."companyId") = e."companyId"
       GROUP BY rm.id, rm."displayName", rm.email, t."regionId", r.name
       ORDER BY avg_execution_score DESC
     `;
@@ -2333,12 +2748,17 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
       WHERE e."overallScore" IS NOT NULL
         AND sp.role = 'SALES_LEAD'
         AND mg.role IN ('REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER')
+        ${companyFilter}
+        ${managerCompanyFilter}
+        AND sp."companyId" = e."companyId"
+        AND sp."isActive" = true
+        AND mg."isActive" = true
       GROUP BY mg.id, mg."displayName", mg.email, t."regionId", r.name
       ORDER BY avg_coaching_score DESC
     `;
 
-    const regionalExecutionMetricsResult = await pool.query(regionalExecutionMetricsQuery);
-    const regionalCoachingMetricsResult = await pool.query(regionalCoachingMetricsQuery);
+    const regionalExecutionMetricsResult = await pool.query(regionalExecutionMetricsQuery, queryParams);
+    const regionalCoachingMetricsResult = await pool.query(regionalCoachingMetricsQuery, queryParams);
 
     const dashboardData = {
       // Regional execution performance (salespeople evaluations by sales leads)
@@ -2469,13 +2889,323 @@ app.get('/analytics/director-dashboard', authenticateToken, async (req, res) => 
 });
 
 // Additional admin panel endpoints
+app.get('/public-admin/companies', authenticateToken, async (req, res) => {
+  try {
+    if (req.user?.role === 'SUPER_ADMIN') {
+      const result = await pool.query(`
+        SELECT id, name, slug, "isActive", "createdAt", "updatedAt"
+        FROM companies
+        ORDER BY name
+      `);
+      return res.json(result.rows);
+    }
+
+    const companyId = req.user?.companyId || DEFAULT_COMPANY_ID;
+    const result = await pool.query(`
+      SELECT id, name, slug, "isActive", "createdAt", "updatedAt"
+      FROM companies
+      WHERE id = $1
+    `, [companyId]);
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching companies:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/public-admin/companies', authenticateToken, async (req, res) => {
+  try {
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ error: 'Only super administrators can create companies' });
+    }
+
+    const body = typeof req.body === 'object' && req.body !== null ? req.body : {};
+    const rawId = typeof body.id === 'string' ? body.id : '';
+    const rawName = typeof body.name === 'string' ? body.name : '';
+    const rawSlug = typeof body.slug === 'string' ? body.slug : '';
+    const companyId = normalizeCompanyId(rawId);
+    const name = rawName.trim();
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'Invalid company id. Use letters, numbers, hyphens, or underscores.' });
+    }
+    if (!name) {
+      return res.status(400).json({ error: 'Company name is required.' });
+    }
+
+    const slug =
+      slugifyCompanyName(rawSlug) ||
+      slugifyCompanyName(name) ||
+      companyId.replace(/_/g, '-');
+
+    if (!slug) {
+      return res.status(400).json({ error: 'Unable to derive a slug for the company.' });
+    }
+
+    const isActive = typeof body.isActive === 'boolean' ? body.isActive : true;
+
+    const result = await pool.query(
+      `
+        INSERT INTO companies (id, name, slug, "isActive", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, $4, NOW(), NOW())
+        RETURNING id, name, slug, "isActive", "createdAt", "updatedAt"
+      `,
+      [companyId, name, slug, isActive]
+    );
+
+    return res.status(201).json(result.rows[0]);
+  } catch (error) {
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'A company with this id or slug already exists.' });
+    }
+    console.error('Error creating company:', error);
+    res.status(500).json({ error: 'Failed to create company', details: error.message });
+  }
+});
+
+app.post('/public-admin/companies/:companyId/seed-defaults', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN') {
+    return res.status(403).json({ error: 'Only super administrators can seed company defaults' });
+  }
+
+  const rawCompanyId = typeof req.params.companyId === 'string' ? req.params.companyId.trim() : '';
+  if (!rawCompanyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+
+  try {
+    const companyCheck = await pool.query('SELECT id FROM companies WHERE id = $1', [rawCompanyId]);
+    if (companyCheck.rowCount === 0) {
+      return res.status(404).json({ error: 'Company not found.' });
+    }
+  } catch (error) {
+    console.error('Error verifying company before seeding:', error);
+    return res.status(500).json({ error: 'Failed to verify company', details: error.message });
+  }
+
+  const client = await pool.connect();
+  const quoteIdentifier = (identifier) => `"${identifier.replace(/"/g, '""')}"`;
+  const getTableColumns = async (tableName) => {
+    const { rows } = await client.query(
+      `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1
+      `,
+      [tableName]
+    );
+    return rows.map((row) => row.column_name);
+  };
+  const detectColumn = (columns, candidates) => {
+    for (const candidate of candidates) {
+      if (columns.includes(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  };
+
+  let transactionStarted = false;
+
+  try {
+    const categoryColumns = await getTableColumns('behavior_categories');
+    const itemColumns = await getTableColumns('behavior_items');
+
+    const categoryCompanyColumn = detectColumn(categoryColumns, ['companyId', 'company_id']);
+    const itemCompanyColumn = detectColumn(itemColumns, ['companyId', 'company_id']);
+    const itemCategoryColumn = detectColumn(itemColumns, ['categoryId', 'category_id']);
+
+    if (!categoryCompanyColumn || !itemCategoryColumn) {
+      return res.status(200).json({
+        message: 'Behavior templates are global in the current schema. No seeding required.'
+      });
+    }
+
+    const existingCategoriesResult = await client.query(
+      `SELECT COUNT(*)::int AS count FROM behavior_categories WHERE ${quoteIdentifier(categoryCompanyColumn)} = $1`,
+      [rawCompanyId]
+    );
+
+    if (existingCategoriesResult.rows[0].count > 0) {
+      const existingItemsResult = await client.query(
+        `
+          SELECT COUNT(*)::int AS count
+          FROM behavior_items
+          WHERE ${quoteIdentifier(itemCategoryColumn)} IN (
+            SELECT id FROM behavior_categories WHERE ${quoteIdentifier(categoryCompanyColumn)} = $1
+          )
+        `,
+        [rawCompanyId]
+      );
+
+      return res.json({
+        message: 'Company already has behavior templates; no action taken.',
+        categories: existingCategoriesResult.rows[0].count,
+        items: existingItemsResult.rows[0].count
+      });
+    }
+
+    const templateCategoriesResult = await client.query(
+      `
+        SELECT *
+        FROM behavior_categories
+        WHERE ${quoteIdentifier(categoryCompanyColumn)} = $1
+        ORDER BY "order"
+      `,
+      [DEFAULT_COMPANY_ID]
+    );
+
+    if (templateCategoriesResult.rowCount === 0) {
+      return res.status(400).json({
+        error: 'No template categories available to seed from the default company.'
+      });
+    }
+
+    await client.query('BEGIN');
+    transactionStarted = true;
+
+    const idMap = new Map();
+    let categoriesInserted = 0;
+    let itemsInserted = 0;
+
+    for (const category of templateCategoriesResult.rows) {
+      const newCategoryId = crypto.randomUUID();
+      idMap.set(category.id, newCategoryId);
+
+      const insertColumns = [];
+      const values = [];
+      const placeholders = [];
+      let paramIndex = 1;
+
+      const pushValue = (column, value) => {
+        insertColumns.push(quoteIdentifier(column));
+        values.push(value);
+        placeholders.push(`$${paramIndex++}`);
+      };
+
+      pushValue('id', newCategoryId);
+      for (const columnName of categoryColumns) {
+        if (
+          columnName === 'id' ||
+          columnName === categoryCompanyColumn ||
+          columnName === 'createdAt' ||
+          columnName === 'updatedAt'
+        ) {
+          continue;
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(category, columnName)) {
+          continue;
+        }
+
+        pushValue(columnName, category[columnName]);
+      }
+
+      if (categoryColumns.includes('createdAt')) {
+        pushValue('createdAt', new Date());
+      }
+      if (categoryColumns.includes('updatedAt')) {
+        pushValue('updatedAt', new Date());
+      }
+      pushValue(categoryCompanyColumn, rawCompanyId);
+
+      const insertSql = `INSERT INTO behavior_categories (${insertColumns.join(', ')}) VALUES (${placeholders.join(', ')})`;
+      await client.query(insertSql, values);
+      categoriesInserted += 1;
+    }
+
+    for (const [sourceCategoryId, targetCategoryId] of idMap.entries()) {
+      const itemsResult = await client.query(
+        `SELECT * FROM behavior_items WHERE ${quoteIdentifier(itemCategoryColumn)} = $1`,
+        [sourceCategoryId]
+      );
+
+      for (const item of itemsResult.rows) {
+        const newItemId = crypto.randomUUID();
+
+        const insertColumns = [];
+        const values = [];
+        const placeholders = [];
+        let paramIndex = 1;
+
+        const pushValue = (column, value) => {
+          insertColumns.push(quoteIdentifier(column));
+          values.push(value);
+          placeholders.push(`$${paramIndex++}`);
+        };
+
+        pushValue('id', newItemId);
+        for (const columnName of itemColumns) {
+          if (
+            columnName === 'id' ||
+            columnName === itemCategoryColumn ||
+            columnName === itemCompanyColumn ||
+            columnName === 'createdAt' ||
+            columnName === 'updatedAt'
+          ) {
+            continue;
+          }
+
+          if (!Object.prototype.hasOwnProperty.call(item, columnName)) {
+            continue;
+          }
+
+          pushValue(columnName, item[columnName]);
+        }
+
+        pushValue(itemCategoryColumn, targetCategoryId);
+        if (itemColumns.includes('createdAt')) {
+          pushValue('createdAt', new Date());
+        }
+        if (itemColumns.includes('updatedAt')) {
+          pushValue('updatedAt', new Date());
+        }
+        if (itemCompanyColumn) {
+          pushValue(itemCompanyColumn, rawCompanyId);
+        }
+
+        const insertSql = `INSERT INTO behavior_items (${insertColumns.join(', ')}) VALUES (${placeholders.join(', ')})`;
+        await client.query(insertSql, values);
+        itemsInserted += 1;
+      }
+    }
+
+    await client.query('COMMIT');
+    transactionStarted = false;
+
+    return res.json({
+      message: 'Default behavior templates seeded successfully.',
+      categories: categoriesInserted,
+      items: itemsInserted
+    });
+  } catch (error) {
+    if (transactionStarted) {
+      await client.query('ROLLBACK').catch((rollbackError) => {
+        console.error('Error rolling back seed transaction:', rollbackError);
+      });
+    }
+    console.error('Error seeding company defaults:', error);
+    return res.status(500).json({ error: 'Failed to seed company defaults', details: error.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.get('/public-admin/regions', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT id, name, "createdAt", "updatedAt"
+    const { companyId, includeAllCompanies } = resolveCompanyContext(req);
+    let query = `
+      SELECT id, name, "companyId", "createdAt", "updatedAt"
       FROM regions
-      ORDER BY name
-    `);
+    `;
+    const params = [];
+    if (!includeAllCompanies) {
+      params.push(companyId);
+      query += `WHERE "companyId" = $${params.length}\n`;
+    }
+    query += 'ORDER BY name';
+
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching regions:', error);
@@ -2614,10 +3344,13 @@ app.post('/public-admin/users', authenticateToken, async (req, res) => {
     const { displayName, email, password, role } = req.body;
     const bcrypt = require('bcrypt');
     const hashedPassword = await bcrypt.hash(password, 10);
+    const { companyId: contextCompanyId } = resolveCompanyContext(req);
+    const requestedCompanyId = typeof req.body?.companyId === 'string' ? req.body.companyId.trim() : '';
+    const targetCompanyId = requestedCompanyId || contextCompanyId || DEFAULT_COMPANY_ID;
     
     const result = await pool.query(
-      'INSERT INTO users (id, email, password, "displayName", role, "isActive", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING id, email, "displayName", role, "isActive"',
-      [crypto.randomUUID(), email, hashedPassword, displayName, role, true]
+      'INSERT INTO users (id, email, password, "displayName", role, "companyId", "isActive", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING id, email, "displayName", role, "isActive", "companyId"',
+      [crypto.randomUUID(), email, hashedPassword, displayName, role, targetCompanyId, true]
     );
     
     res.json(result.rows[0]);
@@ -2628,14 +3361,133 @@ app.post('/public-admin/users', authenticateToken, async (req, res) => {
 });
 
 app.put('/public-admin/users/:id', authenticateToken, async (req, res) => {
+  console.log('🚨 [UPDATE USER] ENDPOINT CALLED - Line 3363');
   try {
     const { id } = req.params;
     const { displayName, email, role, isActive } = req.body;
     
-    const result = await pool.query(
-      'UPDATE users SET "displayName" = $1, email = $2, role = $3, "isActive" = $4, "updatedAt" = NOW() WHERE id = $5 RETURNING id, email, "displayName", role, "isActive"',
-      [displayName, email, role, isActive, id]
-    );
+    console.log('🔵 [UPDATE USER] Request received:', { 
+      id, 
+      displayName, 
+      email, 
+      role, 
+      isActive,
+      isActiveType: typeof isActive,
+      bodyKeys: Object.keys(req.body || {})
+    });
+    
+    // Validate required fields
+    if (!displayName || !email || !role) {
+      return res.status(400).json({ error: 'Missing required fields: displayName, email, role' });
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    
+    // Check if user exists and get companyId
+    // Try to get companyId, but handle if column doesn't exist
+    let userCheck;
+    let existingUser;
+    let companyId = DEFAULT_COMPANY_ID;
+    
+    try {
+      userCheck = await pool.query('SELECT id, email, "isActive", "companyId" FROM users WHERE id = $1', [id]);
+    } catch (colError) {
+      // If companyId column doesn't exist, try without it
+      if (colError.code === '42703') { // undefined_column
+        userCheck = await pool.query('SELECT id, email, "isActive" FROM users WHERE id = $1', [id]);
+      } else {
+        throw colError;
+      }
+    }
+    
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    existingUser = userCheck.rows[0];
+    companyId = existingUser.companyId || DEFAULT_COMPANY_ID;
+    
+    // Check if email is being changed and if it's already taken by another user
+    if (email && email !== existingUser.email) {
+      let emailCheck;
+      try {
+        // Try with companyId check first
+        emailCheck = await pool.query(
+          'SELECT id FROM users WHERE email = $1 AND id != $2 AND "companyId" = $3',
+          [email, id, companyId]
+        );
+      } catch (colError) {
+        // If companyId column doesn't exist, check without it
+        if (colError.code === '42703') {
+          emailCheck = await pool.query(
+            'SELECT id FROM users WHERE email = $1 AND id != $2',
+            [email, id]
+          );
+        } else {
+          throw colError;
+        }
+      }
+      
+      if (emailCheck.rows.length > 0) {
+        return res.status(409).json({ error: 'Email already taken by another user' });
+      }
+    }
+    
+    // Determine isActive value - use existing value if not provided, default to true if null/undefined
+    let activeValue;
+    if (isActive !== undefined && isActive !== null) {
+      activeValue = isActive === true || isActive === 'true' || isActive === 1;
+    } else {
+      // Use existing value, but default to true if it's null/undefined
+      // Handle case where existingUser.isActive might be null in database
+      const existingIsActive = existingUser.isActive;
+      if (existingIsActive === null || existingIsActive === undefined) {
+        activeValue = true; // Default to true if null/undefined
+      } else {
+        activeValue = existingIsActive;
+      }
+    }
+    // Ensure it's a boolean, not null - this is critical!
+    // Convert to boolean explicitly, defaulting to true if null/undefined/false
+    if (activeValue === null || activeValue === undefined) {
+      activeValue = true;
+    } else {
+      activeValue = Boolean(activeValue);
+    }
+    
+    console.log('🟢 [UPDATE USER] isActive processing:', { 
+      provided: isActive, 
+      providedType: typeof isActive,
+      existing: existingUser.isActive,
+      existingType: typeof existingUser.isActive,
+      final: activeValue,
+      finalType: typeof activeValue,
+      isBoolean: activeValue === true || activeValue === false
+    });
+    
+    // Update user - DO NOT change companyId, only update the fields that can be changed
+    let result;
+    try {
+      // Try to include companyId in RETURNING clause, but don't SET it (preserve existing value)
+      result = await pool.query(
+        'UPDATE users SET "displayName" = $1, email = $2, role = $3, "isActive" = $4, "updatedAt" = NOW() WHERE id = $5 RETURNING id, email, "displayName", role, "isActive", "companyId"',
+        [displayName, email, role, activeValue, id]
+      );
+    } catch (updateError) {
+      // If companyId column doesn't exist in RETURNING, try without it
+      if (updateError.code === '42703') {
+        result = await pool.query(
+          'UPDATE users SET "displayName" = $1, email = $2, role = $3, "isActive" = $4, "updatedAt" = NOW() WHERE id = $5 RETURNING id, email, "displayName", role, "isActive"',
+          [displayName, email, role, activeValue, id]
+        );
+      } else {
+        throw updateError;
+      }
+    }
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -2644,7 +3496,30 @@ app.put('/public-admin/users/:id', authenticateToken, async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating user:', error);
-    res.status(500).json({ error: 'Database error' });
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    console.error('Error detail:', error.detail);
+    console.error('Error constraint:', error.constraint);
+    
+    // Handle specific database errors
+    if (error.code === '23505') { // Unique constraint violation
+      return res.status(409).json({ error: 'Email already exists' });
+    }
+    if (error.code === '23503') { // Foreign key constraint violation
+      return res.status(400).json({ error: 'Invalid reference data' });
+    }
+    if (error.code === '23502') { // Not null constraint violation
+      return res.status(400).json({ error: 'Required field is missing', field: error.column });
+    }
+    
+    // Always return error details for debugging
+    res.status(500).json({ 
+      error: 'Database error', 
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      constraint: error.constraint
+    });
   }
 });
 
@@ -3004,8 +3879,9 @@ app.delete('/public-admin/teams/:id', authenticateToken, async (req, res) => {
 
     console.log(`[DELETE TEAM] Deleting team: ${team.rows[0].name}`);
 
-    // Step 2: Delete user_teams memberships using quoted camelCase (from restore SQL)
-    const deleteMemberships = await client.query('DELETE FROM user_teams WHERE "teamId" = $1', [id]);
+    // Step 2: Delete user_teams memberships using detected column names
+    const { teamCol } = await getUserTeamsColumns(client);
+    const deleteMemberships = await client.query(`DELETE FROM user_teams WHERE ${teamCol} = $1`, [id]);
     console.log(`[DELETE TEAM] Deleted ${deleteMemberships.rowCount} memberships`);
 
     // Step 3: Delete the team

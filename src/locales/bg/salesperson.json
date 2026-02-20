@@ -147,6 +147,38 @@
   "Presented product as solution to specific problem": "Представи ли продукта като решение на конкретен проблем",
   "Demonstrated product benefits with concrete examples": "Акцентира ли върху основния приоритет на клиента (цена, качество или доставка)",
   "Proposed test of key products": "Предложи ли тест на ключови продукти",
-  "Agreed on clear next step": "Договори ли ясна следваща стъпка"
+  "Agreed on clear next step": "Договори ли ясна следваща стъпка",
+  
+  "Did the salesperson ask about opportunities to improve collaboration with METRO?": "Попита ли клиента за възможности за подобрение в сътрудничеството с МЕТРО?",
+  "Did the salesperson propose specific products (prepared in advance) for the customer to start sourcing from METRO?": "Предложи ли конкретни продукти (след подготовка), които клиентът да започне да взима от МЕТРО?",
+  "Did the salesperson connect the customer's long-term goals with the proposed new products?": "Свърза ли дългосрочните цели на клиента с предложените нови продукти?",
+  "Did the salesperson present a product/service as a sustainable partnership solution with METRO?": "Представи ли продукт или услуга като устойчиво решение в партньорството с МЕТРО?",
+  "Did the salesperson emphasize the customer benefits of adding more products?": "Акцентира ли върху ползите за клиента при добавяне на повече продукти?",
+  "Did the salesperson agree on a next step with a longer-term perspective?": "Договори ли следваща стъпка в по-дългосрочен план?",
+  
+  "highshare_prob1_1": "Не попита",
+  "highshare_prob1_2": "Попита повърхностно, без изслушване",
+  "highshare_prob1_3": "Попита правилно но без дълбочина",
+  "highshare_prob1_4": "Идентифицира ясни възможности",
+  
+  "highshare_prob2_1": "Няма предложение",
+  "highshare_prob2_2": "Общи/неподготвени предложения",
+  "highshare_prob2_3": "Подготвени и релевантни предложения",
+  "highshare_prob2_4": "Стратегически предложения, свързани с клиента",
+  
+  "highshare_prob3_1": "Без връзка",
+  "highshare_prob3_2": "Частична връзка",
+  "highshare_prob3_3": "Ясна връзка с ползите",
+  "highshare_prob3_4": "Убедителна стратегическа връзка",
+  
+  "highshare_prop1_1": "Без представяне",
+  "highshare_prop1_2": "Повърхностно",
+  "highshare_prop1_3": "Ясно позиционирана стойност",
+  "highshare_prop1_4": "Силно и доказано партньорско решение",
+  
+  "highshare_prop2_1": "Без ползи",
+  "highshare_prop2_2": "Общи ползи",
+  "highshare_prop2_3": "Конкретни и релевантни ползи",
+  "highshare_prop2_4": "Персонализирани и мотивиращи ползи"
 }
 

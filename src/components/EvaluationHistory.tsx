@@ -3,6 +3,29 @@ import { apiService, Evaluation } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 
+const coachingCategoryKeys = new Set([
+  'observationIntervention',
+  'creatingCoachingEnvironment',
+  'qualityAnalysisFeedback',
+  'translatingIntoAction'
+]);
+
+const coachingItemKeys = new Set([
+  'letSalespersonLead',
+  'providedSupport',
+  'steppedInValue',
+  'activelyListened',
+  'calmAtmosphere',
+  'askedSelfAssessment',
+  'listenedAttentively',
+  'startedPositive',
+  'concreteExamples',
+  'identifiedImprovement',
+  'setClearTasks',
+  'reachedAgreement',
+  'encouragedGoal'
+]);
+
 const EvaluationHistory: React.FC = () => {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -175,10 +198,10 @@ const EvaluationHistory: React.FC = () => {
   const getCategoryTranslationKey = (categoryName: string): string => {
     const categoryMap: Record<string, string> = {
       // Coaching categories
-      'Observation & Intervention During Client Meeting': 'cluster1',
-      'Creating Coaching Environment': 'cluster2',
-      'Quality of Analysis & Feedback': 'cluster3',
-      'Translating Into Action': 'cluster4',
+      'Observation & Intervention During Client Meeting': 'observationIntervention',
+      'Creating Coaching Environment': 'creatingCoachingEnvironment',
+      'Quality of Analysis & Feedback': 'qualityAnalysisFeedback',
+      'Translating Into Action': 'translatingIntoAction',
       
       // Sales behavior categories - simple format
       'preparation': 'preparation',
@@ -259,6 +282,20 @@ const EvaluationHistory: React.FC = () => {
       'Closing approach': 'sales:closingApproach'
     };
     return itemMap[itemName] || itemName;
+  };
+
+  const translateCategoryName = (categoryName: string) => {
+    const key = getCategoryTranslationKey(categoryName);
+    const namespace = coachingCategoryKeys.has(key) ? 'coaching' : 'salesperson';
+    const translated = t(key, { ns: namespace });
+    return translated === key ? categoryName : translated;
+  };
+
+  const translateItemName = (itemName: string) => {
+    const key = getBehaviorItemTranslationKey(itemName);
+    const namespace = coachingItemKeys.has(key) ? 'coaching' : 'salesperson';
+    const translated = t(key, { ns: namespace });
+    return translated === key ? itemName : translated;
   };
 
   // Get unique categories from evaluation items
@@ -420,7 +457,7 @@ const EvaluationHistory: React.FC = () => {
                       className="score-value"
                       style={{ color: getScoreColor(evaluation.overallScore) }}
                     >
-                      {evaluation.overallScore ? `${((evaluation.overallScore / 4) * 100).toFixed(0)}%` : 'N/A'}
+                      {evaluation.overallScore != null ? `${((evaluation.overallScore / 4) * 100).toFixed(0)}%` : 'N/A'}
                     </span>
                     <span className="score-label">{t('history.overall')}</span>
                   </div>
@@ -432,7 +469,7 @@ const EvaluationHistory: React.FC = () => {
                     const percentage = ((score / 4) * 100).toFixed(0);
                     return (
                       <div key={categoryName} className="category-score">
-                        <span className="category-name">{t(getCategoryTranslationKey(categoryName), { ns: 'salesperson' })}</span>
+                        <span className="category-name">{translateCategoryName(categoryName)}</span>
                     <span 
                       className="score" 
                           style={{ color: getScoreColor(score) }}
@@ -531,7 +568,7 @@ const EvaluationHistory: React.FC = () => {
                         onClick={() => showCollapsible && toggleCategory(categoryName)}
                         style={{ cursor: showCollapsible ? 'pointer' : 'default' }}
                       >
-                        <h5>{t(getCategoryTranslationKey(categoryName), { ns: 'salesperson' })}</h5>
+                        <h5>{translateCategoryName(categoryName)}</h5>
                         {showCollapsible && (
                           <span className="category-toggle">
                             {isExpanded ? '−' : '+'}
@@ -544,7 +581,7 @@ const EvaluationHistory: React.FC = () => {
                             const itemName = getLegacyItemName(item.behaviorItemId);
                             return (
                             <div key={item.id} className="item-detail">
-                              <div className="item-name">{t(getBehaviorItemTranslationKey(itemName), { ns: 'salesperson' })}</div>
+                              <div className="item-name">{translateItemName(itemName)}</div>
                               <div className="item-score">
                                 <span className="score">{item.rating}/4</span>
                               </div>

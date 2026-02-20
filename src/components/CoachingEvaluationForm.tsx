@@ -137,25 +137,30 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
       return;
     }
 
-    const allItems = categories.flatMap(c => c.items);
-    const missingScores = allItems.filter(item => !scores[item.id]);
+    const allItems = categories.flatMap(category => category.items);
+    
+    // Check for missing or invalid scores (must be between 1 and 4)
+    const missingScores = allItems.filter(item => {
+      const score = scores[item.id];
+      return !score || score < 1 || score > 4;
+    });
     
     if (missingScores.length > 0) {
-      setError('Please rate all criteria');
+      setError('Моля, оценете всички критерии с оценка между 1 и 4');
       return;
     }
+
+    // All items have valid scores, create evaluation items
+    const evaluationItems = allItems.map(item => ({
+      behaviorItemId: item.id, // Use actual item ID from database
+      rating: scores[item.id], // Backend expects 'rating' not 'score'
+      comment: examples[item.id] || ''
+    }));
 
     setIsSubmitting(true);
     setError('');
 
     try {
-      const evaluationItems = categories.flatMap(category => 
-        category.items.map(item => ({
-          behaviorItemId: item.id, // Use actual item ID from database
-          rating: scores[item.id], // Backend expects 'rating' not 'score'
-          comment: examples[item.id] || ''
-        }))
-      );
 
       const evaluationData = {
         salespersonId: selectedUser,
@@ -179,8 +184,6 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
       } catch (onlineError) {
         console.error('Evaluation submission failed:', onlineError);
         setError(onlineError instanceof Error ? onlineError.message : t('common:evaluation.error'));
-        setIsSubmitting(false);
-        return;
       }
     } catch (err) {
       setError(t('common:evaluation.error'));

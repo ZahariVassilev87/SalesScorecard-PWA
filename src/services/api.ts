@@ -474,11 +474,21 @@ class ApiService {
     }
   }
 
-  async getBehaviorCategories(): Promise<BehaviorCategory[]> {
+  async getBehaviorCategories(customerType?: string): Promise<BehaviorCategory[]> {
     try {
-      return await this.request<BehaviorCategory[]>('/scoring/categories');
+      const endpoint = customerType 
+        ? `/scoring/categories?customerType=${encodeURIComponent(customerType)}`
+        : '/scoring/categories';
+      console.log('🔍 [API] getBehaviorCategories called with customerType:', customerType);
+      console.log('🔍 [API] Endpoint:', endpoint);
+      const result = await this.request<BehaviorCategory[]>(endpoint);
+      console.log('✅ [API] getBehaviorCategories returned', result.length, 'categories');
+      if (result.length > 0) {
+        console.log('🔍 [API] First category:', result[0].name);
+      }
+      return result;
     } catch (error) {
-      console.error('Failed to load behavior categories:', error);
+      console.error('❌ [API] Failed to load behavior categories:', error);
       // Return empty array if API fails
       return [];
     }

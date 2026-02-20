@@ -31,7 +31,7 @@ All admin panel issues are now fixed:
    - Fixed all queries to use correct column names
 
 3. **Delete Team Endpoint**
-   - Uses hardcoded `"userId"`, `"teamId"` (correct format)
+   - Uses dynamic column detection via `getUserTeamsColumns()` (supports `"teamId"` / `team_id`)
    - Validates dependencies before deletion
    - Clear error messages
 

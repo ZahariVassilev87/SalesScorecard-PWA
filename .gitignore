@@ -130,3 +130,20 @@ lighthouse-report.json
 
 # Bundle analyzer
 bundle-report.html
+
+# Backups and temporary files
+SalesScorecard-Backup-*/
+backups/
+*.tar.gz
+*.backup
+temp-repo/
+SalesScorecard-App/
+
+# Build artifacts (admin panel)
+production-backend/admin-panel/build/
+**/admin-panel/build/
+
+# Environment files (except examples)
+.env.backup-notification
+.env.*
+!.env.example
