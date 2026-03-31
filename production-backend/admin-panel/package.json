@@ -43,5 +43,5 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "https://api.instorm.io"
+  "proxy": "http://localhost:3001"
 }

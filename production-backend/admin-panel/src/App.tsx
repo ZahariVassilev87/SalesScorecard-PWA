@@ -36,7 +36,10 @@ interface LoginResponse {
 }
 
 // API Service
-const API_BASE = 'https://api.instorm.io';
+const API_BASE =
+  process.env.REACT_APP_ADMIN_API_BASE_URL ||
+  process.env.REACT_APP_API_BASE_URL ||
+  window.location.origin;
 
 class ApiService {
   private token: string | null = null;

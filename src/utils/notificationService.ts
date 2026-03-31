@@ -1,7 +1,7 @@
 // Notification service for push notifications and browser notifications
 // Handles permission requests, subscription management, and notification display
 
-const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://api.scorecard.instorm.io';
+const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001';
 
 export interface NotificationPermission {
   granted: boolean;

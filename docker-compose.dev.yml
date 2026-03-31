@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # ─── PostgreSQL Database ────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: scorecard-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: salesscorecard_dev
+      POSTGRES_USER: scorecard
+      POSTGRES_PASSWORD: scorecard_dev_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - scorecard_dev_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scorecard -d salesscorecard_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Backend API (production code, dev config) ──────────────────────────────
+  backend:
+    build:
+      context: ./production-backend
+      dockerfile: Dockerfile
+    container_name: scorecard-backend-dev
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    environment:
+      DATABASE_URL: postgres://scorecard:scorecard_dev_pass@db:5432/salesscorecard_dev
+      NODE_ENV: development
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  scorecard_dev_db:
+    name: scorecard_dev_db

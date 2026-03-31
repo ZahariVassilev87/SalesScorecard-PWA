@@ -166,17 +166,24 @@ app.post('/admin/run-migrations', authenticateToken, async (req, res) => {
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_for_access_tokens';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your_refresh_secret_key_for_refresh_tokens';
 
-// CORS configuration for production
+const defaultAllowedOrigins = [
+  'https://d2tuhgmig1r5ut.cloudfront.net',
+  'https://scorecard.instorm.io',
+  'https://api.scorecard.instorm.io',
+  'https://api.instorm.io',
+  'https://instorm.io',
+  'https://www.instorm.io',
+  'http://localhost:3000'
+];
+
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+// CORS supports strict override via ALLOWED_ORIGINS and safe defaults otherwise.
 app.use(cors({
-  origin: [
-    'https://d2tuhgmig1r5ut.cloudfront.net', // CloudFront domain
-    'https://scorecard.instorm.io', // Scorecard domain
-    'https://api.scorecard.instorm.io', // API domain
-    'https://api.instorm.io', // Legacy API/hosted admin domain
-    'https://instorm.io', // Main domain
-    'https://www.instorm.io', // WWW domain
-    'http://localhost:3000' // Development
-  ],
+  origin: allowedOrigins.length > 0 ? allowedOrigins : defaultAllowedOrigins,
   credentials: true
 }));
 

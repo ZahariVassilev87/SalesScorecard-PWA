@@ -19,6 +19,8 @@ export interface OfflineUserUpdate {
   status: 'pending' | 'syncing' | 'synced' | 'failed';
 }
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001';
+
 class OfflineService {
   private isOnline: boolean = navigator.onLine;
   private syncInProgress: boolean = false;
@@ -126,7 +128,7 @@ class OfflineService {
       }
 
       // Use a lightweight endpoint to check token validity
-      const response = await fetch('https://api.scorecard.instorm.io/auth/verify', {
+      const response = await fetch(`${API_BASE}/auth/verify`, {
         method: 'HEAD',
         headers: {
           'Authorization': `Bearer ${currentToken}`
@@ -412,7 +414,7 @@ class OfflineService {
       console.log('🔍 Using current token for sync');
       console.log('🔍 Token preview:', currentToken.substring(0, 50) + '...');
       
-      let response = await fetch('https://api.scorecard.instorm.io/evaluations', {
+      let response = await fetch(`${API_BASE}/evaluations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -438,7 +440,7 @@ class OfflineService {
           
           // Test if current token works with a simple API call
           try {
-            const testResponse = await fetch('https://api.scorecard.instorm.io/organizations/salespeople', {
+            const testResponse = await fetch(`${API_BASE}/organizations/salespeople`, {
               method: 'GET',
               headers: {
                 'Content-Type': 'application/json',
@@ -457,7 +459,7 @@ class OfflineService {
           
           // Test if current token works with evaluations endpoint (empty POST)
           try {
-            const evalTestResponse = await fetch('https://api.scorecard.instorm.io/evaluations', {
+            const evalTestResponse = await fetch(`${API_BASE}/evaluations`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -479,7 +481,7 @@ class OfflineService {
             console.log('🔍 Evaluations endpoint test failed:', evalTestError);
           }
           
-          response = await fetch('https://api.scorecard.instorm.io/evaluations', {
+          response = await fetch(`${API_BASE}/evaluations`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

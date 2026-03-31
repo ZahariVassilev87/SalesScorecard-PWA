@@ -1,5 +1,5 @@
 // API Service for Sales Scorecard PWA
-const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://api.scorecard.instorm.io';
+const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001';
 
 export interface User {
   id: string;
