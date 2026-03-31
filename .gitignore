@@ -138,6 +138,7 @@ backups/
 *.backup
 temp-repo/
 SalesScorecard-App/
+/SalesScorecard-PWA/
 
 # Build artifacts (admin panel and other builds)
 production-backend/admin-panel/build/
