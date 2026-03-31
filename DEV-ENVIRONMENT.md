@@ -89,6 +89,45 @@ node seed-dev-data.js --reset
 
 ---
 
+## Using real production data safely (DEV only)
+
+This flow lets you test with a copy of production data **without any risk to prod**.
+
+### 1. Create a production backup (as you do today)
+
+- Use the existing backup scripts on the production environment (for example `backup-database.js` or ECS task).
+- Download the resulting `backup-YYYY-MM-DDTHH-MM-SS/backup.sql` file to your local machine.
+
+### 2. Start the DEV environment
+
+```bash
+./start-dev.sh
+```
+
+Make sure:
+- `scorecard-db-dev` is running and healthy.
+- Backend health works: `curl http://localhost:3001/health`.
+
+### 3. Restore the backup into DEV database
+
+```bash
+./restore-backup-to-dev.sh production-backend/backups/backup-2025-11-17T17-42-16/full.sql
+```
+
+What this script does:
+- Connects **only** to the local Docker Postgres container `scorecard-db-dev`.
+- Drops and recreates the `salesscorecard_dev` database inside that container.
+- Applies the dump with `ON_ERROR_STOP=1` (fails fast on SQL errors).
+- Strips incompatible ownership/timeout statements for local compatibility.
+
+What it **never** does:
+- It never connects to the production RDS endpoint.
+- It never uses `DATABASE_URL` for remote connections.
+
+This gives you a DEV backend (`http://localhost:3001`) and PWA (`http://localhost:3000`) running against a copy of production data, fully isolated from the real production system.
+
+---
+
 ## Useful commands
 
 ```bash

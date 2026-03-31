@@ -1,4 +1,6 @@
 // API Service for Sales Scorecard PWA
+import { tokenStorage, userStorage } from '../utils/secureStorage';
+import { handleApiError, logError } from '../utils/errorHandler';
 const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001';
 
 export interface User {
@@ -155,13 +157,14 @@ class ApiService {
     }
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE}${endpoint}`;
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string>),
-    };
+  // Token refresh mechanism
+  async refreshToken(): Promise<boolean> {
+    try {
+      const refreshToken = tokenStorage.getRefreshToken();
+      if (!refreshToken) {
+        console.warn('No refresh token available');
+        return false;
+      }
 
       const response = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
@@ -177,8 +180,7 @@ class ApiService {
       }
 
       const data: RefreshTokenResponse = await response.json();
-      
-      // Update tokens
+
       this.setToken(data.token);
       if (data.refreshToken) {
         tokenStorage.setRefreshToken(data.refreshToken);
@@ -187,10 +189,10 @@ class ApiService {
         tokenStorage.setTokenExpiry(Date.now() + (data.expiresIn * 1000));
       }
 
-      console.log('✅ Token refreshed successfully');
+      console.log('Token refreshed successfully');
       return true;
     } catch (error) {
-      console.error('❌ Token refresh error:', error);
+      console.error('Token refresh error:', error);
       return false;
     }
   }

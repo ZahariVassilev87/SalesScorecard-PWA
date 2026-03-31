@@ -1,8 +1,27 @@
 node_modules
+**/node_modules
 npm-debug.log
 .DS_Store
 .git
 .gitignore
+
+# Large backup artifacts not needed in runtime image
+backups
+**/backups
+*.sql
+*.tar
+*.tar.gz
+*.gz
+
+# Local/dev docs and reports
+*.md
+
+# Admin source/build caches are not needed by backend runtime
+admin-panel/node_modules
+admin-panel/build
+admin-panel/src
+admin-panel/public
+
+# Legacy backup dirs
 SalesScorecard-Backup-*
-SalesScorecard-Backup-20250927-173240
 SalesScorecard-Backup-*/**

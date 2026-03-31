@@ -19,8 +19,11 @@ cd "$SCRIPT_DIR"
 # Load environment variables (Node.js scripts use dotenv, so we don't need to export here)
 # The .env file will be loaded by Node.js scripts using require('dotenv').config()
 
-# Database URL (use from .env or set default)
-DATABASE_URL="${DATABASE_URL:-postgresql://postgres:SalesScorecard2024!@sales-scorecard-db.cvmwi48oaptu.eu-north-1.rds.amazonaws.com:5432/sales_scorecard}"
+# Database URL (must be explicitly provided via env/.env)
+if [ -z "${DATABASE_URL:-}" ] && [ -z "${PRODUCTION_DATABASE_URL:-}" ]; then
+    log "${RED}❌ DATABASE_URL (or PRODUCTION_DATABASE_URL) is not set. Refusing to run.${NC}"
+    exit 1
+fi
 
 # Backup directory
 BACKUP_DIR="$SCRIPT_DIR/backups"

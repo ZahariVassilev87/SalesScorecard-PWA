@@ -9,11 +9,14 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_DATABASE_URL = 'postgresql://postgres:SalesScorecard2024!@sales-scorecard-db.cvmwi48oaptu.eu-north-1.rds.amazonaws.com:5432/sales_scorecard';
 const connectionString =
   process.env.DATABASE_URL ||
-  process.env.PRODUCTION_DATABASE_URL ||
-  DEFAULT_DATABASE_URL;
+  process.env.PRODUCTION_DATABASE_URL;
+
+if (!connectionString) {
+  console.error('❌ Missing DATABASE_URL (or PRODUCTION_DATABASE_URL). Refusing to run backup.');
+  process.exit(1);
+}
 
 const pool = new Pool({
   connectionString,
@@ -103,7 +106,7 @@ async function createBackup() {
     
     const backup = {
       timestamp: new Date().toISOString(),
-      database: process.env.DATABASE_URL ? 'production' : 'unknown',
+      database: 'configured-via-env',
       tables: {}
     };
     
