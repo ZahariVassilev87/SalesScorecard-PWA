@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react';
+import React from 'react';
 import './App.css';
 import './i18n';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -6,10 +6,6 @@ import LoginForm from './components/LoginForm';
 import SalesApp from './components/SalesApp';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
-
-// Lazy load components for better performance
-const LoginForm = lazy(() => import('./components/LoginForm'));
-const SalesApp = lazy(() => import('./components/SalesApp'));
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading, user } = useAuth();

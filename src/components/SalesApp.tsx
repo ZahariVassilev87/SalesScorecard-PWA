@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import Dashboard from './Dashboard';
@@ -13,6 +13,9 @@ import ExportView from './ExportView';
 import TeamManagementView from './TeamManagementView';
 import LanguageSwitcher from './LanguageSwitcher';
 import MobileDebugPanel from './MobileDebugPanel';
+import { offlineService } from '../utils/offlineService';
+import { notificationService } from '../utils/notificationService';
+import { apiService, Company } from '../services/api';
 
 const SalesApp: React.FC = () => {
   const { user, logout } = useAuth();
@@ -25,6 +28,8 @@ const SalesApp: React.FC = () => {
   const hasInitialized = useRef(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => localStorage.getItem('pwaCompanyId') || 'all');
 
   // Save active tab to localStorage whenever it changes
   const handleTabChange = (tab: string) => {
@@ -68,6 +73,10 @@ const SalesApp: React.FC = () => {
 
   const isSalesDirector = (userRole: string) => {
     return userRole === 'SALES_DIRECTOR';
+  };
+
+  const isSuperAdmin = (userRole: string) => {
+    return userRole === 'SUPER_ADMIN';
   };
 
   // Set initial tab based on user role (only if no saved tab exists)
@@ -117,6 +126,21 @@ const SalesApp: React.FC = () => {
     initializeServices();
   }, []);
 
+  useEffect(() => {
+    if (!isSuperAdmin(user?.role || '')) {
+      return;
+    }
+    const loadCompanies = async () => {
+      const list = await apiService.getCompanies();
+      setCompanies(list);
+    };
+    loadCompanies();
+  }, [user?.role]);
+
+  useEffect(() => {
+    apiService.setCompanyContext(selectedCompanyId === 'all' ? null : selectedCompanyId);
+  }, [selectedCompanyId]);
+
   const handleEvaluationSuccess = () => {
     handleTabChange('history');
   };
@@ -137,6 +161,21 @@ const SalesApp: React.FC = () => {
           <h1>🎯 Sales Scorecard</h1>
         </div>
         <div className="header-right">
+          {isSuperAdmin(user?.role || '') && (
+            <select
+              value={selectedCompanyId}
+              onChange={(e) => setSelectedCompanyId(e.target.value)}
+              title="Company context"
+              style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ddd', marginRight: '8px' }}
+            >
+              <option value="all">All Companies</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+          )}
           {/* Performance Dashboard - Admin Only */}
           {user?.role === 'ADMIN' && (
             <button 

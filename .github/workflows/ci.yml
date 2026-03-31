@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  secret-and-artifact-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fail on suspicious secrets/artifacts
+        run: |
+          set -euo pipefail
+
+          # Block obvious secret patterns and accidental dump files.
+          rg -n --hidden -S \
+            -g '!node_modules/**' \
+            -g '!.git/**' \
+            -g '!**/package-lock.json' \
+            -e 'AWS_SECRET_ACCESS_KEY\s*=' \
+            -e 'AWS_ACCESS_KEY_ID\s*=' \
+            -e 'SMTP_PASS\s*=' \
+            -e 'BEGIN (RSA )?PRIVATE KEY' \
+            -e 'postgres(ql)?:\/\/[^ ]+:[^ ]+@' \
+            -e '\.sql$|\.dump$|\.bak$' \
+            . && {
+              echo "Blocked: suspicious secrets/artifacts found in repository."
+              exit 1
+            } || true
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    needs: secret-and-artifact-guard
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build frontend
+        run: CI=false npm run build
+
+  admin-build:
+    runs-on: ubuntu-latest
+    needs: secret-and-artifact-guard
+    defaults:
+      run:
+        working-directory: production-backend/admin-panel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: production-backend/admin-panel/package-lock.json
+
+      - name: Install admin dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build admin panel
+        run: CI=false npm run build
+

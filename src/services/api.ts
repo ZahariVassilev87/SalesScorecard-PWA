@@ -7,9 +7,15 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
-  role: 'ADMIN' | 'SALES_DIRECTOR' | 'REGIONAL_SALES_MANAGER' | 'REGIONAL_MANAGER' | 'SALES_LEAD' | 'SALESPERSON';
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'SALES_DIRECTOR' | 'REGIONAL_SALES_MANAGER' | 'REGIONAL_MANAGER' | 'SALES_LEAD' | 'SALESPERSON';
   isActive: boolean;
   teamId?: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  isActive: boolean;
 }
 
 export interface Team {
@@ -112,6 +118,7 @@ export interface Evaluation {
 
 class ApiService {
   private token: string | null = null;
+  private companyId: string | null = localStorage.getItem('pwaCompanyId');
 
   constructor() {
     // Simple token initialization - try localStorage first, then sessionStorage
@@ -141,6 +148,15 @@ class ApiService {
       } catch (sessionError) {
         console.error('❌ [MOBILE DEBUG] Failed to save token to sessionStorage:', sessionError);
       }
+    }
+  }
+
+  setCompanyContext(companyId: string | null) {
+    this.companyId = companyId;
+    if (companyId) {
+      localStorage.setItem('pwaCompanyId', companyId);
+    } else {
+      localStorage.removeItem('pwaCompanyId');
     }
   }
 
@@ -228,6 +244,9 @@ class ApiService {
 
       if (this.token) {
         headers.Authorization = `Bearer ${this.token}`;
+      }
+      if (this.companyId) {
+        headers['x-company-id'] = this.companyId;
       }
 
       console.log('🔍 [REQUEST DEBUG] Making request to:', url);
@@ -393,6 +412,15 @@ class ApiService {
         console.error('❌ [DEBUG] Fallback also failed:', fallbackError);
         return [];
       }
+    }
+  }
+
+  async getCompanies(): Promise<Company[]> {
+    try {
+      return await this.request<Company[]>('/public-admin/companies');
+    } catch (error) {
+      console.error('Failed to load companies:', error);
+      return [];
     }
   }
 

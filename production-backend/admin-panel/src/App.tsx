@@ -30,6 +30,12 @@ interface Team {
   }>;
 }
 
+interface Company {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 interface LoginResponse {
   token: string;
   user: User;
@@ -43,6 +49,7 @@ const API_BASE =
 
 class ApiService {
   private token: string | null = null;
+  private companyId: string | null = localStorage.getItem('adminCompanyId');
 
   setToken(token: string) {
     this.token = token;
@@ -62,6 +69,23 @@ class ApiService {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` })
     };
+  }
+
+  setCompanyContext(companyId: string | null) {
+    this.companyId = companyId;
+    if (companyId) {
+      localStorage.setItem('adminCompanyId', companyId);
+    } else {
+      localStorage.removeItem('adminCompanyId');
+    }
+  }
+
+  private withCompany(path: string): string {
+    if (!this.companyId) {
+      return `${API_BASE}${path}`;
+    }
+    const separator = path.includes('?') ? '&' : '?';
+    return `${API_BASE}${path}${separator}companyId=${encodeURIComponent(this.companyId)}`;
   }
 
   async login(email: string, password: string): Promise<LoginResponse> {
@@ -88,10 +112,10 @@ class ApiService {
       throw new Error('No token received from server');
     }
     
-    // SECURITY CHECK: Only ADMIN users can access admin panel
+    // SECURITY CHECK: Only ADMIN/SUPER_ADMIN users can access admin panel
     const userRole = data.user?.role;
-    if (userRole !== 'ADMIN') {
-      throw new Error('Access denied. Only administrators can access the admin panel.');
+    if (userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') {
+      throw new Error('Access denied. Only admin users can access the admin panel.');
     }
     
     this.setToken(token);
@@ -122,7 +146,7 @@ class ApiService {
   }
 
   async getUsers(): Promise<User[]> {
-    const response = await fetch(`${API_BASE}/public-admin/users`, {
+    const response = await fetch(this.withCompany('/public-admin/users'), {
       headers: this.getHeaders()
     });
 
@@ -135,7 +159,7 @@ class ApiService {
 
   async getTeams(): Promise<Team[]> {
     // Connect to your real API
-    const response = await fetch(`${API_BASE}/public-admin/teams`, {
+    const response = await fetch(this.withCompany('/public-admin/teams'), {
       headers: this.getHeaders()
     });
 
@@ -148,7 +172,7 @@ class ApiService {
 
   async removeUserFromTeam(userId: string, teamId: string): Promise<any> {
     // Connect to your real API
-    const response = await fetch(`${API_BASE}/public-admin/remove-user-from-team`, {
+    const response = await fetch(this.withCompany('/public-admin/remove-user-from-team'), {
       method: 'DELETE',
       headers: this.getHeaders(),
       body: JSON.stringify({ userId, teamId })
@@ -163,7 +187,7 @@ class ApiService {
   }
 
   async updateUser(userId: string, userData: { displayName?: string; email?: string; role?: string; isActive?: boolean }): Promise<User> {
-    const response = await fetch(`${API_BASE}/public-admin/users/${userId}`, {
+    const response = await fetch(this.withCompany(`/public-admin/users/${userId}`), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(userData)
@@ -178,7 +202,7 @@ class ApiService {
   }
 
   async deactivateUser(userId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/users/${userId}/deactivate`, {
+    const response = await fetch(this.withCompany(`/public-admin/users/${userId}/deactivate`), {
       method: 'POST',
       headers: this.getHeaders()
     });
@@ -192,7 +216,7 @@ class ApiService {
   }
 
   async deleteUser(userId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/users/${userId}`, {
+    const response = await fetch(this.withCompany(`/public-admin/users/${userId}`), {
       method: 'DELETE',
       headers: this.getHeaders()
     });
@@ -206,7 +230,7 @@ class ApiService {
   }
 
   async createTeam(teamData: { name: string; region: string; managerId?: string }): Promise<Team> {
-    const response = await fetch(`${API_BASE}/public-admin/teams`, {
+    const response = await fetch(this.withCompany('/public-admin/teams'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(teamData)
@@ -221,7 +245,7 @@ class ApiService {
   }
 
   async updateTeamManager(teamId: string, managerId: string): Promise<Team> {
-    const response = await fetch(`${API_BASE}/public-admin/teams/${teamId}/manager`, {
+    const response = await fetch(this.withCompany(`/public-admin/teams/${teamId}/manager`), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify({ managerId })
@@ -236,7 +260,7 @@ class ApiService {
   }
 
   async updateTeam(teamId: string, teamData: { name?: string; region?: string }): Promise<Team> {
-    const response = await fetch(`${API_BASE}/public-admin/teams/${teamId}`, {
+    const response = await fetch(this.withCompany(`/public-admin/teams/${teamId}`), {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(teamData)
@@ -251,7 +275,7 @@ class ApiService {
   }
 
   async deleteTeam(teamId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/teams/${teamId}`, {
+    const response = await fetch(this.withCompany(`/public-admin/teams/${teamId}`), {
       method: 'DELETE',
       headers: this.getHeaders()
     });
@@ -265,7 +289,7 @@ class ApiService {
   }
 
   async getRegions(): Promise<Region[]> {
-    const response = await fetch(`${API_BASE}/public-admin/regions`, {
+    const response = await fetch(this.withCompany('/public-admin/regions'), {
       headers: this.getHeaders()
     });
 
@@ -278,7 +302,7 @@ class ApiService {
   }
 
   async assignUserToTeam(userId: string, teamId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/assign-user-to-team`, {
+    const response = await fetch(this.withCompany('/public-admin/assign-user-to-team'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ userId, teamId })
@@ -298,7 +322,7 @@ class ApiService {
     password: string; 
     role: string; 
   }): Promise<User> {
-    const response = await fetch(`${API_BASE}/public-admin/users`, {
+    const response = await fetch(this.withCompany('/public-admin/users'), {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(userData)
@@ -307,6 +331,19 @@ class ApiService {
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Failed to create user: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  async getCompanies(): Promise<Company[]> {
+    const response = await fetch(`${API_BASE}/public-admin/companies`, {
+      headers: this.getHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to fetch companies: ${response.status} ${errorText}`);
     }
 
     return response.json();
@@ -376,6 +413,8 @@ const TeamMembers: React.FC = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => localStorage.getItem('adminCompanyId') || 'all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -411,6 +450,16 @@ const TeamMembers: React.FC = () => {
       setError('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCompanies = async () => {
+    try {
+      const companiesData = await apiService.getCompanies();
+      setCompanies(companiesData || []);
+    } catch (err) {
+      console.warn('Failed to load companies list:', err);
+      setCompanies([]);
     }
   };
 
@@ -569,7 +618,12 @@ const TeamMembers: React.FC = () => {
   };
 
   useEffect(() => {
+    apiService.setCompanyContext(selectedCompanyId === 'all' ? null : selectedCompanyId);
     loadTeams();
+  }, [selectedCompanyId]);
+
+  useEffect(() => {
+    loadCompanies();
   }, []);
 
   if (loading) {
@@ -585,6 +639,19 @@ const TeamMembers: React.FC = () => {
       <div className="section-header">
         <h3>🏢 Team Management</h3>
         <div className="header-actions">
+          <select
+            value={selectedCompanyId}
+            onChange={(e) => setSelectedCompanyId(e.target.value)}
+            style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
+            title="Company context"
+          >
+            <option value="all">All Companies</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name} ({company.id})
+              </option>
+            ))}
+          </select>
           <div className="view-mode-toggle">
             <button 
               onClick={() => setViewMode('list')} 
@@ -883,6 +950,8 @@ const TeamMembers: React.FC = () => {
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => localStorage.getItem('adminCompanyId') || 'all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -908,6 +977,16 @@ const UserManagement: React.FC = () => {
       setError('Failed to load users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCompanies = async () => {
+    try {
+      const companiesData = await apiService.getCompanies();
+      setCompanies(companiesData || []);
+    } catch (err) {
+      console.warn('Failed to load companies list:', err);
+      setCompanies([]);
     }
   };
 
@@ -1001,7 +1080,7 @@ const UserManagement: React.FC = () => {
     return users.filter(user => {
       switch (activeUserSubTab) {
         case 'admin':
-          return user.role === 'ADMIN';
+          return user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
         case 'sales-director':
           return user.role === 'SALES_DIRECTOR';
         case 'regional-manager':
@@ -1034,7 +1113,12 @@ const UserManagement: React.FC = () => {
   };
 
   useEffect(() => {
+    apiService.setCompanyContext(selectedCompanyId === 'all' ? null : selectedCompanyId);
     loadUsers();
+  }, [selectedCompanyId]);
+
+  useEffect(() => {
+    loadCompanies();
   }, []);
 
   if (loading) {
@@ -1050,6 +1134,19 @@ const UserManagement: React.FC = () => {
       <div className="section-header">
         <h3>👤 User Management</h3>
         <div className="header-actions">
+          <select
+            value={selectedCompanyId}
+            onChange={(e) => setSelectedCompanyId(e.target.value)}
+            style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
+            title="Company context"
+          >
+            <option value="all">All Companies</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name} ({company.id})
+              </option>
+            ))}
+          </select>
           <button onClick={() => setShowCreateForm(true)} className="action-button success">
             ➕ Create User
           </button>
@@ -1071,7 +1168,7 @@ const UserManagement: React.FC = () => {
           className={`sub-tab ${activeUserSubTab === 'admin' ? 'active' : ''}`}
           onClick={() => setActiveUserSubTab('admin')}
         >
-          👑 Admins ({users.filter(u => u.role === 'ADMIN').length})
+          👑 Admins ({users.filter(u => u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').length})
         </button>
         <button 
           className={`sub-tab ${activeUserSubTab === 'sales-director' ? 'active' : ''}`}

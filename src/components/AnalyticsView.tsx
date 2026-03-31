@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { apiService, Evaluation } from '../services/api';
-import { useTranslation } from 'react-i18next';
 
 const AnalyticsView: React.FC = () => {
   const { user } = useAuth();

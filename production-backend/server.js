@@ -77,11 +77,15 @@ function slugifyCompanyName(rawName) {
 }
 
 // Database connection
+const databaseUrl = process.env.DATABASE_URL || '';
+const isLocalDatabase =
+  databaseUrl.includes('localhost') ||
+  databaseUrl.includes('@db:') ||
+  databaseUrl.includes('@127.0.0.1:');
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  connectionString: databaseUrl,
+  ssl: isLocalDatabase ? false : { rejectUnauthorized: false }
 });
 
 // Database migrations on startup
@@ -181,9 +185,22 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .map(origin => origin.trim())
   .filter(Boolean);
 
+const localDevOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const effectiveAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : defaultAllowedOrigins;
+
 // CORS supports strict override via ALLOWED_ORIGINS and safe defaults otherwise.
 app.use(cors({
-  origin: allowedOrigins.length > 0 ? allowedOrigins : defaultAllowedOrigins,
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (effectiveAllowedOrigins.includes(origin) || localDevOriginPattern.test(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS blocked origin: ${origin}`));
+  },
   credentials: true
 }));
 
@@ -1307,12 +1324,101 @@ app.get('/evaluations/my', authenticateToken, async (req, res) => {
 });
 
 // Organization routes
-app.get('/organizations/teams', authenticateToken, (req, res) => {
+app.get('/organizations/teams', authenticateToken, async (req, res) => {
   console.log('Organizations teams request from user:', req.user.email, 'role:', req.user.role);
-  
-  // Return empty array for now - this should be handled by your existing admin panel
-  // The frontend should be calling the original /public-admin/teams endpoint
-  res.json([]);
+
+  try {
+    const { userCol, teamCol } = await getUserTeamsColumns(pool);
+    const { companyId, includeAllCompanies } = resolveCompanyContext(req);
+
+    let teamsQuery = `
+      SELECT
+        t.id,
+        t.name,
+        t."regionId",
+        t."managerId",
+        t."companyId",
+        t."createdAt",
+        t."updatedAt",
+        r.id AS region_id,
+        r.name AS region_name,
+        m.id AS manager_id,
+        m.email AS manager_email,
+        m."displayName" AS manager_name,
+        m.role AS manager_role,
+        COALESCE(m."isActive", true) AS manager_active
+      FROM teams t
+      LEFT JOIN regions r ON r.id = t."regionId"
+      LEFT JOIN users m ON m.id = t."managerId"
+    `;
+    const teamParams = [];
+    if (!includeAllCompanies) {
+      teamParams.push(companyId);
+      teamsQuery += ` WHERE t."companyId" = $${teamParams.length}`;
+    }
+    teamsQuery += '\nORDER BY t.name';
+
+    const teamsResult = await pool.query(teamsQuery, teamParams);
+    const teamIds = teamsResult.rows.map(row => row.id);
+
+    let memberships = [];
+    if (teamIds.length > 0) {
+      const membershipsQuery = await pool.query(`
+        SELECT
+          ut.${teamCol} AS team_id,
+          u.id AS user_id,
+          u.email,
+          u."displayName",
+          u.role,
+          u."isActive"
+        FROM user_teams ut
+        JOIN users u ON u.id = ut.${userCol}
+        WHERE ut.${teamCol} = ANY($1)
+      `, [teamIds]);
+      memberships = membershipsQuery.rows;
+    }
+
+    const teamIdToMembers = new Map();
+    for (const row of memberships) {
+      if (!teamIdToMembers.has(row.team_id)) {
+        teamIdToMembers.set(row.team_id, []);
+      }
+      teamIdToMembers.get(row.team_id).push({
+        user: {
+          id: row.user_id,
+          email: row.email,
+          displayName: row.displayName,
+          role: row.role,
+          isActive: row.isActive
+        }
+      });
+    }
+
+    const teams = teamsResult.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      companyId: row.companyId,
+      region: row.region_id ? { id: row.region_id, name: row.region_name } : null,
+      manager: row.manager_id ? {
+        id: row.manager_id,
+        email: row.manager_email,
+        displayName: row.manager_name,
+        role: row.manager_role,
+        isActive: row.manager_active
+      } : null,
+      userTeams: teamIdToMembers.get(row.id) || []
+    }));
+
+    console.log(`✅ Returning ${teams.length} organizations teams`);
+    res.json(teams);
+  } catch (error) {
+    console.error('❌ Error fetching organizations teams:', error);
+    res.status(500).json({
+      message: 'Internal server error',
+      error: 'DatabaseError',
+      statusCode: 500
+    });
+  }
 });
 
 app.get('/organizations/salespeople', authenticateToken, async (req, res) => {

@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService, User } from '../services/api';
 import { useTranslation } from 'react-i18next';
-import { sanitizeText, sanitizeWithXSSDetection, validateInput } from '../utils/sanitize';
+import { validateInput } from '../utils/sanitize';
 import { offlineService } from '../utils/offlineService';
-import { notificationService } from '../utils/notificationService';
 
 interface EvaluationFormProps {
   onSuccess: () => void;
@@ -19,7 +18,6 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const isSubmittingRef = useRef(false); // Ref-based guard to prevent double submissions
   
   const [evaluatableUsers, setEvaluatableUsers] = useState<User[]>([]);
-  const [behaviorCategories, setBehaviorCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -38,6 +36,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   // Evaluation scores and comments
   const [scores, setScores] = useState<Record<string, number>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
+  const [examples, setExamples] = useState<Record<string, string>>({});
   
   // Evaluation categories from backend
   const [categories, setCategories] = useState<any[]>([]);
@@ -761,16 +760,6 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     setScores(prev => ({ ...prev, [criteriaId]: score }));
   };
 
-  const handleCommentChange = (criteriaId: string, comment: string) => {
-    const validation = validateInput(comment, 500);
-    if (validation.isValid) {
-      setComments(prev => ({ ...prev, [criteriaId]: validation.sanitized }));
-    } else {
-      console.warn('Invalid comment input detected:', validation.errors);
-      setComments(prev => ({ ...prev, [criteriaId]: validation.sanitized }));
-    }
-  };
-
   const handleExampleChange = (itemId: string, value: string) => {
     const validation = validateInput(value, 1000);
     if (validation.isValid) {
@@ -795,21 +784,6 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     const clusterScores = cluster.items.map((item: any) => scores[item.id] || 0);
     const totalScore = clusterScores.reduce((sum: number, score: number) => sum + score, 0);
     return clusterScores.length > 0 ? totalScore / clusterScores.length : 0; // Return average score (1-4)
-  };
-
-  const calculateOverallScore = () => {
-    const categories = getEvaluationCategories();
-    let weightedSum = 0;
-    let totalWeight = 0;
-    
-    categories.forEach(category => {
-      const clusterScore = calculateClusterScore(category.id);
-      const weight = (category as any).weight || 0.25; // Default weight if not specified
-      weightedSum += clusterScore * weight;
-      totalWeight += weight;
-    });
-    
-    return totalWeight > 0 ? weightedSum / totalWeight : 0; // Return weighted average
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
