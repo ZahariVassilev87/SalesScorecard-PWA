@@ -1164,36 +1164,65 @@ app.get('/evaluations/my', authenticateToken, async (req, res) => {
       }
     }
 
-    const managerIdArray = Array.from(managerIds);
-    const salespersonIdArray = Array.from(salespersonIds);
-    const evalParams = [managerIdArray, salespersonIdArray];
+    const isAdminViewRole = req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN';
 
-    let companyFilter = '';
-    if (!includeAllCompanies) {
-      evalParams.push(companyId);
-      companyFilter = ` AND e."companyId" = $${evalParams.length}`;
+    let evaluationsResult;
+    if (isAdminViewRole) {
+      // Admin views should see all evaluations in current company scope.
+      const adminParams = [];
+      let adminWhere = '';
+      if (!includeAllCompanies) {
+        adminParams.push(companyId);
+        adminWhere = `WHERE e."companyId" = $${adminParams.length}`;
+      }
+
+      evaluationsResult = await pool.query(`
+        SELECT
+          e.id, e."salespersonId", e."managerId", e."visitDate",
+          e."customerName", e.location, e."overallComment", e."overallScore",
+          e.version, e."createdAt", e."updatedAt", e."companyId",
+          sp."displayName" as salesperson_name, sp.email as salesperson_email,
+          sp.role as salesperson_role, sp."companyId" as salesperson_company_id, sp."isActive" as salesperson_is_active,
+          mg."displayName" as manager_name, mg.email as manager_email,
+          mg.role as manager_role, mg."companyId" as manager_company_id, mg."isActive" as manager_is_active
+        FROM evaluations e
+        LEFT JOIN users sp ON sp.id = e."salespersonId"
+        LEFT JOIN users mg ON mg.id = e."managerId"
+        ${adminWhere}
+        ORDER BY e."createdAt" DESC
+      `, adminParams);
+    } else {
+      const managerIdArray = Array.from(managerIds);
+      const salespersonIdArray = Array.from(salespersonIds);
+      const evalParams = [managerIdArray, salespersonIdArray];
+
+      let companyFilter = '';
+      if (!includeAllCompanies) {
+        evalParams.push(companyId);
+        companyFilter = ` AND e."companyId" = $${evalParams.length}`;
+      }
+
+      // Get evaluations created by this user OR evaluations about this user
+      evaluationsResult = await pool.query(`
+        SELECT 
+          e.id, e."salespersonId", e."managerId", e."visitDate",
+          e."customerName", e.location, e."overallComment", e."overallScore",
+          e.version, e."createdAt", e."updatedAt", e."companyId",
+          sp."displayName" as salesperson_name, sp.email as salesperson_email,
+          sp.role as salesperson_role, sp."companyId" as salesperson_company_id, sp."isActive" as salesperson_is_active,
+          mg."displayName" as manager_name, mg.email as manager_email,
+          mg.role as manager_role, mg."companyId" as manager_company_id, mg."isActive" as manager_is_active
+        FROM evaluations e
+        LEFT JOIN users sp ON sp.id = e."salespersonId"
+        LEFT JOIN users mg ON mg.id = e."managerId"
+        WHERE (
+          e."managerId"::text = ANY($1::text[])
+          OR e."salespersonId"::text = ANY($2::text[])
+        )
+        ${companyFilter}
+        ORDER BY e."createdAt" DESC
+      `, evalParams);
     }
-
-    // Get evaluations created by this user OR evaluations about this user
-    const evaluationsResult = await pool.query(`
-      SELECT 
-        e.id, e."salespersonId", e."managerId", e."visitDate",
-        e."customerName", e.location, e."overallComment", e."overallScore",
-        e.version, e."createdAt", e."updatedAt", e."companyId",
-        sp."displayName" as salesperson_name, sp.email as salesperson_email,
-        sp.role as salesperson_role, sp."companyId" as salesperson_company_id, sp."isActive" as salesperson_is_active,
-        mg."displayName" as manager_name, mg.email as manager_email,
-        mg.role as manager_role, mg."companyId" as manager_company_id, mg."isActive" as manager_is_active
-      FROM evaluations e
-      LEFT JOIN users sp ON sp.id = e."salespersonId"
-      LEFT JOIN users mg ON mg.id = e."managerId"
-      WHERE (
-        e."managerId"::text = ANY($1::text[])
-        OR e."salespersonId"::text = ANY($2::text[])
-      )
-      ${companyFilter}
-      ORDER BY e."createdAt" DESC
-    `, evalParams);
     
     // Get evaluation items for each evaluation
     const evaluations = [];

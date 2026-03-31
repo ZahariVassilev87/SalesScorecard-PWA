@@ -26,8 +26,25 @@ const MyTeam: React.FC = () => {
       try {
         const teamData = await apiService.getMyTeam();
         
-        if (teamData && teamData.members && teamData.members.length > 0) {
-          setTeam(teamData);
+        const normalizedTeam = teamData
+          ? {
+              ...teamData,
+              members: Array.isArray(teamData.members)
+                ? teamData.members
+                    .filter(Boolean)
+                    .map((member: any) => ({
+                      id: member?.id || '',
+                      email: member?.email || '',
+                      displayName: member?.displayName || member?.name || member?.email || 'Unknown user',
+                      role: member?.role || 'SALESPERSON',
+                      isActive: member?.isActive !== false
+                    }))
+                : []
+            }
+          : null;
+
+        if (normalizedTeam && normalizedTeam.members.length > 0) {
+          setTeam(normalizedTeam as Team);
         } else {
           setTeam(null);
         }

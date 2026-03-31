@@ -120,22 +120,35 @@ class ApiService {
   private token: string | null = null;
   private companyId: string | null = localStorage.getItem('pwaCompanyId');
 
+  private isSuperAdminUser(): boolean {
+    try {
+      const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+      if (!userStr) {
+        return false;
+      }
+      const user = JSON.parse(userStr);
+      return user?.role === 'SUPER_ADMIN';
+    } catch (error) {
+      return false;
+    }
+  }
+
   constructor() {
-    // Simple token initialization - try localStorage first, then sessionStorage
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    const userToken = localStorage.getItem('userToken') || sessionStorage.getItem('userToken');
-    
-    // Use token if available, otherwise fallback to userToken
-    this.token = token || userToken;
+    // Prefer decrypted secure token, then plain legacy token locations.
+    this.token =
+      tokenStorage.getToken() ||
+      localStorage.getItem('token') ||
+      sessionStorage.getItem('token') ||
+      null;
     
     console.log('🔍 ApiService initialized with token:', !!this.token);
   }
 
   setToken(token: string) {
     this.token = token;
+    tokenStorage.setToken(token);
     try {
       localStorage.setItem('token', token);
-      localStorage.setItem('userToken', token); // Keep for backward compatibility
       console.log('✅ [MOBILE DEBUG] Token saved to localStorage');
     } catch (error) {
       console.error('❌ [MOBILE DEBUG] Failed to save token to localStorage:', error);
@@ -143,7 +156,6 @@ class ApiService {
       // Store in sessionStorage as fallback
       try {
         sessionStorage.setItem('token', token);
-        sessionStorage.setItem('userToken', token); // Keep for backward compatibility
         console.log('✅ [MOBILE DEBUG] Token saved to sessionStorage as fallback');
       } catch (sessionError) {
         console.error('❌ [MOBILE DEBUG] Failed to save token to sessionStorage:', sessionError);
@@ -162,11 +174,12 @@ class ApiService {
 
   clearToken() {
     this.token = null;
+    tokenStorage.removeToken();
+    tokenStorage.removeRefreshToken();
+    tokenStorage.removeTokenExpiry();
     try {
       localStorage.removeItem('token');
-      localStorage.removeItem('userToken'); // Keep for backward compatibility
       sessionStorage.removeItem('token');
-      sessionStorage.removeItem('userToken'); // Keep for backward compatibility
       console.log('✅ [MOBILE DEBUG] Tokens cleared from storage');
     } catch (error) {
       console.error('❌ [MOBILE DEBUG] Failed to clear tokens:', error);
@@ -225,6 +238,15 @@ class ApiService {
 
   private async request<T>(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
     try {
+      // Rehydrate token on-demand in case state was lost after reload.
+      if (!this.token) {
+        this.token =
+          tokenStorage.getToken() ||
+          localStorage.getItem('token') ||
+          sessionStorage.getItem('token') ||
+          null;
+      }
+
       // Check if token is expired and refresh if needed
       if (this.token && this.isTokenExpired() && retryCount === 0) {
         console.log('🔄 Token expired, attempting refresh...');
@@ -245,7 +267,8 @@ class ApiService {
       if (this.token) {
         headers.Authorization = `Bearer ${this.token}`;
       }
-      if (this.companyId) {
+      // Company override header is only valid for SUPER_ADMIN context.
+      if (this.companyId && this.isSuperAdminUser()) {
         headers['x-company-id'] = this.companyId;
       }
 
@@ -350,6 +373,16 @@ class ApiService {
       }
       
       this.setToken(token);
+      if (data.refreshToken) {
+        tokenStorage.setRefreshToken(data.refreshToken);
+      }
+      // Backend tokens are 24h; keep expiry for proactive refresh.
+      tokenStorage.setTokenExpiry(Date.now() + (24 * 60 * 60 * 1000));
+
+      // Prevent stale company override leaking from a previous super-admin session.
+      if (data.user?.role !== 'SUPER_ADMIN') {
+        this.setCompanyContext(null);
+      }
       
       return {
         token: token,
@@ -753,15 +786,22 @@ class ApiService {
     console.log('🔍 Loading evaluatable users...');
     
     try {
+      // Match production wiring first: server-side RBAC endpoint
+      console.log('📡 Calling /organizations/salespeople...');
+      const scopedUsers = await this.request<User[]>('/organizations/salespeople');
+      if (Array.isArray(scopedUsers) && scopedUsers.length > 0) {
+        console.log('✅ Found evaluatable users from backend RBAC endpoint:', scopedUsers.length);
+        return scopedUsers;
+      }
+
       // Use team-based approach as primary method
       console.log('📡 Getting team data for evaluatable users...');
-      const currentUserStr = localStorage.getItem('user');
-      if (!currentUserStr) {
-        console.log('❌ No current user found in localStorage');
+      const currentUser = this.getCurrentUser();
+      if (!currentUser) {
+        console.log('❌ No current user found in storage');
         return [];
       }
-      
-      const currentUser = JSON.parse(currentUserStr);
+
       console.log('👤 Current user role:', currentUser.role);
       
       // Get team members based on current user's role
@@ -784,6 +824,15 @@ class ApiService {
           const salesLeads = team.members.filter(member => member.role === 'SALES_LEAD');
           console.log('✅ Found sales leads:', salesLeads);
           return salesLeads;
+        }
+        // Fallback for schema/shape edge cases: derive subordinates from organization teams.
+        const orgTeams = await this.getTeams();
+        const fallbackSalesLeads = orgTeams
+          .flatMap(teamRow => teamRow.members || [])
+          .filter(member => member.role === 'SALES_LEAD');
+        if (fallbackSalesLeads.length > 0) {
+          console.log('✅ Found sales leads via organizations fallback:', fallbackSalesLeads);
+          return fallbackSalesLeads;
         }
         console.log('⚠️ No team members found - Regional Manager has no managed teams');
         return [];

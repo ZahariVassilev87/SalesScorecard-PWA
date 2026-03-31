@@ -348,6 +348,20 @@ class ApiService {
 
     return response.json();
   }
+
+  async seedTemplates(companyId: string): Promise<any> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/seed-defaults`, {
+      method: 'POST',
+      headers: this.getHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to seed templates: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
 }
 
 const apiService = new ApiService();
@@ -409,12 +423,10 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
   );
 };
 
-const TeamMembers: React.FC = () => {
+const TeamMembers: React.FC<{ openCreateSignal?: number }> = ({ openCreateSignal = 0 }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => localStorage.getItem('adminCompanyId') || 'all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -450,16 +462,6 @@ const TeamMembers: React.FC = () => {
       setError('Failed to load data');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadCompanies = async () => {
-    try {
-      const companiesData = await apiService.getCompanies();
-      setCompanies(companiesData || []);
-    } catch (err) {
-      console.warn('Failed to load companies list:', err);
-      setCompanies([]);
     }
   };
 
@@ -618,13 +620,14 @@ const TeamMembers: React.FC = () => {
   };
 
   useEffect(() => {
-    apiService.setCompanyContext(selectedCompanyId === 'all' ? null : selectedCompanyId);
     loadTeams();
-  }, [selectedCompanyId]);
+  }, []);
 
   useEffect(() => {
-    loadCompanies();
-  }, []);
+    if (openCreateSignal > 0) {
+      setShowCreateForm(true);
+    }
+  }, [openCreateSignal]);
 
   if (loading) {
     return <div className="loading">Loading team data...</div>;
@@ -639,19 +642,6 @@ const TeamMembers: React.FC = () => {
       <div className="section-header">
         <h3>🏢 Team Management</h3>
         <div className="header-actions">
-          <select
-            value={selectedCompanyId}
-            onChange={(e) => setSelectedCompanyId(e.target.value)}
-            style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
-            title="Company context"
-          >
-            <option value="all">All Companies</option>
-            {companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name} ({company.id})
-              </option>
-            ))}
-          </select>
           <div className="view-mode-toggle">
             <button 
               onClick={() => setViewMode('list')} 
@@ -948,10 +938,8 @@ const TeamMembers: React.FC = () => {
   );
 };
 
-const UserManagement: React.FC = () => {
+const UserManagement: React.FC<{ openCreateSignal?: number }> = ({ openCreateSignal = 0 }) => {
   const [users, setUsers] = useState<User[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => localStorage.getItem('adminCompanyId') || 'all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -977,16 +965,6 @@ const UserManagement: React.FC = () => {
       setError('Failed to load users');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadCompanies = async () => {
-    try {
-      const companiesData = await apiService.getCompanies();
-      setCompanies(companiesData || []);
-    } catch (err) {
-      console.warn('Failed to load companies list:', err);
-      setCompanies([]);
     }
   };
 
@@ -1113,13 +1091,14 @@ const UserManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    apiService.setCompanyContext(selectedCompanyId === 'all' ? null : selectedCompanyId);
     loadUsers();
-  }, [selectedCompanyId]);
+  }, []);
 
   useEffect(() => {
-    loadCompanies();
-  }, []);
+    if (openCreateSignal > 0) {
+      setShowCreateForm(true);
+    }
+  }, [openCreateSignal]);
 
   if (loading) {
     return <div className="loading">Loading users...</div>;
@@ -1134,19 +1113,6 @@ const UserManagement: React.FC = () => {
       <div className="section-header">
         <h3>👤 User Management</h3>
         <div className="header-actions">
-          <select
-            value={selectedCompanyId}
-            onChange={(e) => setSelectedCompanyId(e.target.value)}
-            style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
-            title="Company context"
-          >
-            <option value="all">All Companies</option>
-            {companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name} ({company.id})
-              </option>
-            ))}
-          </select>
           <button onClick={() => setShowCreateForm(true)} className="action-button success">
             ➕ Create User
           </button>
@@ -1463,9 +1429,85 @@ const UserManagement: React.FC = () => {
   );
 };
 
+const RegionsManagement: React.FC = () => {
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadRegions = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const regionsData = await apiService.getRegions();
+      setRegions(regionsData);
+    } catch (err) {
+      setError('Failed to load regions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRegions();
+  }, []);
+
+  if (loading) {
+    return <div className="loading">Loading regions...</div>;
+  }
+
+  if (error) {
+    return <div className="error-message">{error}</div>;
+  }
+
+  return (
+    <div className="user-management">
+      <div className="section-header">
+        <h3>🗺️ Regions</h3>
+        <div className="header-actions">
+          <button onClick={loadRegions} className="refresh-button">🔄 Refresh</button>
+        </div>
+      </div>
+      {regions.length === 0 ? (
+        <p>No regions found.</p>
+      ) : (
+        <div className="users-table desktop-only">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {regions.map((region) => (
+                <tr key={region.id}>
+                  <td>{region.name}</td>
+                  <td>{region.id}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState('teams');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => localStorage.getItem('adminCompanyId') || 'all');
+  const [openCreateSignal, setOpenCreateSignal] = useState(0);
+
+  const loadCompanies = async () => {
+    try {
+      const companiesData = await apiService.getCompanies();
+      setCompanies(companiesData || []);
+    } catch (err) {
+      setCompanies([]);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
@@ -1478,6 +1520,33 @@ const AdminPanel: React.FC = () => {
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
+  };
+
+  useEffect(() => {
+    apiService.setCompanyContext(selectedCompanyId === 'all' ? null : selectedCompanyId);
+  }, [selectedCompanyId]);
+
+  useEffect(() => {
+    loadCompanies();
+  }, []);
+
+  const handleNew = () => {
+    if (activeTab === 'teams' || activeTab === 'users') {
+      setOpenCreateSignal(prev => prev + 1);
+    }
+  };
+
+  const handleSeedTemplates = async () => {
+    if (selectedCompanyId === 'all') {
+      alert('Please select a specific company before seeding templates.');
+      return;
+    }
+    try {
+      await apiService.seedTemplates(selectedCompanyId);
+      alert('✅ Templates seeded successfully.');
+    } catch (error) {
+      alert(`❌ Failed to seed templates: ${(error as Error).message}`);
+    }
   };
 
   return (
@@ -1495,12 +1564,39 @@ const AdminPanel: React.FC = () => {
           </button>
           <h1>🎯 Sales Scorecard Admin</h1>
         </div>
-        <button onClick={handleLogout} className="logout-button">
-          🚪 Logout
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', marginRight: '8px' }}>
+            <label style={{ fontSize: '12px', color: '#eee' }}>Company</label>
+            <select
+              value={selectedCompanyId}
+              onChange={(e) => setSelectedCompanyId(e.target.value)}
+              style={{ padding: '6px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.35)' }}
+            >
+              <option value="all">All</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>{company.name}</option>
+              ))}
+            </select>
+            <small style={{ color: '#ddd' }}>Switching company reloads teams and users.</small>
+          </div>
+          <button className="action-button" onClick={handleNew}>+ New</button>
+          <button className="action-button" onClick={handleSeedTemplates}>Seed Templates</button>
+          <button onClick={handleLogout} className="logout-button">
+            🚪 Logout
+          </button>
+        </div>
       </header>
 
       <nav className={`admin-nav ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+        <button
+          className={activeTab === 'regions' ? 'nav-button active' : 'nav-button'}
+          onClick={() => {
+            setActiveTab('regions');
+            closeMobileMenu();
+          }}
+        >
+          🗺️ Regions
+        </button>
         <button
           className={activeTab === 'teams' ? 'nav-button active' : 'nav-button'}
           onClick={() => {
@@ -1527,8 +1623,9 @@ const AdminPanel: React.FC = () => {
       )}
 
       <main className="admin-content">
-        {activeTab === 'teams' && <TeamMembers />}
-        {activeTab === 'users' && <UserManagement />}
+        {activeTab === 'regions' && <RegionsManagement />}
+        {activeTab === 'teams' && <TeamMembers openCreateSignal={openCreateSignal} />}
+        {activeTab === 'users' && <UserManagement openCreateSignal={openCreateSignal} />}
       </main>
     </div>
   );
@@ -1546,7 +1643,7 @@ const App: React.FC = () => {
         try {
           // Verify the user still has ADMIN role
           const currentUser = await apiService.getCurrentUser();
-          if (currentUser.role === 'ADMIN') {
+          if (currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN') {
             setIsLoggedIn(true);
           } else {
             // User is no longer admin, clear token and show login

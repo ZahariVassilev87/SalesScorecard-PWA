@@ -1,164 +1,101 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { apiService, User, Team } from '../services/api';
+import { apiService, Team } from '../services/api';
+
+const isRegionalManagerRole = (role?: string) =>
+  role === 'REGIONAL_SALES_MANAGER' || role === 'REGIONAL_MANAGER';
+
+const roleBadgeClass = (role: string) => role.toLowerCase().replace(/_/g, '-');
+
+const displayRole = (role: string) => role.replace(/_/g, ' ');
 
 const TeamManagementView: React.FC = () => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { user } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const lastUserIdRef = useRef<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'hierarchy'>('list');
+  const [activeSubTab, setActiveSubTab] = useState<'all' | 'sales-director' | 'regional-manager' | 'sales-lead'>('all');
 
-  useEffect(() => {
-    // Only load if user ID actually changed
-    if (!user?.id || user.id === lastUserIdRef.current) {
-      if (!user?.id) {
-        setIsLoading(false);
-      }
+  const loadData = useCallback(async () => {
+    if (!user?.id) {
       return;
     }
-    
-    lastUserIdRef.current = user.id;
-    
-    const loadData = async () => {
-      try {
-        // For admins and sales directors, get all data
-        if (user?.role === 'ADMIN' || user?.role === 'SALES_DIRECTOR') {
-          console.log('🔍 [DEBUG] TeamManagementView: Loading all data for admin/sales director');
-          const [teamsData, usersData] = await Promise.all([
-            apiService.getTeams(),
-            apiService.getUsers()
-          ]);
-          setTeams(teamsData);
-          setAllUsers(usersData);
-        } else {
-          // For other roles, only get teams data and extract users from there
-          console.log('🔍 [DEBUG] TeamManagementView: Loading teams data for role:', user?.role);
-          console.log('🔍 [DEBUG] TeamManagementView: About to call apiService.getTeams()...');
-          let teamsData;
-          try {
-            teamsData = await apiService.getTeams();
-            console.log('🔍 [DEBUG] TeamManagementView: Got teams data:', teamsData.length, 'teams');
-          } catch (teamsError) {
-            console.error('❌ [DEBUG] TeamManagementView: Error calling getTeams():', teamsError);
-            throw teamsError;
-          }
-          setTeams(teamsData);
-          
-          // Extract all users from teams data
-          const usersFromTeams: User[] = [];
-          teamsData.forEach(team => {
-            if (team.members) {
-              team.members.forEach(member => {
-                if (!usersFromTeams.find(u => u.id === member.id)) {
-                  usersFromTeams.push(member);
-                }
-              });
-            }
-            if (team.manager && !usersFromTeams.find(u => u.id === team.manager!.id)) {
-              usersFromTeams.push(team.manager);
-            }
-          });
-          
-          // Add current user if not already included
-          if (user && !usersFromTeams.find(u => u.id === user.id)) {
-            usersFromTeams.push(user);
-          }
-          
-          setAllUsers(usersFromTeams);
-        }
-      } catch (err) {
-        setError('Failed to load team data');
-        console.error('Failed to load team data:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
 
+    try {
+      setError('');
+      const teamsData = await apiService.getTeams();
+      setTeams(teamsData);
+    } catch (err) {
+      setError('Failed to load team data');
+      console.error('Failed to load team data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
     loadData();
-  }, [user]); // Include full user object to satisfy ESLint
+  }, [user?.id, loadData]);
 
-  const getUsersByRole = (role: string) => {
-    return allUsers.filter(user => user.role === role);
-  };
-
-  const getTeamHierarchy = () => {
-    // Get role-based data based on current user's role
-    const currentUserRole = user?.role;
-    
-    let hierarchy = {
-      salesDirectors: [] as User[],
-      regionalManagers: [] as User[],
-      salesLeads: [] as User[],
-      salespeople: [] as User[]
-    };
-
-    if (currentUserRole === 'ADMIN' || currentUserRole === 'SALES_DIRECTOR') {
-      // Admins and Sales Directors see the full hierarchy
-      hierarchy = {
-        salesDirectors: getUsersByRole('SALES_DIRECTOR'),
-        regionalManagers: getUsersByRole('REGIONAL_SALES_MANAGER'),
-        salesLeads: getUsersByRole('SALES_LEAD'),
-        salespeople: getUsersByRole('SALESPERSON')
-      };
-    } else if (currentUserRole === 'REGIONAL_SALES_MANAGER') {
-      // Regional Managers see their peers and their subordinates
-      hierarchy = {
-        salesDirectors: getUsersByRole('SALES_DIRECTOR'),
-        regionalManagers: getUsersByRole('REGIONAL_SALES_MANAGER'),
-        salesLeads: [], // Will be populated from team data
-        salespeople: [] // Will be populated from team data
-      };
-      
-      // Get sales leads and salespeople from their teams
-      teams.forEach(team => {
-        if (team.members) {
-          team.members.forEach(member => {
-            if (member.role === 'SALES_LEAD' && !hierarchy.salesLeads.find(sl => sl.id === member.id)) {
-              hierarchy.salesLeads.push(member);
-            } else if (member.role === 'SALESPERSON' && !hierarchy.salespeople.find(sp => sp.id === member.id)) {
-              hierarchy.salespeople.push(member);
-            }
-          });
-        }
-      });
-    } else if (currentUserRole === 'SALES_LEAD') {
-      // Sales Leads see their manager and their salespeople
-      hierarchy = {
-        salesDirectors: getUsersByRole('SALES_DIRECTOR'),
-        regionalManagers: getUsersByRole('REGIONAL_SALES_MANAGER'),
-        salesLeads: user ? [user] : [], // Just themselves
-        salespeople: [] // Will be populated from team data
-      };
-      
-      // Get salespeople from their team
-      teams.forEach(team => {
-        if (team.members) {
-          team.members.forEach(member => {
-            if (member.role === 'SALESPERSON' && !hierarchy.salespeople.find(sp => sp.id === member.id)) {
-              hierarchy.salespeople.push(member);
-            }
-          });
-        }
-      });
-    } else {
-      // Salespeople see minimal hierarchy
-      hierarchy = {
-        salesDirectors: getUsersByRole('SALES_DIRECTOR'),
-        regionalManagers: getUsersByRole('REGIONAL_SALES_MANAGER'),
-        salesLeads: getUsersByRole('SALES_LEAD'),
-        salespeople: user ? [user] : [] // Just themselves
-      };
+  const getFilteredTeams = () => {
+    if (activeSubTab === 'all') {
+      return teams;
     }
 
-    return hierarchy;
+    return teams.filter(team => {
+      if (!team.manager) {
+        return false;
+      }
+
+      switch (activeSubTab) {
+        case 'sales-director':
+          return team.manager.role === 'SALES_DIRECTOR';
+        case 'regional-manager':
+          return isRegionalManagerRole(team.manager.role);
+        case 'sales-lead':
+          return team.manager.role === 'SALES_LEAD';
+        default:
+          return true;
+      }
+    });
+  };
+
+  const getSubTabTitle = () => {
+    switch (activeSubTab) {
+      case 'sales-director':
+        return 'Sales Director Teams';
+      case 'regional-manager':
+        return 'Regional Manager Teams';
+      case 'sales-lead':
+        return 'Sales Lead Teams';
+      default:
+        return 'All Teams';
+    }
+  };
+
+  const filteredTeams = getFilteredTeams();
+
+  const countByManagerRole = (check: (role?: string) => boolean) =>
+    teams.filter(t => t.manager && check(t.manager!.role)).length;
+
+  const membersExcludingManager = (team: Team) => {
+    const mgrId = team.manager?.id;
+    const members = Array.isArray(team.members) ? team.members : [];
+    if (!mgrId) {
+      return members;
+    }
+    return members.filter(m => m.id !== mgrId);
   };
 
   if (isLoading) {
     return (
-      <div className="team-management">
+      <div className="team-members tm-panel">
         <div className="loading">Loading team data...</div>
       </div>
     );
@@ -166,135 +103,159 @@ const TeamManagementView: React.FC = () => {
 
   if (error) {
     return (
-      <div className="team-management">
-        <div className="error">{error}</div>
+      <div className="team-members tm-panel">
+        <div className="error-message">{error}</div>
       </div>
     );
   }
 
-  const hierarchy = getTeamHierarchy();
-
   return (
-    <div className="team-management">
-      <div className="team-header">
-        <h2>Team Management</h2>
-        <p>View and manage your organizational hierarchy</p>
-      </div>
-
-      <div className="hierarchy-view">
-        <div className="hierarchy-level">
-          <h3>Sales Directors</h3>
-          <div className="users-grid">
-            {hierarchy.salesDirectors.map(director => (
-              <div key={director.id} className="user-card director">
-                <div className="user-avatar">👔</div>
-                <div className="user-info">
-                  <div className="user-name">{director.displayName}</div>
-                  <div className="user-email">{director.email}</div>
-                  <div className="user-role">Sales Director</div>
-                </div>
-              </div>
-            ))}
-            {hierarchy.salesDirectors.length === 0 && (
-              <div className="no-users">No Sales Directors found</div>
-            )}
+    <div className="team-members tm-panel">
+      <div className="section-header">
+        <h3>🏢 Team Management</h3>
+        <div className="header-actions">
+          <div className="view-mode-toggle">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`view-toggle ${viewMode === 'list' ? 'active' : ''}`}
+            >
+              📋 List View
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('hierarchy')}
+              className={`view-toggle ${viewMode === 'hierarchy' ? 'active' : ''}`}
+            >
+              🏗️ Hierarchy View
+            </button>
           </div>
-        </div>
-
-        <div className="hierarchy-level">
-          <h3>Regional Managers</h3>
-          <div className="users-grid">
-            {hierarchy.regionalManagers.map(manager => (
-              <div key={manager.id} className="user-card manager">
-                <div className="user-avatar">👨‍💼</div>
-                <div className="user-info">
-                  <div className="user-name">{manager.displayName}</div>
-                  <div className="user-email">{manager.email}</div>
-                  <div className="user-role">Regional Manager</div>
-                </div>
-              </div>
-            ))}
-            {hierarchy.regionalManagers.length === 0 && (
-              <div className="no-users">No Regional Managers found</div>
-            )}
-          </div>
-        </div>
-
-        <div className="hierarchy-level">
-          <h3>Sales Leads</h3>
-          <div className="users-grid">
-            {hierarchy.salesLeads.map(lead => (
-              <div key={lead.id} className="user-card lead">
-                <div className="user-avatar">👨‍💻</div>
-                <div className="user-info">
-                  <div className="user-name">{lead.displayName}</div>
-                  <div className="user-email">{lead.email}</div>
-                  <div className="user-role">Sales Lead</div>
-                </div>
-              </div>
-            ))}
-            {hierarchy.salesLeads.length === 0 && (
-              <div className="no-users">No Sales Leads found</div>
-            )}
-          </div>
-        </div>
-
-        <div className="hierarchy-level">
-          <h3>Salespeople</h3>
-          <div className="users-grid">
-            {hierarchy.salespeople.map(salesperson => (
-              <div key={salesperson.id} className="user-card salesperson">
-                <div className="user-avatar">👤</div>
-                <div className="user-info">
-                  <div className="user-name">{salesperson.displayName}</div>
-                  <div className="user-email">{salesperson.email}</div>
-                  <div className="user-role">Salesperson</div>
-                </div>
-              </div>
-            ))}
-            {hierarchy.salespeople.length === 0 && (
-              <div className="no-users">No Salespeople found</div>
-            )}
-          </div>
+          <button type="button" onClick={() => { setIsLoading(true); loadData(); }} className="refresh-button">
+            🔄 Refresh
+          </button>
         </div>
       </div>
 
-      <div className="teams-section">
-        <h3>Teams</h3>
-        <div className="teams-grid">
-          {teams.map(team => (
-            <div key={team.id} className="team-card">
-              <div className="team-header">
-                <h4>{team.name}</h4>
-                {team.region && (
-                  <span className="team-region">{team.region.name}</span>
+      <div className="sub-tabs">
+        <button
+          type="button"
+          className={`sub-tab ${activeSubTab === 'all' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('all')}
+        >
+          📊 All Teams ({teams.length})
+        </button>
+        <button
+          type="button"
+          className={`sub-tab ${activeSubTab === 'sales-director' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('sales-director')}
+        >
+          👔 Sales Director Teams ({countByManagerRole(r => r === 'SALES_DIRECTOR')})
+        </button>
+        <button
+          type="button"
+          className={`sub-tab ${activeSubTab === 'regional-manager' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('regional-manager')}
+        >
+          🏢 Regional Manager Teams ({countByManagerRole(r => isRegionalManagerRole(r))})
+        </button>
+        <button
+          type="button"
+          className={`sub-tab ${activeSubTab === 'sales-lead' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('sales-lead')}
+        >
+          👥 Sales Lead Teams ({countByManagerRole(r => r === 'SALES_LEAD')})
+        </button>
+      </div>
+
+      {viewMode === 'hierarchy' ? (
+        <div className="hierarchical-view">
+          {filteredTeams.length === 0 ? (
+            <p className="tm-empty-hint">
+              No teams found in {getSubTabTitle().toLowerCase()}.
+            </p>
+          ) : (
+            filteredTeams.map(team => (
+              <div key={team.id} className="team-hierarchy">
+                <h4>🏢 {team.name}</h4>
+                {team.manager ? (
+                  <div className="manager-card">
+                    <div className="manager-info">
+                      <div className="manager-avatar">
+                        {team.manager.displayName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="manager-details">
+                        <h5>{team.manager.displayName}</h5>
+                        <p>{team.manager.email}</p>
+                        <span className={`role-badge ${roleBadgeClass(team.manager.role)}`}>
+                          {displayRole(team.manager.role)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="subordinates">
+                      {membersExcludingManager(team).map(member => (
+                        <div key={member.id} className="subordinate-card">
+                          <div className="subordinate-info">
+                            <div className="subordinate-avatar">
+                              {member.displayName.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="subordinate-details">
+                              <h6>{member.displayName}</h6>
+                              <p>{member.email}</p>
+                              <span className={`role-badge ${roleBadgeClass(member.role)}`}>
+                                {displayRole(member.role)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="no-manager">
+                    <p>No manager assigned to this team.</p>
+                  </div>
                 )}
               </div>
-              <div className="team-members">
-                <div className="members-count">
-                  {team.members.length} member{team.members.length !== 1 ? 's' : ''}
-                </div>
-                <div className="members-list">
-                  {team.members.slice(0, 3).map(member => (
-                    <div key={member.id} className="member-item">
-                      <span className="member-name">{member.displayName}</span>
-                      <span className="member-role">{member.role}</span>
-                    </div>
-                  ))}
-                  {team.members.length > 3 && (
-                    <div className="more-members">
-                      +{team.members.length - 3} more
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-          {teams.length === 0 && (
-            <div className="no-teams">No teams found</div>
+            ))
           )}
         </div>
-      </div>
+      ) : filteredTeams.length === 0 ? (
+        <p className="tm-empty-hint">
+          No teams found in {getSubTabTitle().toLowerCase()}.
+        </p>
+      ) : (
+        filteredTeams.map(team => (
+          <div key={team.id} className="team-section">
+            <div className="tm-team-block-header">
+              <div className="team-info">
+                <h4>
+                  🏢 {team.name} ({team.region?.name || 'No region'})
+                </h4>
+                <p className="team-manager-line">
+                  👤 Manager:{' '}
+                  {team.manager
+                    ? `${team.manager.displayName} (${displayRole(team.manager.role)})`
+                    : 'No manager assigned'}
+                </p>
+              </div>
+            </div>
+
+            {!team.members || team.members.length === 0 ? (
+              <p className="no-members">No members assigned to this team.</p>
+            ) : (
+              <ul className="team-members-list">
+                {team.members.map(m => (
+                  <li key={m.id} className="team-member">
+                    <span className="member-info">
+                      👤 {m.displayName} ({m.email}) — {displayRole(m.role)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))
+      )}
     </div>
   );
 };

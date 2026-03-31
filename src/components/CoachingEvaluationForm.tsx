@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiService, User } from '../services/api';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CoachingEvaluationFormProps {
   onSuccess: () => void;
@@ -9,6 +10,7 @@ interface CoachingEvaluationFormProps {
 
 const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSuccess, onCancel }) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [evaluatableUsers, setEvaluatableUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,9 +31,19 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Use apiService only — raw fetch with localStorage userToken sends encrypted garbage;
+        // apiService uses tokenStorage.getToken() (decrypted) and refresh on 401.
+        let salesLeads: User[] = [];
         const users = await apiService.getEvaluatableUsers();
-        const salesLeads = users.filter(u => u.role === 'SALES_LEAD');
-        setEvaluatableUsers(salesLeads);
+        salesLeads = users.filter(u => u.role === 'SALES_LEAD');
+
+        if (salesLeads.length === 0) {
+          const team = await apiService.getMyTeam();
+          salesLeads = (team?.members || []).filter(member => member.role === 'SALES_LEAD');
+        }
+
+        const uniqueSalesLeads = Array.from(new Map(salesLeads.map(item => [item.id, item])).values());
+        setEvaluatableUsers(uniqueSalesLeads);
       } catch (err) {
         setError(t('common:evaluation.error'));
         console.error('Error loading data:', err);
@@ -41,7 +53,7 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
     };
 
     loadData();
-  }, [t]);
+  }, [t, user?.id]);
 
   // Hardcoded coaching categories
   const categories = [

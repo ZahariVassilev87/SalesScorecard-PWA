@@ -43,7 +43,29 @@ const EvaluationHistory: React.FC = () => {
         console.log('🔄 Loading evaluations...');
         const data = await apiService.getMyEvaluations();
         console.log('📊 Loaded evaluations:', data);
-        setEvaluations(data);
+        const safeData = (Array.isArray(data) ? data : []).filter(Boolean).map((evaluation: any) => ({
+          ...evaluation,
+          salesperson: evaluation?.salesperson || {
+            id: evaluation?.salespersonId || '',
+            firstName: '',
+            lastName: '',
+            displayName: 'Unknown',
+            email: '',
+            teamId: '',
+            isActive: true,
+            createdAt: '',
+            updatedAt: ''
+          },
+          manager: evaluation?.manager || {
+            id: evaluation?.managerId || '',
+            email: '',
+            displayName: 'Unknown',
+            role: 'SALES_LEAD',
+            isActive: true
+          },
+          items: Array.isArray(evaluation?.items) ? evaluation.items.filter(Boolean) : []
+        }));
+        setEvaluations(safeData as Evaluation[]);
       } catch (err) {
         setError(t('history.loading'));
         console.error('Failed to load evaluations:', err);
@@ -321,12 +343,16 @@ const EvaluationHistory: React.FC = () => {
   const separateEvaluations = () => {
     if (!user) return { evaluationsICreated: [], evaluationsAboutMe: [] };
 
+    if (user.role === 'REGIONAL_MANAGER' || user.role === 'REGIONAL_SALES_MANAGER') {
+      return { evaluationsICreated: evaluations, evaluationsAboutMe: [] };
+    }
+
     const evaluationsICreated = evaluations.filter(evaluation => 
       evaluation.managerId === user.id
     );
 
     const evaluationsAboutMe = evaluations.filter(evaluation => 
-      evaluation.salespersonId === user.id
+      evaluation.managerId !== user.id
     );
 
     return { evaluationsICreated, evaluationsAboutMe };
@@ -432,7 +458,7 @@ const EvaluationHistory: React.FC = () => {
                 <div className="evaluation-header">
                   <div className="evaluation-info">
                     <div className="evaluation-title">
-                      <h3>{evaluation.salesperson.displayName || evaluation.salesperson.name || `${evaluation.salesperson.firstName} ${evaluation.salesperson.lastName}`}</h3>
+                      <h3>{evaluation.salesperson?.displayName || evaluation.salesperson?.name || `${evaluation.salesperson?.firstName || ''} ${evaluation.salesperson?.lastName || ''}`.trim() || evaluation.salesperson?.email || 'Unknown'}</h3>
                       <span className="evaluation-date">{formatDate(evaluation.visitDate)}</span>
                     </div>
                     
@@ -523,7 +549,7 @@ const EvaluationHistory: React.FC = () => {
             
             <div className="modal-body">
               <div className="evaluation-details">
-                <h4>{selectedEvaluation.salesperson.displayName || selectedEvaluation.salesperson.name || `${selectedEvaluation.salesperson.firstName} ${selectedEvaluation.salesperson.lastName}`}</h4>
+                <h4>{selectedEvaluation.salesperson?.displayName || selectedEvaluation.salesperson?.name || `${selectedEvaluation.salesperson?.firstName || ''} ${selectedEvaluation.salesperson?.lastName || ''}`.trim() || selectedEvaluation.salesperson?.email || 'Unknown'}</h4>
                 <p><strong>{t('history.date')}</strong> {formatDate(selectedEvaluation.visitDate)}</p>
                 {selectedEvaluation.customerName && (
                   <p><strong>{t('history.customer')}</strong> {selectedEvaluation.customerName}</p>

@@ -420,17 +420,17 @@ const SalesApp: React.FC = () => {
         {activeTab === 'team' && <MyTeam />}
         {activeTab === 'evaluation' && (
           user?.role === 'REGIONAL_MANAGER' || user?.role === 'REGIONAL_SALES_MANAGER' ? (
-            <CoachingEvaluationForm 
+            <CoachingEvaluationForm
               onSuccess={handleEvaluationSuccess}
               onCancel={() => setActiveTab('dashboard')}
             />
           ) : user?.role === 'SALES_LEAD' ? (
-            <SalespersonEvaluationForm 
+            <SalespersonEvaluationForm
               onSuccess={handleEvaluationSuccess}
               onCancel={() => setActiveTab('dashboard')}
             />
           ) : (
-            <EvaluationForm 
+            <EvaluationForm
               onSuccess={handleEvaluationSuccess}
               onCancel={() => setActiveTab('dashboard')}
             />

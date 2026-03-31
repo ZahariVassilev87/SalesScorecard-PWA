@@ -31,7 +31,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initAuth = () => {
       console.log('🔍 [MOBILE DEBUG] AuthContext initAuth starting...');
-      const token = localStorage.getItem('userToken') || sessionStorage.getItem('userToken');
+      const token = tokenStorage.getToken() || localStorage.getItem('token') || sessionStorage.getItem('token');
       console.log('🔍 [MOBILE DEBUG] Token found:', !!token);
       
       if (token) {

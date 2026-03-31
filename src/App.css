@@ -4213,3 +4213,442 @@ body {
     font-size: 0.8rem;
   }
 }
+
+/* Team Management tab — layout aligned with admin panel Team Members */
+.team-members.tm-panel {
+  background: white;
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--gray-200);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.tm-panel .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--gray-200);
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.tm-panel .section-header h3 {
+  color: var(--gray-900);
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tm-panel .header-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tm-panel .view-mode-toggle {
+  display: flex;
+  background: var(--gray-100);
+  border-radius: var(--radius-lg);
+  padding: var(--space-1);
+  gap: var(--space-1);
+}
+
+.tm-panel .view-toggle {
+  background: transparent;
+  border: none;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--gray-600);
+  transition: all 0.2s ease;
+}
+
+.tm-panel .view-toggle:hover {
+  background: var(--gray-200);
+  color: var(--gray-800);
+}
+
+.tm-panel .view-toggle.active {
+  background: var(--primary-500);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.tm-panel .refresh-button {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  min-height: 44px;
+}
+
+.tm-panel .refresh-button:hover {
+  background: #218838;
+}
+
+.tm-panel .sub-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  background: var(--gray-50);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--gray-200);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tm-panel .sub-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tm-panel .sub-tab {
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-md);
+  color: var(--gray-600);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.tm-panel .sub-tab:hover {
+  background: var(--gray-100);
+  border-color: var(--gray-400);
+  color: var(--gray-700);
+  transform: translateY(-1px);
+}
+
+.tm-panel .sub-tab.active {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: white;
+  box-shadow: 0 2px 4px rgba(168, 85, 247, 0.2);
+}
+
+.tm-panel .tm-empty-hint {
+  color: var(--gray-600);
+  padding: var(--space-4);
+}
+
+.tm-panel .team-section {
+  margin-bottom: var(--space-8);
+  padding: var(--space-6);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, var(--gray-50) 0%, white 100%);
+  box-shadow: var(--shadow-md);
+  transition: all 0.3s ease;
+}
+
+.tm-panel .team-section:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.tm-panel .tm-team-block-header {
+  margin-bottom: var(--space-4);
+}
+
+.tm-panel .team-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.tm-panel .team-info h4 {
+  color: var(--gray-900);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tm-panel .team-manager-line {
+  color: var(--gray-600);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.tm-panel .no-members {
+  color: #666;
+  font-style: italic;
+  padding: 1rem;
+  text-align: center;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.tm-panel .team-members-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tm-panel .team-member {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e1e5e9;
+  transition: box-shadow 0.2s ease;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tm-panel .team-member:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.tm-panel .member-info {
+  flex: 1;
+  color: #333;
+  min-width: 200px;
+}
+
+.tm-panel .hierarchical-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-2);
+}
+
+.tm-panel .team-hierarchy {
+  background: white;
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--gray-200);
+}
+
+.tm-panel .team-hierarchy h4 {
+  color: var(--gray-900);
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--primary-200);
+}
+
+.tm-panel .manager-card {
+  background: linear-gradient(135deg, var(--primary-50) 0%, var(--primary-100) 100%);
+  border: 2px solid var(--primary-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  position: relative;
+}
+
+.tm-panel .manager-card::before {
+  content: '👑';
+  position: absolute;
+  top: -10px;
+  left: var(--space-4);
+  background: white;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+}
+
+.tm-panel .manager-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.tm-panel .manager-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--primary-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: var(--font-size-lg);
+}
+
+.tm-panel .manager-details h5 {
+  color: var(--gray-900);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.tm-panel .manager-details p {
+  color: var(--gray-600);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.tm-panel .subordinates {
+  margin-left: var(--space-6);
+  border-left: 2px solid var(--primary-200);
+  padding-left: var(--space-4);
+}
+
+.tm-panel .subordinate-card {
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+  transition: all 0.2s ease;
+}
+
+.tm-panel .subordinate-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateX(4px);
+}
+
+.tm-panel .subordinate-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tm-panel .subordinate-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gray-400);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.tm-panel .subordinate-details h6 {
+  color: var(--gray-900);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  margin: 0;
+}
+
+.tm-panel .subordinate-details p {
+  color: var(--gray-600);
+  font-size: var(--font-size-xs);
+  margin: 0;
+}
+
+.tm-panel .role-badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tm-panel .role-badge.sales-director {
+  background: var(--primary-100);
+  color: var(--primary-800);
+}
+
+.tm-panel .role-badge.regional-manager,
+.tm-panel .role-badge.regional-sales-manager {
+  background: var(--warning-50);
+  color: var(--warning-600);
+}
+
+.tm-panel .role-badge.sales-lead {
+  background: var(--success-50);
+  color: var(--success-600);
+}
+
+.tm-panel .role-badge.salesperson {
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+
+.tm-panel .no-manager {
+  padding: var(--space-4);
+  background: var(--gray-50);
+  border-radius: var(--radius-md);
+  color: var(--gray-600);
+}
+
+@media (max-width: 768px) {
+  .team-members.tm-panel {
+    padding: var(--space-4);
+  }
+
+  .tm-panel .section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+
+  .tm-panel .header-actions {
+    justify-content: stretch;
+  }
+
+  .tm-panel .refresh-button {
+    flex: 1;
+    min-width: auto;
+  }
+
+  .tm-panel .team-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tm-panel .team-member {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .tm-panel .hierarchical-view {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .team-members.tm-panel {
+    padding: 1rem;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .tm-panel .view-toggle,
+  .tm-panel .refresh-button,
+  .tm-panel .sub-tab {
+    min-height: 48px;
+    font-size: 1rem;
+  }
+}
