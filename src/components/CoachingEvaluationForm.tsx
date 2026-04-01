@@ -31,15 +31,22 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Use apiService only — raw fetch with localStorage userToken sends encrypted garbage;
-        // apiService uses tokenStorage.getToken() (decrypted) and refresh on 401.
+        // For coaching, RM/RSM evaluate SALES_LEAD users specifically.
+        // Do not use getEvaluatableUsers() here because that endpoint is salesperson-oriented.
         let salesLeads: User[] = [];
-        const users = await apiService.getEvaluatableUsers();
-        salesLeads = users.filter(u => u.role === 'SALES_LEAD');
+        const team = await apiService.getMyTeam();
+        salesLeads = (team?.members || []).filter(member => member.role === 'SALES_LEAD');
 
         if (salesLeads.length === 0) {
-          const team = await apiService.getMyTeam();
-          salesLeads = (team?.members || []).filter(member => member.role === 'SALES_LEAD');
+          const orgTeams = await apiService.getTeams();
+          salesLeads = Array.from(
+            new Map(
+              orgTeams
+                .flatMap((t) => t.members || [])
+                .filter((m) => m && m.role === 'SALES_LEAD')
+                .map((m) => [m.id, m])
+            ).values()
+          );
         }
 
         const uniqueSalesLeads = Array.from(new Map(salesLeads.map(item => [item.id, item])).values());
@@ -55,51 +62,51 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
     loadData();
   }, [t, user?.id]);
 
-  // Hardcoded coaching categories
+  // Hardcoded coaching categories (source of truth for RM/RSM coaching form).
+  // Weights proportional to criterion count (12 total): 3 + 2 + 4 + 3.
   const categories = [
     {
-      id: 'observation',
-      name: t('coaching:cluster1'),
+      id: 'preMeeting',
+      name: t('coaching:clusterPreMeeting'),
       color: '#8b5cf6',
-      weight: 0.40,
+      weight: 3 / 12,
       items: [
-        { id: 'obs1', name: t('coaching:letSalespersonLead'), descriptions: [t('coaching:score1'), t('coaching:score2'), t('coaching:score3'), t('coaching:score4')] },
-        { id: 'obs2', name: t('coaching:providedSupport'), descriptions: [t('coaching:support1'), t('coaching:support2'), t('coaching:support3'), t('coaching:support4')] },
-        { id: 'obs3', name: t('coaching:steppedInValue'), descriptions: [t('coaching:value1'), t('coaching:value2'), t('coaching:value3'), t('coaching:value4')] },
-        { id: 'obs4', name: t('coaching:activelyListened'), descriptions: [t('coaching:listen1'), t('coaching:listen2'), t('coaching:listen3'), t('coaching:listen4')] },
+        { id: 'pre1', name: t('coaching:clarifiedObjective'), descriptions: [t('coaching:clarifiedObjective1'), t('coaching:clarifiedObjective2'), t('coaching:clarifiedObjective3'), t('coaching:clarifiedObjective4')] },
+        { id: 'pre2', name: t('coaching:reviewedPreparation'), descriptions: [t('coaching:reviewedPreparation1'), t('coaching:reviewedPreparation2'), t('coaching:reviewedPreparation3'), t('coaching:reviewedPreparation4')] },
+        { id: 'pre3', name: t('coaching:clearStrategy'), descriptions: [t('coaching:clearStrategy1'), t('coaching:clearStrategy2'), t('coaching:clearStrategy3'), t('coaching:clearStrategy4')] },
       ]
     },
     {
-      id: 'environment',
-      name: t('coaching:cluster2'),
+      id: 'duringMeeting',
+      name: t('coaching:clusterDuringMeeting'),
       color: '#3b82f6',
-      weight: 0.20,
+      weight: 2 / 12,
       items: [
-        { id: 'env1', name: t('coaching:calmAtmosphere'), descriptions: [t('coaching:atmosphere1'), t('coaching:atmosphere2'), t('coaching:atmosphere3'), t('coaching:atmosphere4')] },
-        { id: 'env2', name: t('coaching:askedSelfAssessment'), descriptions: [t('coaching:assessment1'), t('coaching:assessment2'), t('coaching:assessment3'), t('coaching:assessment4')] },
-        { id: 'env3', name: t('coaching:listenedAttentively'), descriptions: [t('coaching:attentive1'), t('coaching:attentive2'), t('coaching:attentive3'), t('coaching:attentive4')] },
+        { id: 'meet1', name: t('coaching:allowedLead'), descriptions: [t('coaching:allowedLead1'), t('coaching:allowedLead2'), t('coaching:allowedLead3'), t('coaching:allowedLead4')] },
+        { id: 'meet2', name: t('coaching:interveneWhenNeeded'), descriptions: [t('coaching:interveneWhenNeeded1'), t('coaching:interveneWhenNeeded2'), t('coaching:interveneWhenNeeded3'), t('coaching:interveneWhenNeeded4')] },
       ]
     },
     {
-      id: 'feedback',
-      name: t('coaching:cluster3'),
+      id: 'analysisFeedback',
+      name: t('coaching:clusterAnalysis'),
       color: '#10b981',
-      weight: 0.20,
+      weight: 4 / 12,
       items: [
-        { id: 'fb1', name: t('coaching:startedPositive'), descriptions: [t('coaching:positive1'), t('coaching:positive2'), t('coaching:positive3'), t('coaching:positive4')] },
-        { id: 'fb2', name: t('coaching:concreteExamples'), descriptions: [t('coaching:examples1'), t('coaching:examples2'), t('coaching:examples3'), t('coaching:examples4')] },
-        { id: 'fb3', name: t('coaching:identifiedImprovement'), descriptions: [t('coaching:improvement1'), t('coaching:improvement2'), t('coaching:improvement3'), t('coaching:improvement4')] },
+        { id: 'ana1', name: t('coaching:selfAssessmentFirst'), descriptions: [t('coaching:selfAssessmentFirst1'), t('coaching:selfAssessmentFirst2'), t('coaching:selfAssessmentFirst3'), t('coaching:selfAssessmentFirst4')] },
+        { id: 'ana2', name: t('coaching:positiveBIR'), descriptions: [t('coaching:positiveBIR1'), t('coaching:positiveBIR2'), t('coaching:positiveBIR3'), t('coaching:positiveBIR4')] },
+        { id: 'ana3', name: t('coaching:constructiveBIR'), descriptions: [t('coaching:constructiveBIR1'), t('coaching:constructiveBIR2'), t('coaching:constructiveBIR3'), t('coaching:constructiveBIR4')] },
+        { id: 'ana4', name: t('coaching:realExamples'), descriptions: [t('coaching:realExamples1'), t('coaching:realExamples2'), t('coaching:realExamples3'), t('coaching:realExamples4')] },
       ]
     },
     {
       id: 'action',
-      name: t('coaching:cluster4'),
+      name: t('coaching:clusterAction'),
       color: '#f59e0b',
-      weight: 0.20,
+      weight: 3 / 12,
       items: [
-        { id: 'act1', name: t('coaching:setClearTasks'), descriptions: [t('coaching:tasks1'), t('coaching:tasks2'), t('coaching:tasks3'), t('coaching:tasks4')] },
-        { id: 'act2', name: t('coaching:reachedAgreement'), descriptions: [t('coaching:agreement1'), t('coaching:agreement2'), t('coaching:agreement3'), t('coaching:agreement4')] },
-        { id: 'act3', name: t('coaching:encouragedGoal'), descriptions: [t('coaching:goal1'), t('coaching:goal2'), t('coaching:goal3'), t('coaching:goal4')] },
+        { id: 'act1', name: t('coaching:nextVisitFocus'), descriptions: [t('coaching:nextVisitFocus1'), t('coaching:nextVisitFocus2'), t('coaching:nextVisitFocus3'), t('coaching:nextVisitFocus4')] },
+        { id: 'act2', name: t('coaching:ensuredUnderstanding'), descriptions: [t('coaching:ensuredUnderstanding1'), t('coaching:ensuredUnderstanding2'), t('coaching:ensuredUnderstanding3'), t('coaching:ensuredUnderstanding4')] },
+        { id: 'act3', name: t('coaching:weeklyFocus'), descriptions: [t('coaching:weeklyFocus1'), t('coaching:weeklyFocus2'), t('coaching:weeklyFocus3'), t('coaching:weeklyFocus4')] },
       ]
     }
   ];
