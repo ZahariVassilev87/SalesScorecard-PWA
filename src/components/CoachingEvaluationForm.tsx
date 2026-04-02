@@ -174,7 +174,11 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
       category => !(clusterComments[category.id] || '').trim()
     );
     if (missingClusterComments.length > 0) {
-      setError('Моля, добавете коментар за всеки клъстер');
+      setError(
+        i18n.language === 'bg'
+          ? 'Трябва да дадете конкретен пример, като коментар след всяка секция.'
+          : 'You need to give a concrete example as a comment after each stage to submit the evaluation form.'
+      );
       return;
     }
 
@@ -243,7 +247,6 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
         <p>{t('coaching:subtitle')}</p>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
       {successMessage && <div className="success-message">{successMessage}</div>}
 
       <form onSubmit={handleSubmit}>
@@ -395,7 +398,6 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
                   value={clusterComments[category.id] || ''}
                   onChange={(e) => handleClusterCommentChange(category.id, e.target.value)}
                   rows={3}
-                  required
                   style={{
                     width: '100%',
                     padding: '12px',
@@ -459,6 +461,22 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
             />
           </div>
         </div>
+
+        {error && (
+          <div
+            className="error-message"
+            style={{
+              fontSize: '1rem',
+              fontWeight: 700,
+              lineHeight: 1.45,
+              padding: '0.9rem 1rem',
+              borderWidth: '2px',
+              marginBottom: '1rem'
+            }}
+          >
+            {error}
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="form-actions">
