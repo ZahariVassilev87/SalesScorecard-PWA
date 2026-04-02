@@ -36,16 +36,215 @@ interface Company {
   isActive: boolean;
 }
 
+interface CompanyFeatureFlags {
+  enableCompanyCustomization: boolean;
+  useLegacyEvaluationFlow: boolean;
+}
+
+interface CompanyScoringProfile {
+  mode: 'legacy_average' | 'weighted_average';
+  settings: Record<string, any>;
+}
+
+interface CompanyHierarchyTemplate {
+  rules: Array<{
+    evaluatorRole: string;
+    targetRoles: string[];
+  }>;
+}
+
+interface CompanyConfigurationPayload {
+  companyId: string;
+  featureFlags: CompanyFeatureFlags;
+  scoringProfile: CompanyScoringProfile;
+  hierarchyTemplate: CompanyHierarchyTemplate;
+}
+
+interface CompanyFormTemplatePayload {
+  companyId: string;
+  categories: Array<{
+    id: string;
+    name: string;
+    order: number;
+    weight: number;
+    items: Array<{
+      id: string;
+      name: string;
+      order: number;
+      weight?: number;
+      isActive?: boolean;
+    }>;
+  }>;
+}
+
+/** Roles shown in hierarchy & form editors (order: broad → narrow) */
+const ROLE_OPTIONS_EVALUATOR = [
+  'SUPER_ADMIN',
+  'ADMIN',
+  'SALES_DIRECTOR',
+  'REGIONAL_SALES_MANAGER',
+  'REGIONAL_MANAGER',
+  'SALES_LEAD',
+  'SALESPERSON'
+] as const;
+
+const ROLE_OPTIONS_TARGET = [
+  'SALESPERSON',
+  'SALES_LEAD',
+  'REGIONAL_MANAGER',
+  'REGIONAL_SALES_MANAGER',
+  'SALES_DIRECTOR',
+  'ADMIN',
+  'SUPER_ADMIN'
+] as const;
+
+type HierarchyRuleEditor = {
+  key: string;
+  evaluatorRole: string;
+  targetRoles: string[];
+};
+
+type FormItemEditor = {
+  key: string;
+  id: string;
+  name: string;
+  order: number;
+  weight: number;
+  isActive: boolean;
+};
+
+type FormCategoryEditor = {
+  key: string;
+  id: string;
+  name: string;
+  order: number;
+  weight: number;
+  items: FormItemEditor[];
+};
+
+const PROD_SALESPERSON_STANDARD_PRESET: CompanyFormTemplatePayload['categories'] = [
+  {
+    id: crypto.randomUUID(),
+    name: 'Discovery (SALESPERSON)',
+    order: 1,
+    weight: 0.25,
+    items: [
+      { id: crypto.randomUUID(), name: 'Asks open-ended questions', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Uncovers customer pain points', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Identifies decision makers', order: 3, weight: 1, isActive: true }
+    ]
+  },
+  {
+    id: crypto.randomUUID(),
+    name: 'Solution Positioning (SALESPERSON)',
+    order: 2,
+    weight: 0.25,
+    items: [
+      { id: crypto.randomUUID(), name: 'Tailors solution to customer context', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Articulates clear value proposition', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Demonstrates product knowledge', order: 3, weight: 1, isActive: true }
+    ]
+  },
+  {
+    id: crypto.randomUUID(),
+    name: 'Closing & Next Steps (SALESPERSON)',
+    order: 3,
+    weight: 0.25,
+    items: [
+      { id: crypto.randomUUID(), name: 'Makes clear asks', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Identifies next steps', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Sets mutual commitments', order: 3, weight: 1, isActive: true }
+    ]
+  },
+  {
+    id: crypto.randomUUID(),
+    name: 'Professionalism (SALESPERSON)',
+    order: 4,
+    weight: 0.25,
+    items: [
+      { id: crypto.randomUUID(), name: 'Arrives prepared', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Manages time effectively', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Maintains professional demeanor', order: 3, weight: 1, isActive: true }
+    ]
+  }
+];
+
+const PROD_COACHING_SALES_LEAD_PRESET: CompanyFormTemplatePayload['categories'] = [
+  {
+    id: crypto.randomUUID(),
+    name: 'PRE-MEETING COACHING',
+    order: 1,
+    weight: 3 / 12,
+    items: [
+      { id: crypto.randomUUID(), name: 'Clarified the objective for the client meeting', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Reviewed salesperson preparation (menu, max potential, basket size)', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Ensured the salesperson has a clear strategy for what to do in the meeting', order: 3, weight: 1, isActive: true }
+    ]
+  },
+  {
+    id: crypto.randomUUID(),
+    name: 'BEHAVIOR DURING CLIENT MEETING',
+    order: 2,
+    weight: 2 / 12,
+    items: [
+      { id: crypto.randomUUID(), name: 'Allowed the salesperson to lead the conversation', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Intervened only when necessary (business-critical situations)', order: 2, weight: 1, isActive: true }
+    ]
+  },
+  {
+    id: crypto.randomUUID(),
+    name: 'Quality of Analysis & Feedback',
+    order: 3,
+    weight: 4 / 12,
+    items: [
+      { id: crypto.randomUUID(), name: 'Asked for the salesperson’s self-assessment first', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Gave positive feedback using Behavior - Impact - Result', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Gave constructive feedback using Behavior - Impact - Result', order: 3, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Used real examples from the meeting', order: 4, weight: 1, isActive: true }
+    ]
+  },
+  {
+    id: crypto.randomUUID(),
+    name: 'Translating Into Action',
+    order: 4,
+    weight: 3 / 12,
+    items: [
+      { id: crypto.randomUUID(), name: 'Set a clear goal for executing specific behavior for the next visit (FOCUS)', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Ensured agreement and understanding from the salesperson', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Set a weekly goal for executing specific behavior (FOCUS)', order: 3, weight: 1, isActive: true }
+    ]
+  }
+];
+
+/** Mirrors /scoring/categories filtering by category name (Metro-style tokens). View-only in admin. */
+type FormTemplatePwaView = 'all' | 'sp_standard' | 'sp_high_share' | 'sales_lead';
+
+function categoryMatchesPwaView(categoryName: string, view: FormTemplatePwaView): boolean {
+  if (view === 'all') return true;
+  const n = categoryName || '';
+  const u = n.toUpperCase();
+  if (view === 'sales_lead') {
+    return u.includes('SALES_LEAD');
+  }
+  if (view === 'sp_high_share') {
+    return u.includes('SALESPERSON') && (u.includes('HIGH_SHARE') || n.includes('High Share'));
+  }
+  if (view === 'sp_standard') {
+    return u.includes('SALESPERSON') && !u.includes('HIGH_SHARE') && !n.includes('High Share');
+  }
+  return true;
+}
+
 interface LoginResponse {
   token: string;
   user: User;
 }
 
-// API Service
+// API Service — relative URLs in dev (empty base) so CRA `proxy` forwards to the Node backend; use env or origin in prod / cross-origin.
 const API_BASE =
   process.env.REACT_APP_ADMIN_API_BASE_URL ||
   process.env.REACT_APP_API_BASE_URL ||
-  window.location.origin;
+  (process.env.NODE_ENV === 'development' ? '' : window.location.origin);
 
 class ApiService {
   private token: string | null = null;
@@ -349,6 +548,26 @@ class ApiService {
     return response.json();
   }
 
+  async createCompany(payload: {
+    id: string;
+    name: string;
+    slug?: string;
+    isActive?: boolean;
+  }): Promise<Company & { slug?: string }> {
+    const response = await fetch(`${API_BASE}/public-admin/companies`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to create company: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
   async seedTemplates(companyId: string): Promise<any> {
     const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/seed-defaults`, {
       method: 'POST',
@@ -360,6 +579,60 @@ class ApiService {
       throw new Error(`Failed to seed templates: ${response.status} ${errorText}`);
     }
 
+    return response.json();
+  }
+
+  async getCompanyConfiguration(companyId: string): Promise<CompanyConfigurationPayload> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/config`, {
+      headers: this.getHeaders()
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load company configuration: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async updateCompanyConfiguration(companyId: string, payload: {
+    featureFlags: CompanyFeatureFlags;
+    scoringProfile: CompanyScoringProfile;
+    hierarchyTemplate: CompanyHierarchyTemplate;
+  }): Promise<CompanyConfigurationPayload> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/config`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to update company configuration: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async getCompanyFormTemplate(companyId: string): Promise<CompanyFormTemplatePayload> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/form-template`, {
+      headers: this.getHeaders()
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load company form template: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async updateCompanyFormTemplate(companyId: string, categories: any[]): Promise<CompanyFormTemplatePayload> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/form-template`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ categories })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to update company form template: ${response.status} ${errorText}`);
+    }
     return response.json();
   }
 }
@@ -423,7 +696,10 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
   );
 };
 
-const TeamMembers: React.FC<{ openCreateSignal?: number }> = ({ openCreateSignal = 0 }) => {
+const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: string }> = ({
+  openCreateSignal = 0,
+  selectedCompanyId
+}) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
@@ -621,7 +897,7 @@ const TeamMembers: React.FC<{ openCreateSignal?: number }> = ({ openCreateSignal
 
   useEffect(() => {
     loadTeams();
-  }, []);
+  }, [selectedCompanyId]);
 
   useEffect(() => {
     if (openCreateSignal > 0) {
@@ -938,7 +1214,10 @@ const TeamMembers: React.FC<{ openCreateSignal?: number }> = ({ openCreateSignal
   );
 };
 
-const UserManagement: React.FC<{ openCreateSignal?: number }> = ({ openCreateSignal = 0 }) => {
+const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: string }> = ({
+  openCreateSignal = 0,
+  selectedCompanyId
+}) => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -1092,7 +1371,7 @@ const UserManagement: React.FC<{ openCreateSignal?: number }> = ({ openCreateSig
 
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [selectedCompanyId]);
 
   useEffect(() => {
     if (openCreateSignal > 0) {
@@ -1429,7 +1708,7 @@ const UserManagement: React.FC<{ openCreateSignal?: number }> = ({ openCreateSig
   );
 };
 
-const RegionsManagement: React.FC = () => {
+const RegionsManagement: React.FC<{ selectedCompanyId: string }> = ({ selectedCompanyId }) => {
   const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -1449,7 +1728,7 @@ const RegionsManagement: React.FC = () => {
 
   useEffect(() => {
     loadRegions();
-  }, []);
+  }, [selectedCompanyId]);
 
   if (loading) {
     return <div className="loading">Loading regions...</div>;
@@ -1493,12 +1772,543 @@ const RegionsManagement: React.FC = () => {
   );
 };
 
+const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selectedCompanyId }) => {
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [featureFlags, setFeatureFlags] = useState<CompanyFeatureFlags>({
+    enableCompanyCustomization: false,
+    useLegacyEvaluationFlow: true
+  });
+  const [scoringMode, setScoringMode] = useState<'legacy_average' | 'weighted_average'>('legacy_average');
+  const [hierarchyRules, setHierarchyRules] = useState<HierarchyRuleEditor[]>([]);
+  const [formCategories, setFormCategories] = useState<FormCategoryEditor[]>([]);
+  const [pwaFormView, setPwaFormView] = useState<FormTemplatePwaView>('all');
+
+  const normalizeHierarchyFromConfig = (template: CompanyHierarchyTemplate | undefined): HierarchyRuleEditor[] => {
+    const rules = template?.rules;
+    if (Array.isArray(rules) && rules.length > 0) {
+      return rules.map((r) => ({
+        key: crypto.randomUUID(),
+        evaluatorRole: typeof r.evaluatorRole === 'string' ? r.evaluatorRole : 'SALES_LEAD',
+        targetRoles: Array.isArray(r.targetRoles) ? r.targetRoles.filter((x) => typeof x === 'string') : []
+      }));
+    }
+    return [
+      {
+        key: crypto.randomUUID(),
+        evaluatorRole: 'SALES_LEAD',
+        targetRoles: ['SALESPERSON']
+      }
+    ];
+  };
+
+  const normalizeFormCategoriesFromApi = (categories: CompanyFormTemplatePayload['categories']): FormCategoryEditor[] => {
+    if (!Array.isArray(categories) || categories.length === 0) {
+      return [];
+    }
+    return categories.map((c) => ({
+      key: crypto.randomUUID(),
+      id: typeof c.id === 'string' ? c.id : crypto.randomUUID(),
+      name: typeof c.name === 'string' ? c.name : '',
+      order: Number.isFinite(Number(c.order)) ? Number(c.order) : 1,
+      weight: Number.isFinite(Number(c.weight)) ? Number(c.weight) : 1,
+      items: (Array.isArray(c.items) ? c.items : []).map((it) => ({
+        key: crypto.randomUUID(),
+        id: typeof it.id === 'string' ? it.id : crypto.randomUUID(),
+        name: typeof it.name === 'string' ? it.name : '',
+        order: Number.isFinite(Number(it.order)) ? Number(it.order) : 1,
+        weight: (() => {
+          const w = it.weight;
+          if (typeof w === 'number' && Number.isFinite(w)) return w;
+          const p = parseFloat(String(w ?? '1'));
+          return Number.isFinite(p) ? p : 1;
+        })(),
+        isActive: it.isActive !== false
+      }))
+    }));
+  };
+
+  const load = async () => {
+    if (selectedCompanyId === 'all') {
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    const errors: string[] = [];
+    try {
+      try {
+        const config = await apiService.getCompanyConfiguration(selectedCompanyId);
+        setFeatureFlags({
+          enableCompanyCustomization: config.featureFlags?.enableCompanyCustomization === true,
+          useLegacyEvaluationFlow: config.featureFlags?.useLegacyEvaluationFlow !== false
+        });
+        setScoringMode(config.scoringProfile?.mode === 'weighted_average' ? 'weighted_average' : 'legacy_average');
+        setHierarchyRules(normalizeHierarchyFromConfig(config.hierarchyTemplate));
+      } catch (configErr) {
+        errors.push((configErr as Error).message);
+      }
+
+      try {
+        const formTemplate = await apiService.getCompanyFormTemplate(selectedCompanyId);
+        setFormCategories(normalizeFormCategoriesFromApi(formTemplate.categories || []));
+      } catch (formErr) {
+        errors.push((formErr as Error).message);
+      }
+
+      if (errors.length) {
+        setError(errors.join('\n\n'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCompanyId]);
+
+  const toggleTargetRole = (ruleKey: string, role: string) => {
+    setHierarchyRules((prev) =>
+      prev.map((rule) => {
+        if (rule.key !== ruleKey) return rule;
+        const has = rule.targetRoles.includes(role);
+        return {
+          ...rule,
+          targetRoles: has ? rule.targetRoles.filter((r) => r !== role) : [...rule.targetRoles, role]
+        };
+      })
+    );
+  };
+
+  const addHierarchyRule = () => {
+    setHierarchyRules((prev) => [
+      ...prev,
+      { key: crypto.randomUUID(), evaluatorRole: 'SALES_LEAD', targetRoles: ['SALESPERSON'] }
+    ]);
+  };
+
+  const removeHierarchyRule = (ruleKey: string) => {
+    setHierarchyRules((prev) => (prev.length <= 1 ? prev : prev.filter((r) => r.key !== ruleKey)));
+  };
+
+  const addCategory = () => {
+    setFormCategories((prev) => [
+      ...prev,
+      {
+        key: crypto.randomUUID(),
+        id: crypto.randomUUID(),
+        name: 'New category',
+        order: prev.length + 1,
+        weight: 1,
+        items: []
+      }
+    ]);
+  };
+
+  const applyPreset = (preset: CompanyFormTemplatePayload['categories']) => {
+    if (!window.confirm('Replace the current category list with this preset? You can still edit before saving.')) {
+      return;
+    }
+    setFormCategories(normalizeFormCategoriesFromApi(preset));
+    setSuccess('Preset loaded. Review and click Save configuration to persist.');
+    setError('');
+  };
+
+  const removeCategory = (catKey: string) => {
+    setFormCategories((prev) => prev.filter((c) => c.key !== catKey));
+  };
+
+  const updateCategory = (catKey: string, patch: Partial<Pick<FormCategoryEditor, 'name' | 'order' | 'weight'>>) => {
+    setFormCategories((prev) =>
+      prev.map((c) => (c.key === catKey ? { ...c, ...patch } : c))
+    );
+  };
+
+  const addItem = (catKey: string) => {
+    setFormCategories((prev) =>
+      prev.map((c) => {
+        if (c.key !== catKey) return c;
+        const nextOrder = c.items.length + 1;
+        return {
+          ...c,
+          items: [
+            ...c.items,
+            {
+              key: crypto.randomUUID(),
+              id: crypto.randomUUID(),
+              name: 'New item',
+              order: nextOrder,
+              weight: 1,
+              isActive: true
+            }
+          ]
+        };
+      })
+    );
+  };
+
+  const removeItem = (catKey: string, itemKey: string) => {
+    setFormCategories((prev) =>
+      prev.map((c) => {
+        if (c.key !== catKey) return c;
+        return { ...c, items: c.items.filter((it) => it.key !== itemKey) };
+      })
+    );
+  };
+
+  const updateItem = (
+    catKey: string,
+    itemKey: string,
+    patch: Partial<Pick<FormItemEditor, 'name' | 'order' | 'weight' | 'isActive'>>
+  ) => {
+    setFormCategories((prev) =>
+      prev.map((c) => {
+        if (c.key !== catKey) return c;
+        return {
+          ...c,
+          items: c.items.map((it) => (it.key === itemKey ? { ...it, ...patch } : it))
+        };
+      })
+    );
+  };
+
+  const handleSave = async () => {
+    if (selectedCompanyId === 'all') {
+      setError('Please select a specific company first.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const parsedHierarchy: CompanyHierarchyTemplate = {
+        rules: hierarchyRules.map((r) => ({
+          evaluatorRole: r.evaluatorRole,
+          targetRoles: [...r.targetRoles]
+        }))
+      };
+      const parsedFormTemplate = formCategories.map((c, ci) => ({
+        id: c.id,
+        name: c.name.trim() || `Category ${ci + 1}`,
+        order: c.order,
+        weight: c.weight,
+        items: c.items.map((it, ii) => ({
+          id: it.id,
+          name: it.name.trim() || `Item ${ii + 1}`,
+          order: it.order,
+          weight: it.weight,
+          isActive: it.isActive
+        }))
+      }));
+      if (parsedFormTemplate.length === 0) {
+        setError('Add at least one evaluation category (or use Seed Templates first).');
+        setSaving(false);
+        return;
+      }
+      await apiService.updateCompanyConfiguration(selectedCompanyId, {
+        featureFlags,
+        scoringProfile: {
+          mode: scoringMode,
+          settings: {}
+        },
+        hierarchyTemplate: parsedHierarchy
+      });
+      await apiService.updateCompanyFormTemplate(selectedCompanyId, parsedFormTemplate);
+      setSuccess('✅ Company configuration saved.');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (selectedCompanyId === 'all') {
+    return (
+      <div className="team-members">
+        <div className="section-header">
+          <h3>⚙️ Company Configuration</h3>
+        </div>
+        <p>Please select a specific company from the header dropdown.</p>
+      </div>
+    );
+  }
+
+  const visibleFormCategories = formCategories.filter((c) => categoryMatchesPwaView(c.name, pwaFormView));
+
+  return (
+    <div className="team-members company-config-wizard">
+      <div className="section-header">
+        <h3>⚙️ Company Configuration</h3>
+        <div className="header-actions">
+          <button onClick={load} className="refresh-button">🔄 Refresh</button>
+          <button onClick={handleSave} className="action-button success" disabled={saving || loading}>
+            {saving ? 'Saving...' : 'Save configuration'}
+          </button>
+        </div>
+      </div>
+
+      <p className="company-config-intro">
+        Choose your company in the header first. Changes here apply <strong>only to that company</strong>. Use the forms
+        below—no JSON editing required. Click <strong>Save configuration</strong> when you are done.
+      </p>
+
+      {loading ? <div className="loading">Loading configuration...</div> : null}
+      {error ? <div className="error-message">{error}</div> : null}
+      {success ? <div className="success-message">{success}</div> : null}
+
+      <div className="form-section company-config-card">
+        <h4>App behavior</h4>
+        <p className="config-hint">These options control how the mobile/web app uses this company&apos;s data. If unsure, leave as-is and ask your administrator.</p>
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={featureFlags.enableCompanyCustomization}
+            onChange={(e) => setFeatureFlags((prev) => ({ ...prev, enableCompanyCustomization: e.target.checked }))}
+          />
+          <span>
+            <strong>Use this company&apos;s own evaluation setup in the app</strong>
+            <span className="config-sub"> (company customization)</span>
+          </span>
+        </label>
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={featureFlags.useLegacyEvaluationFlow}
+            onChange={(e) => setFeatureFlags((prev) => ({ ...prev, useLegacyEvaluationFlow: e.target.checked }))}
+          />
+          <span>
+            <strong>Use standard evaluation flow</strong>
+            <span className="config-sub"> (recommended; turn off only if support asks)</span>
+          </span>
+        </label>
+      </div>
+
+      <div className="form-section company-config-card">
+        <h4>Scoring</h4>
+        <p className="config-hint">How scores are combined for this company.</p>
+        <div className="form-group">
+          <label htmlFor="scoring-mode">Scoring style</label>
+          <select
+            id="scoring-mode"
+            value={scoringMode}
+            onChange={(e) => setScoringMode(e.target.value as 'legacy_average' | 'weighted_average')}
+          >
+            <option value="legacy_average">Simple average (recommended)</option>
+            <option value="weighted_average">Weighted average</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="form-section company-config-card">
+        <h4>Who can evaluate whom</h4>
+        <p className="config-hint">
+          Each rule means: people with the first role may evaluate people who have one of the checked roles.
+        </p>
+        {hierarchyRules.map((rule) => (
+          <div key={rule.key} className="hierarchy-rule-card">
+            <div className="hierarchy-rule-header">
+              <label className="form-group compact">
+                <span>Evaluator role</span>
+                <select
+                  value={rule.evaluatorRole}
+                  onChange={(e) =>
+                    setHierarchyRules((prev) =>
+                      prev.map((r) => (r.key === rule.key ? { ...r, evaluatorRole: e.target.value } : r))
+                    )
+                  }
+                >
+                  {ROLE_OPTIONS_EVALUATOR.map((role) => (
+                    <option key={role} value={role}>{role.replace(/_/g, ' ')}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="action-button danger subtle" onClick={() => removeHierarchyRule(rule.key)}>
+                Remove rule
+              </button>
+            </div>
+            <fieldset className="target-roles-fieldset">
+              <legend>Can evaluate these roles</legend>
+              <div className="target-roles-grid">
+                {ROLE_OPTIONS_TARGET.map((role) => (
+                  <label key={role} className="checkbox-row inline">
+                    <input
+                      type="checkbox"
+                      checked={rule.targetRoles.includes(role)}
+                      onChange={() => toggleTargetRole(rule.key, role)}
+                    />
+                    {role.replace(/_/g, ' ')}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        ))}
+        <button type="button" className="action-button" onClick={addHierarchyRule}>
+          + Add rule
+        </button>
+      </div>
+
+      <div className="form-section company-config-card">
+        <h4>Evaluation form (categories &amp; items)</h4>
+        <div className="config-callout">
+          <p>
+            <strong>Dev vs production:</strong> This list comes from the <strong>same API your admin uses</strong> (for example
+            Docker on localhost). Production PWA uses the production API and database — content often <strong>will not match</strong>{' '}
+            until you use the same data source.
+          </p>
+          <p>
+            <strong>One list here, several experiences in the app:</strong> The PWA loads only categories whose <strong>names</strong>{' '}
+            match the situation (for Metro: tokens like <code>(SALESPERSON)</code>, <code>(SALES_LEAD)</code>, and optional{' '}
+            <code>HIGH_SHARE</code>). Everything still lives in one template; the app filters by role and visit type.
+          </p>
+        </div>
+        <p className="config-hint">
+          Edit names and order, or add categories and line items. Use &quot;Seed templates&quot; in the header first if this list is empty.
+        </p>
+        <div className="preset-toolbar">
+          <span className="preset-label">Load real prod baselines:</span>
+          <button
+            type="button"
+            className="action-button"
+            onClick={() => applyPreset(PROD_SALESPERSON_STANDARD_PRESET)}
+          >
+            Salesperson standard
+          </button>
+          <button
+            type="button"
+            className="action-button"
+            onClick={() => applyPreset(PROD_COACHING_SALES_LEAD_PRESET)}
+          >
+            RM -&gt; Sales Lead coaching
+          </button>
+        </div>
+        {formCategories.length > 0 ? (
+          <div className="form-group pwa-view-picker">
+            <label htmlFor="pwa-form-view">Preview like the mobile app (filter only — save still stores the full template)</label>
+            <select
+              id="pwa-form-view"
+              value={pwaFormView}
+              onChange={(e) => setPwaFormView(e.target.value as FormTemplatePwaView)}
+            >
+              <option value="all">All categories (full template in database)</option>
+              <option value="sp_standard">Salesperson — standard visit (~categories with SALESPERSON, not high-share)</option>
+              <option value="sp_high_share">Salesperson — high-share visit (~HIGH_SHARE in name)</option>
+              <option value="sales_lead">Sales lead / coaching (~SALES_LEAD in name)</option>
+            </select>
+          </div>
+        ) : null}
+        {formCategories.length === 0 ? (
+          <p className="config-empty">No categories yet. Use <strong>Seed templates</strong> in the header, then refresh this page.</p>
+        ) : null}
+        {formCategories.length > 0 && visibleFormCategories.length === 0 ? (
+          <p className="config-empty">
+            No categories match this preview. Try <strong>All categories</strong>, or check that names include the expected tokens
+            (e.g. <code>(SALESPERSON)</code>).
+          </p>
+        ) : null}
+        {visibleFormCategories.map((cat) => (
+          <div key={cat.key} className="form-category-card">
+            <div className="form-category-header">
+              <input
+                type="text"
+                className="category-title-input"
+                value={cat.name}
+                onChange={(e) => updateCategory(cat.key, { name: e.target.value })}
+                aria-label="Category name"
+              />
+              <button type="button" className="action-button danger subtle" onClick={() => removeCategory(cat.key)}>
+                Remove category
+              </button>
+            </div>
+            <div className="form-row-3">
+              <label className="form-group compact">
+                Display order
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={cat.order}
+                  onChange={(e) => updateCategory(cat.key, { order: parseInt(e.target.value, 10) || 1 })}
+                />
+              </label>
+              <label className="form-group compact">
+                Weight
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={cat.weight}
+                  onChange={(e) => updateCategory(cat.key, { weight: parseFloat(e.target.value) || 0 })}
+                />
+              </label>
+            </div>
+            <div className="form-items-block">
+              <div className="form-items-head">Items in this category</div>
+              {cat.items.map((it) => (
+                <div key={it.key} className="form-item-row">
+                  <input
+                    type="text"
+                    value={it.name}
+                    onChange={(e) => updateItem(cat.key, it.key, { name: e.target.value })}
+                    placeholder="Item description"
+                    aria-label="Item name"
+                  />
+                  <label className="sr-only" htmlFor={`ord-${it.key}`}>Order</label>
+                  <input
+                    id={`ord-${it.key}`}
+                    type="number"
+                    className="item-order"
+                    min={1}
+                    title="Order"
+                    value={it.order}
+                    onChange={(e) => updateItem(cat.key, it.key, { order: parseInt(e.target.value, 10) || 1 })}
+                  />
+                  <label className="checkbox-row inline tight">
+                    <input
+                      type="checkbox"
+                      checked={it.isActive}
+                      onChange={(e) => updateItem(cat.key, it.key, { isActive: e.target.checked })}
+                    />
+                    Active
+                  </label>
+                  <button
+                    type="button"
+                    className="action-button danger subtle"
+                    onClick={() => removeItem(cat.key, it.key)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button type="button" className="action-button success subtle" onClick={() => addItem(cat.key)}>
+                + Add item to this category
+              </button>
+            </div>
+          </div>
+        ))}
+        <button type="button" className="action-button success" onClick={addCategory}>
+          + Add category
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState('teams');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => localStorage.getItem('adminCompanyId') || 'all');
   const [openCreateSignal, setOpenCreateSignal] = useState(0);
+  const [adminRole, setAdminRole] = useState<string | null>(null);
+  const [showCreateCompanyPanel, setShowCreateCompanyPanel] = useState(false);
+  const [createCompanyForm, setCreateCompanyForm] = useState({ id: '', name: '', slug: '' });
+  const [createCompanyError, setCreateCompanyError] = useState('');
+  const [createCompanySaving, setCreateCompanySaving] = useState(false);
 
   const loadCompanies = async () => {
     try {
@@ -1530,9 +2340,55 @@ const AdminPanel: React.FC = () => {
     loadCompanies();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const u = await apiService.getCurrentUser();
+        setAdminRole(u.role);
+      } catch {
+        setAdminRole(null);
+      }
+    })();
+  }, []);
+
   const handleNew = () => {
+    if (adminRole === 'SUPER_ADMIN') {
+      setCreateCompanyError('');
+      setCreateCompanyForm({ id: '', name: '', slug: '' });
+      setShowCreateCompanyPanel(true);
+      return;
+    }
     if (activeTab === 'teams' || activeTab === 'users') {
       setOpenCreateSignal(prev => prev + 1);
+    }
+  };
+
+  const handleCreateCompanySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = createCompanyForm.id.trim();
+    const name = createCompanyForm.name.trim();
+    const slug = createCompanyForm.slug.trim();
+    if (!id || !name) {
+      setCreateCompanyError('Company id and name are required.');
+      return;
+    }
+    setCreateCompanySaving(true);
+    setCreateCompanyError('');
+    try {
+      const created = await apiService.createCompany({
+        id,
+        name,
+        ...(slug ? { slug } : {})
+      });
+      apiService.setCompanyContext(created.id);
+      setSelectedCompanyId(created.id);
+      await loadCompanies();
+      setShowCreateCompanyPanel(false);
+      setActiveTab('configuration');
+    } catch (err) {
+      setCreateCompanyError((err as Error).message);
+    } finally {
+      setCreateCompanySaving(false);
     }
   };
 
@@ -1542,91 +2398,227 @@ const AdminPanel: React.FC = () => {
       return;
     }
     try {
-      await apiService.seedTemplates(selectedCompanyId);
-      alert('✅ Templates seeded successfully.');
+      const result = await apiService.seedTemplates(selectedCompanyId);
+      const msg = (result && typeof result.message === 'string') ? result.message : '';
+      const cats = result?.categories;
+      const items = result?.items;
+      const counts =
+        typeof cats === 'number' && typeof items === 'number'
+          ? ` (${cats} categories, ${items} items)`
+          : '';
+      alert(`✅ ${msg || 'Done.'}${counts}`);
     } catch (error) {
       alert(`❌ Failed to seed templates: ${(error as Error).message}`);
     }
   };
 
+  const pageTitles: Record<string, string> = {
+    regions: 'Regions',
+    teams: 'Team management',
+    users: 'User management',
+    configuration: 'Company configuration'
+  };
+
   return (
     <div className="admin-panel">
-      <header className="admin-header">
-        <div className="header-left">
-          <button 
-            className="mobile-menu-toggle"
-            onClick={toggleMobileMenu}
-            aria-label="Toggle mobile menu"
-          >
-            <span className="hamburger-line"></span>
-            <span className="hamburger-line"></span>
-            <span className="hamburger-line"></span>
-          </button>
-          <h1>🎯 Sales Scorecard Admin</h1>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', marginRight: '8px' }}>
-            <label style={{ fontSize: '12px', color: '#eee' }}>Company</label>
-            <select
-              value={selectedCompanyId}
-              onChange={(e) => setSelectedCompanyId(e.target.value)}
-              style={{ padding: '6px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.35)' }}
-            >
-              <option value="all">All</option>
-              {companies.map((company) => (
-                <option key={company.id} value={company.id}>{company.name}</option>
-              ))}
-            </select>
-            <small style={{ color: '#ddd' }}>Switching company reloads teams and users.</small>
+      <div className="admin-shell">
+        <aside className={`admin-sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`} aria-label="Main navigation">
+          <div className="sidebar-brand">
+            <span className="sidebar-brand-mark" aria-hidden="true">
+              SS
+            </span>
+            <div className="sidebar-brand-text">
+              <span className="sidebar-brand-title">Sales Scorecard</span>
+              <span className="sidebar-brand-sub">Admin console</span>
+            </div>
           </div>
-          <button className="action-button" onClick={handleNew}>+ New</button>
-          <button className="action-button" onClick={handleSeedTemplates}>Seed Templates</button>
-          <button onClick={handleLogout} className="logout-button">
-            🚪 Logout
-          </button>
+          <nav className="admin-sidebar-nav">
+            <button
+              type="button"
+              className={activeTab === 'regions' ? 'nav-button active' : 'nav-button'}
+              onClick={() => {
+                setActiveTab('regions');
+                closeMobileMenu();
+              }}
+            >
+              Regions
+            </button>
+            <button
+              type="button"
+              className={activeTab === 'teams' ? 'nav-button active' : 'nav-button'}
+              onClick={() => {
+                setActiveTab('teams');
+                closeMobileMenu();
+              }}
+            >
+              Team management
+            </button>
+            <button
+              type="button"
+              className={activeTab === 'users' ? 'nav-button active' : 'nav-button'}
+              onClick={() => {
+                setActiveTab('users');
+                closeMobileMenu();
+              }}
+            >
+              User management
+            </button>
+            <button
+              type="button"
+              className={activeTab === 'configuration' ? 'nav-button active' : 'nav-button'}
+              onClick={() => {
+                setActiveTab('configuration');
+                closeMobileMenu();
+              }}
+            >
+              Company configuration
+            </button>
+          </nav>
+        </aside>
+
+        <div className="admin-main">
+          <header className="admin-topbar">
+            <div className="topbar-left">
+              <button
+                type="button"
+                className={isMobileMenuOpen ? 'mobile-menu-toggle active' : 'mobile-menu-toggle'}
+                onClick={toggleMobileMenu}
+                aria-label="Toggle navigation menu"
+                aria-expanded={isMobileMenuOpen}
+              >
+                <span className="hamburger-line" />
+                <span className="hamburger-line" />
+                <span className="hamburger-line" />
+              </button>
+              <h1 className="topbar-page-title">{pageTitles[activeTab] ?? 'Admin'}</h1>
+            </div>
+            <div className="topbar-actions">
+              <label className="topbar-company-field">
+                <span className="topbar-company-label">Company</span>
+                <select
+                  className="topbar-company-select"
+                  value={selectedCompanyId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    apiService.setCompanyContext(v === 'all' ? null : v);
+                    setSelectedCompanyId(v);
+                  }}
+                >
+                  <option value="all">All companies</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="topbar-company-hint">Switching updates teams and users.</span>
+              </label>
+              {adminRole === 'SUPER_ADMIN' && showCreateCompanyPanel ? (
+                <button
+                  type="button"
+                  className="action-button action-button--ghost"
+                  disabled={createCompanySaving}
+                  onClick={() => !createCompanySaving && setShowCreateCompanyPanel(false)}
+                >
+                  Cancel
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="action-button action-button--primary"
+                  onClick={handleNew}
+                  title={
+                    adminRole === 'SUPER_ADMIN'
+                      ? 'Create a new company'
+                      : 'Create team (Team Management) or user (User Management)'
+                  }
+                >
+                  + New
+                </button>
+              )}
+              <button type="button" className="action-button action-button--ghost" onClick={handleSeedTemplates}>
+                Seed templates
+              </button>
+              <button type="button" onClick={handleLogout} className="logout-button">
+                Log out
+              </button>
+            </div>
+          </header>
+
+          {adminRole === 'SUPER_ADMIN' && showCreateCompanyPanel ? (
+            <section className="create-company-panel" aria-labelledby="create-company-title">
+              <h2 id="create-company-title" className="create-company-panel-title">
+                Create company
+              </h2>
+              <form className="create-company-panel-form" onSubmit={handleCreateCompanySubmit}>
+                <div className="create-company-panel-fields">
+                  <div className="form-group">
+                    <label htmlFor="cc-id">Company ID</label>
+                    <input
+                      id="cc-id"
+                      value={createCompanyForm.id}
+                      onChange={(e) => setCreateCompanyForm((f) => ({ ...f, id: e.target.value }))}
+                      placeholder="e.g. company_demo"
+                      autoComplete="off"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="cc-name">Name</label>
+                    <input
+                      id="cc-name"
+                      value={createCompanyForm.name}
+                      onChange={(e) => setCreateCompanyForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g. Demo Industries"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="cc-slug">Slug (optional)</label>
+                    <input
+                      id="cc-slug"
+                      value={createCompanyForm.slug}
+                      onChange={(e) => setCreateCompanyForm((f) => ({ ...f, slug: e.target.value }))}
+                      placeholder="e.g. demo-industries"
+                    />
+                  </div>
+                </div>
+                {createCompanyError ? (
+                  <div className="error-message create-company-panel-error">{createCompanyError}</div>
+                ) : null}
+                <div className="create-company-panel-actions">
+                  <button
+                    type="button"
+                    className="action-button action-button--ghost"
+                    disabled={createCompanySaving}
+                    onClick={() => setShowCreateCompanyPanel(false)}
+                  >
+                    Close
+                  </button>
+                  <button type="submit" className="action-button action-button--primary" disabled={createCompanySaving}>
+                    {createCompanySaving ? 'Creating…' : 'Create company'}
+                  </button>
+                </div>
+              </form>
+            </section>
+          ) : null}
+
+          <main className="admin-content">
+            {activeTab === 'regions' && <RegionsManagement selectedCompanyId={selectedCompanyId} />}
+            {activeTab === 'teams' && (
+              <TeamMembers openCreateSignal={openCreateSignal} selectedCompanyId={selectedCompanyId} />
+            )}
+            {activeTab === 'users' && (
+              <UserManagement openCreateSignal={openCreateSignal} selectedCompanyId={selectedCompanyId} />
+            )}
+            {activeTab === 'configuration' && <CompanyConfiguration selectedCompanyId={selectedCompanyId} />}
+          </main>
         </div>
-      </header>
+      </div>
 
-      <nav className={`admin-nav ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
-        <button
-          className={activeTab === 'regions' ? 'nav-button active' : 'nav-button'}
-          onClick={() => {
-            setActiveTab('regions');
-            closeMobileMenu();
-          }}
-        >
-          🗺️ Regions
-        </button>
-        <button
-          className={activeTab === 'teams' ? 'nav-button active' : 'nav-button'}
-          onClick={() => {
-            setActiveTab('teams');
-            closeMobileMenu();
-          }}
-        >
-          👥 Team Management
-        </button>
-        <button
-          className={activeTab === 'users' ? 'nav-button active' : 'nav-button'}
-          onClick={() => {
-            setActiveTab('users');
-            closeMobileMenu();
-          }}
-        >
-          👤 User Management
-        </button>
-      </nav>
-
-      {/* Mobile menu overlay */}
-      {isMobileMenuOpen && (
-        <div className="mobile-menu-overlay" onClick={closeMobileMenu}></div>
-      )}
-
-      <main className="admin-content">
-        {activeTab === 'regions' && <RegionsManagement />}
-        {activeTab === 'teams' && <TeamMembers openCreateSignal={openCreateSignal} />}
-        {activeTab === 'users' && <UserManagement openCreateSignal={openCreateSignal} />}
-      </main>
+      {isMobileMenuOpen ? (
+        <div className="mobile-menu-overlay" onClick={closeMobileMenu} role="presentation" />
+      ) : null}
     </div>
   );
 };
