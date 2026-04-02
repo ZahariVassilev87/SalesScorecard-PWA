@@ -4,6 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 
 const coachingCategoryKeys = new Set([
+  'clusterPreMeeting',
+  'clusterDuringMeeting',
+  'clusterAnalysis',
+  'clusterAction',
   'observationIntervention',
   'creatingCoachingEnvironment',
   'qualityAnalysisFeedback',
@@ -11,6 +15,18 @@ const coachingCategoryKeys = new Set([
 ]);
 
 const coachingItemKeys = new Set([
+  'clarifiedObjective',
+  'reviewedPreparation',
+  'clearStrategy',
+  'allowedLead',
+  'interveneWhenNeeded',
+  'selfAssessmentFirst',
+  'positiveBIR',
+  'constructiveBIR',
+  'realExamples',
+  'nextVisitFocus',
+  'ensuredUnderstanding',
+  'weeklyFocus',
   'letSalespersonLead',
   'providedSupport',
   'steppedInValue',
@@ -137,6 +153,17 @@ const EvaluationHistory: React.FC = () => {
       'act1': 'Translating Into Action',
       'act2': 'Translating Into Action',
       'act3': 'Translating Into Action',
+
+      // New coaching structure items
+      'pre1': 'PRE-MEETING COACHING',
+      'pre2': 'PRE-MEETING COACHING',
+      'pre3': 'PRE-MEETING COACHING',
+      'meet1': 'BEHAVIOR DURING CLIENT MEETING',
+      'meet2': 'BEHAVIOR DURING CLIENT MEETING',
+      'ana1': 'Quality of Analysis & Feedback',
+      'ana2': 'Quality of Analysis & Feedback',
+      'ana3': 'Quality of Analysis & Feedback',
+      'ana4': 'Quality of Analysis & Feedback',
       
       // Sales Behavior Categories - Simple format
       'prep1': 'preparation',
@@ -208,9 +235,18 @@ const EvaluationHistory: React.FC = () => {
       'fb1': 'Started with positive practices',
       'fb2': 'Gave concrete examples from client meeting',
       'fb3': 'Identified areas for improvement with examples',
-      'act1': 'Set clear tasks for a specific period',
-      'act2': 'Reached agreement on evaluation and next steps',
-      'act3': 'Encouraged salesperson to set a personal goal/commitment'
+      'pre1': 'Clarified the objective for the client meeting',
+      'pre2': 'Reviewed salesperson preparation (menu, max potential, basket size)',
+      'pre3': 'Ensured the salesperson has a clear strategy for what to do in the meeting',
+      'meet1': 'Allowed the salesperson to lead the conversation',
+      'meet2': 'Intervened only when necessary (business-critical situations)',
+      'ana1': 'Asked for the salesperson’s self-assessment first',
+      'ana2': 'Gave positive feedback using Behavior - Impact - Result',
+      'ana3': 'Gave constructive feedback using Behavior - Impact - Result',
+      'ana4': 'Used real examples from the meeting',
+      'act1': 'Set a clear goal for executing specific behavior for the next visit (FOCUS)',
+      'act2': 'Ensured agreement and understanding from the salesperson',
+      'act3': 'Set a weekly goal for executing specific behavior (FOCUS)'
     };
     
     return legacyMappings[behaviorItemId] || behaviorItemId;
@@ -222,6 +258,8 @@ const EvaluationHistory: React.FC = () => {
       // Coaching categories
       'Observation & Intervention During Client Meeting': 'observationIntervention',
       'Creating Coaching Environment': 'creatingCoachingEnvironment',
+      'PRE-MEETING COACHING': 'clusterPreMeeting',
+      'BEHAVIOR DURING CLIENT MEETING': 'clusterDuringMeeting',
       'Quality of Analysis & Feedback': 'qualityAnalysisFeedback',
       'Translating Into Action': 'translatingIntoAction',
       
@@ -261,6 +299,18 @@ const EvaluationHistory: React.FC = () => {
       'Set clear tasks for a specific period': 'setClearTasks',
       'Reached agreement on evaluation and next steps': 'reachedAgreement',
       'Encouraged salesperson to set a personal goal/commitment': 'encouragedGoal',
+      'Clarified the objective for the client meeting': 'clarifiedObjective',
+      'Reviewed salesperson preparation (menu, max potential, basket size)': 'reviewedPreparation',
+      'Ensured the salesperson has a clear strategy for what to do in the meeting': 'clearStrategy',
+      'Allowed the salesperson to lead the conversation': 'allowedLead',
+      'Intervened only when necessary (business-critical situations)': 'interveneWhenNeeded',
+      'Asked for the salesperson’s self-assessment first': 'selfAssessmentFirst',
+      'Gave positive feedback using Behavior - Impact - Result': 'positiveBIR',
+      'Gave constructive feedback using Behavior - Impact - Result': 'constructiveBIR',
+      'Used real examples from the meeting': 'realExamples',
+      'Set a clear goal for executing specific behavior for the next visit (FOCUS)': 'nextVisitFocus',
+      'Ensured agreement and understanding from the salesperson': 'ensuredUnderstanding',
+      'Set a weekly goal for executing specific behavior (FOCUS)': 'weeklyFocus',
       
       // Sales behavior items - exact English descriptions from getLegacyItemName
       'Identified core products the client uses (in their menu) but does not buy from METRO': 'Identified core products the client uses (in their menu) but does not buy from METRO',
@@ -318,6 +368,20 @@ const EvaluationHistory: React.FC = () => {
     const namespace = coachingItemKeys.has(key) ? 'coaching' : 'salesperson';
     const translated = t(key, { ns: namespace });
     return translated === key ? itemName : translated;
+  };
+
+  const getDisplayCommentText = (comment?: string) => {
+    if (!comment) return null;
+    if (typeof comment === 'string' && comment.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(comment);
+        if (parsed.behaviorItemId && parsed.itemName && parsed.categoryName) return null;
+        return parsed.text || parsed.comment || parsed.example || null;
+      } catch {
+        return comment;
+      }
+    }
+    return comment;
   };
 
   // Get unique categories from evaluation items
@@ -603,44 +667,38 @@ const EvaluationHistory: React.FC = () => {
                           </div>
                       {(!showCollapsible || isExpanded) && (
                         <div className="category-items">
-                          {categoryItems.map(item => {
+                          {categoryItems.map((item, index) => {
                             const itemName = getLegacyItemName(item.behaviorItemId);
+                            const categoryComments = categoryItems
+                              .map(entry => getDisplayCommentText(entry.comment))
+                              .filter((entry): entry is string => Boolean(entry && entry.trim()));
+                            const uniqueCategoryComments = Array.from(new Set(categoryComments));
+                            const showSingleClusterComment =
+                              uniqueCategoryComments.length === 1 && categoryItems.length > 1;
+                            const categoryComment = uniqueCategoryComments[0];
+                            const itemComment = getDisplayCommentText(item.comment);
                             return (
                             <div key={item.id} className="item-detail">
                               <div className="item-name">{translateItemName(itemName)}</div>
                               <div className="item-score">
                                 <span className="score">{item.rating}/4</span>
                               </div>
-                              <div className="item-comment">
-                                <div className="comment-label">{t('history.example')}</div>
-                                <div className="comment-text">
-                                  {(() => {
-                                    // Handle empty or missing comments
-                                    if (!item.comment) {
-                                      return <em>{t('history.noExampleProvided')}</em>;
-                                    }
-                                    
-                                    // Handle JSON comments
-                                    if (typeof item.comment === 'string' && item.comment.startsWith('{')) {
-                                      try {
-                                        const parsed = JSON.parse(item.comment);
-                                        // Check if this is just metadata (has behaviorItemId, itemName, categoryName)
-                                        if (parsed.behaviorItemId && parsed.itemName && parsed.categoryName) {
-                                          // This is metadata, not actual example text
-                                          return <em>{t('history.noExampleProvided')}</em>;
-                                        }
-                                        // Return actual example text if it exists
-                                        return parsed.text || parsed.comment || parsed.example || <em>{t('history.noExampleProvided')}</em>;
-                                      } catch {
-                                        return item.comment;
-                                      }
-                                    }
-                                    
-                                    // Handle plain text comments
-                                    return item.comment || <em>{t('history.noExampleProvided')}</em>;
-                                  })()}
+                              {showSingleClusterComment && index === 0 && (
+                                <div className="item-comment">
+                                  <div className="comment-label">{t('history.example')}</div>
+                                  <div className="comment-text">
+                                    {categoryComment || <em>{t('history.noExampleProvided')}</em>}
+                                  </div>
                                 </div>
-                              </div>
+                              )}
+                              {!showSingleClusterComment && (
+                                <div className="item-comment">
+                                  <div className="comment-label">{t('history.example')}</div>
+                                  <div className="comment-text">
+                                    {itemComment || <em>{t('history.noExampleProvided')}</em>}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             );
                           })}

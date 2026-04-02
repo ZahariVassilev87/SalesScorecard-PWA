@@ -24,9 +24,9 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
   const [customerType, setCustomerType] = useState('LOW_SHARE');
   const [overallComment, setOverallComment] = useState('');
 
-  // Salesperson scores and examples
+  // Salesperson scores and comments
   const [scores, setScores] = useState<Record<string, number>>({});
-  const [examples, setExamples] = useState<Record<string, string>>({});
+  const [clusterComments, setClusterComments] = useState<Record<string, string>>({});
   
   // Evaluation categories from backend
   const [categories, setCategories] = useState<any[]>([]);
@@ -73,17 +73,17 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
             console.log('🔍 [SalespersonForm] First category:', behaviorCategories[0].name);
           }
           setCategories(behaviorCategories);
-          // Reset scores and examples when categories change
+          // Reset scores and cluster comments when categories change
           setScores({});
-          setExamples({});
+          setClusterComments({});
           console.log('✅ [SalespersonForm] Loaded HIGH_SHARE categories:', behaviorCategories.length);
         } else {
           // For LOW_SHARE and MID_SHARE, clear categories to use defaultCategories fallback
           console.log('🔍 [SalespersonForm] Using default categories for:', customerType);
           setCategories([]); // Clear to trigger fallback to defaultCategories
-          // Reset scores and examples when categories change
+          // Reset scores and cluster comments when categories change
           setScores({});
-          setExamples({});
+          setClusterComments({});
           console.log('✅ [SalespersonForm] Using default categories for:', customerType);
         }
       } catch (err) {
@@ -171,8 +171,8 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
     setScores(prev => ({ ...prev, [itemId]: score }));
   };
 
-  const handleExampleChange = (itemId: string, example: string) => {
-    setExamples(prev => ({ ...prev, [itemId]: example }));
+  const handleClusterCommentChange = (categoryId: string, comment: string) => {
+    setClusterComments(prev => ({ ...prev, [categoryId]: comment }));
   };
   
   // Translation mapping for high-share categories and items from backend
@@ -426,10 +426,16 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
       // For now, create a simple mapping of our frontend IDs to generic backend format
       // The backend will store this as a JSON structure
       const useBackendCategories = categories.length > 0;
+      const categoryByItemId = activeCategories.reduce<Record<string, string>>((acc, category) => {
+        category.items.forEach((item: any) => {
+          acc[item.id] = category.id;
+        });
+        return acc;
+      }, {});
       const evaluationItems = validScoreEntries.map(({ item, score }) => ({
         behaviorItemId: useBackendCategories ? item.id : `salesperson_${customerType}_${item.id}`,
         rating: score,
-        comment: examples[item.id] || ''
+        comment: categoryByItemId[item.id] ? (clusterComments[categoryByItemId[item.id]] || '') : ''
       }));
 
       const evaluationData = {
@@ -637,30 +643,41 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
                     </div>
                   )}
 
-                  <textarea
-                    placeholder="Give a specific example from the meeting..."
-                    value={examples[item.id] || ''}
-                    onChange={(e) => handleExampleChange(item.id, e.target.value)}
-                    rows={2}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      border: `2px solid ${categoryColor}30`,
-                      borderRadius: '12px',
-                      fontSize: '0.875rem',
-                      fontFamily: 'inherit',
-                      resize: 'vertical',
-                      boxSizing: 'border-box',
-                      marginTop: '0.5rem',
-                      background: 'white',
-                      fontStyle: 'italic',
-                      textAlign: 'center',
-                      color: 'var(--gray-700)'
-                    }}
-                  />
                 </div>
                 );
               })}
+
+              <div style={{ marginTop: '1rem' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '0.5rem',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    color: 'var(--gray-700)'
+                  }}
+                >
+                  Cluster comment
+                </label>
+                <textarea
+                  placeholder="Add one comment for this cluster..."
+                  value={clusterComments[category.id] || ''}
+                  onChange={(e) => handleClusterCommentChange(category.id, e.target.value)}
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: `2px solid ${categoryColor}30`,
+                    borderRadius: '12px',
+                    fontSize: '0.875rem',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                    background: 'white',
+                    color: 'var(--gray-700)'
+                  }}
+                />
+              </div>
 
               {/* Cluster Score Display */}
               <div style={{

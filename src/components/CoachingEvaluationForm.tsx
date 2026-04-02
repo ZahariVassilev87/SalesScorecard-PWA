@@ -24,9 +24,9 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
   const [location, setLocation] = useState('');
   const [overallComment, setOverallComment] = useState('');
 
-  // Coaching scores and examples
+  // Coaching scores and comments
   const [scores, setScores] = useState<Record<string, number>>({});
-  const [examples, setExamples] = useState<Record<string, string>>({});
+  const [clusterComments, setClusterComments] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const loadData = async () => {
@@ -115,8 +115,8 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
     setScores(prev => ({ ...prev, [itemId]: score }));
   };
 
-  const handleExampleChange = (itemId: string, example: string) => {
-    setExamples(prev => ({ ...prev, [itemId]: example }));
+  const handleClusterCommentChange = (categoryId: string, comment: string) => {
+    setClusterComments(prev => ({ ...prev, [categoryId]: comment }));
   };
 
   const calculateClusterScore = (categoryId: string) => {
@@ -170,11 +170,22 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
     }
 
     // All items have valid scores, create evaluation items
-    const evaluationItems = allItems.map(item => ({
-      behaviorItemId: item.id, // Use actual item ID from database
-      rating: scores[item.id], // Backend expects 'rating' not 'score'
-      comment: examples[item.id] || ''
-    }));
+    const categoryByItemId = categories.reduce<Record<string, string>>((acc, category) => {
+      category.items.forEach(item => {
+        acc[item.id] = category.id;
+      });
+      return acc;
+    }, {});
+
+    const evaluationItems = allItems.map(item => {
+      const categoryId = categoryByItemId[item.id];
+      return {
+        behaviorItemId: item.id, // Use actual item ID from database
+        rating: scores[item.id], // Backend expects 'rating' not 'score'
+        // Keep backend payload unchanged by saving the cluster comment on each cluster item.
+        comment: categoryId ? (clusterComments[categoryId] || '') : ''
+      };
+    });
 
     setIsSubmitting(true);
     setError('');
@@ -355,29 +366,40 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
                     </div>
                   )}
 
-                  <textarea
-                    placeholder="Give a specific example from the meeting..."
-                    value={examples[item.id] || ''}
-                    onChange={(e) => handleExampleChange(item.id, e.target.value)}
-                    rows={2}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      border: `2px solid ${category.color}30`,
-                      borderRadius: '12px',
-                      fontSize: '0.875rem',
-                      fontFamily: 'inherit',
-                      resize: 'vertical',
-                      boxSizing: 'border-box',
-                      marginTop: '0.5rem',
-                      background: 'white',
-                      fontStyle: 'italic',
-                      textAlign: 'center',
-                      color: 'var(--gray-700)'
-                    }}
-                  />
                 </div>
               ))}
+
+              <div style={{ marginTop: '1rem' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '0.5rem',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    color: 'var(--gray-700)'
+                  }}
+                >
+                  Cluster comment
+                </label>
+                <textarea
+                  placeholder="Add one comment for this cluster..."
+                  value={clusterComments[category.id] || ''}
+                  onChange={(e) => handleClusterCommentChange(category.id, e.target.value)}
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: `2px solid ${category.color}30`,
+                    borderRadius: '12px',
+                    fontSize: '0.875rem',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                    background: 'white',
+                    color: 'var(--gray-700)'
+                  }}
+                />
+              </div>
 
               {/* Cluster Score Display */}
               <div style={{
