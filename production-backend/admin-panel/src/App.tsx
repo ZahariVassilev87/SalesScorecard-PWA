@@ -242,14 +242,18 @@ interface LoginResponse {
 
 /**
  * API base URL for fetch():
- * - Default: '' → root-relative paths (`/auth/login`, `/public-admin/...`) so the browser calls
- *   the same host/port as the admin (Express :3001, or CRA dev :3002 with package.json `proxy`).
- * - Set REACT_APP_ADMIN_API_BASE_URL only when the admin is hosted on a different origin than the API.
+ * - `npm start` (CRA, e.g. :3002): default to http://localhost:3001 so requests go straight to the
+ *   Node API. Relying on webpack proxy alone breaks login and many /public-admin/* routes.
+ * - Production build: '' → root-relative URLs on the same origin as the admin (Express).
+ * - Override anytime: REACT_APP_ADMIN_API_BASE_URL (e.g. remote API while developing).
  */
 function getApiBase(): string {
   const fromEnv = (process.env.REACT_APP_ADMIN_API_BASE_URL || process.env.REACT_APP_API_BASE_URL || '').trim();
   if (fromEnv) {
     return fromEnv.replace(/\/$/, '');
+  }
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3001';
   }
   return '';
 }
@@ -668,7 +672,7 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
       const msg = err instanceof Error ? err.message : String(err);
       setError(
         msg.includes('Failed to fetch') || msg.includes('NetworkError')
-          ? 'Cannot reach the API. Use the admin on the same host as the backend (e.g. http://localhost:3001/public-admin/react-admin/) or run `npm start` on port 3002 with the API on 3001. If the API is elsewhere, set REACT_APP_ADMIN_API_BASE_URL when building.'
+          ? 'Cannot reach the API. Start the backend on port 3001 (e.g. docker compose backend) and keep the admin on port 3002.'
           : msg
       );
     } finally {

@@ -1,7 +1,6 @@
 /**
- * Dev-server proxy: forwards API paths to the Node backend so GET /public-admin/companies/.../config
- * is not answered by the webpack dev server (which would 404).
- * Target must match where production-backend listens (see docker-compose.dev.yml: 3001).
+ * Fallback proxy when something still uses root-relative URLs on the CRA dev server.
+ * App code uses REACT_APP_* or http://localhost:3001 in development — this covers edge cases.
  */
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
@@ -9,11 +8,7 @@ module.exports = function proxyDevApi(app) {
   const target = process.env.ADMIN_PROXY_TARGET || 'http://localhost:3001';
   const api = { target, changeOrigin: true, logLevel: 'silent' };
 
-  // Auth + profile (admin login uses POST /auth/login, GET /users/profile/me)
-  app.use('/auth', createProxyMiddleware(api));
-  app.use('/users', createProxyMiddleware(api));
-  app.use(
-    '/public-admin/companies',
-    createProxyMiddleware(api)
-  );
+  ['/auth', '/users', '/public-admin'].forEach((prefix) => {
+    app.use(prefix, createProxyMiddleware(api));
+  });
 };
