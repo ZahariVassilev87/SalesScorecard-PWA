@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiService, User } from '../services/api';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { useAuth } from '../contexts/AuthContext';
 
 interface CoachingEvaluationFormProps {
@@ -166,6 +167,14 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
     
     if (missingScores.length > 0) {
       setError('Моля, оценете всички критерии с оценка между 1 и 4');
+      return;
+    }
+
+    const missingClusterComments = categories.filter(
+      category => !(clusterComments[category.id] || '').trim()
+    );
+    if (missingClusterComments.length > 0) {
+      setError('Моля, добавете коментар за всеки клъстер');
       return;
     }
 
@@ -382,10 +391,11 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
                   Cluster comment
                 </label>
                 <textarea
-                  placeholder="Add one comment for this cluster..."
+                  placeholder={i18n.language === 'bg' ? 'Дай конкретен пример от разговора' : 'Give concrete example from the conversation'}
                   value={clusterComments[category.id] || ''}
                   onChange={(e) => handleClusterCommentChange(category.id, e.target.value)}
                   rows={3}
+                  required
                   style={{
                     width: '100%',
                     padding: '12px',

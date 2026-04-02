@@ -413,6 +413,14 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
       return;
     }
 
+    const missingClusterComments = activeCategories.filter(
+      category => !(clusterComments[category.id] || '').trim()
+    );
+    if (missingClusterComments.length > 0) {
+      setError('Моля, добавете коментар за всеки клъстер');
+      return;
+    }
+
     // All items have valid scores, create evaluation items
     const validScoreEntries = allItems.map((item: any) => ({
       item,
@@ -660,10 +668,11 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
                   Cluster comment
                 </label>
                 <textarea
-                  placeholder="Add one comment for this cluster..."
+                  placeholder={i18n.language === 'bg' ? 'Дай конкретен пример от разговора' : 'Give concrete example from the conversation'}
                   value={clusterComments[category.id] || ''}
                   onChange={(e) => handleClusterCommentChange(category.id, e.target.value)}
                   rows={3}
+                  required
                   style={{
                     width: '100%',
                     padding: '12px',
