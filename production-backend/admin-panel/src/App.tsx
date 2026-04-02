@@ -683,7 +683,8 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
   return (
     <div className="login-container">
       <div className="login-form">
-        <h2>🔐 Admin Login</h2>
+        <h2>Sign in</h2>
+        <p className="login-subtitle">Sales Scorecard admin</p>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Email:</label>
@@ -768,12 +769,12 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
 
     try {
       await apiService.createTeam(createForm);
-      alert('✅ Team created successfully!');
+      alert('Team created successfully!');
       setCreateForm({ name: '', region: '', managerId: '' });
       setShowCreateForm(false);
       loadTeams();
     } catch (err) {
-      alert('❌ Failed to create team: ' + (err as Error).message);
+      alert('Failed to create team: ' + (err as Error).message);
     }
   };
 
@@ -785,12 +786,12 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
 
     try {
       await apiService.updateTeam(editingTeam.id, editForm);
-      alert('✅ Team updated successfully!');
+      alert('Team updated successfully!');
       setEditingTeam(null);
       setEditForm({ name: '', region: '', managerId: '' });
       loadTeams();
     } catch (err) {
-      alert('❌ Failed to update team: ' + (err as Error).message);
+      alert('Failed to update team: ' + (err as Error).message);
     }
   };
 
@@ -802,12 +803,12 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
 
     try {
       await apiService.updateTeamManager(teamId, setManagerForm.managerId);
-      alert('✅ Team manager updated successfully!');
+      alert('Team manager updated successfully!');
       setShowSetManagerForm(null);
       setSetManagerForm({ managerId: '' });
       loadTeams();
     } catch (err) {
-      alert('❌ Failed to update team manager: ' + (err as Error).message);
+      alert('Failed to update team manager: ' + (err as Error).message);
     }
   };
 
@@ -818,10 +819,10 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
 
     try {
       await apiService.deleteTeam(team.id);
-      alert('✅ Team deleted successfully!');
+      alert('Team deleted successfully!');
       loadTeams();
     } catch (err) {
-      alert('❌ Failed to delete team: ' + (err as Error).message);
+      alert('Failed to delete team: ' + (err as Error).message);
     }
   };
 
@@ -833,12 +834,12 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
 
     try {
       await apiService.assignUserToTeam(addMemberForm.userId, teamId);
-      alert('✅ User added to team successfully!');
+      alert('User added to team successfully!');
       setAddMemberForm({ userId: '' });
       setShowAddMemberForm(null);
       loadTeams();
     } catch (err) {
-      alert('❌ Failed to add user to team: ' + (err as Error).message);
+      alert('Failed to add user to team: ' + (err as Error).message);
     }
   };
 
@@ -849,10 +850,10 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
 
     try {
       await apiService.removeUserFromTeam(userId, teamId);
-      alert('✅ User removed successfully!');
+      alert('User removed successfully!');
       loadTeams();
     } catch (err) {
-      alert('❌ Failed to remove user: ' + (err as Error).message);
+      alert('Failed to remove user: ' + (err as Error).message);
     }
   };
 
@@ -1280,11 +1281,11 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
 
     try {
       await apiService.updateUser(editingUser.id, editForm);
-      alert('✅ User updated successfully!');
+      alert('User updated successfully!');
       setEditingUser(null);
       loadUsers(); // Refresh the list
     } catch (err) {
-      alert('❌ Failed to update user: ' + (err as Error).message);
+      alert('Failed to update user: ' + (err as Error).message);
     }
   };
 
@@ -1296,14 +1297,14 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
     try {
       if (user.isActive) {
         await apiService.deactivateUser(user.id);
-        alert('✅ User deactivated successfully!');
+        alert('User deactivated successfully!');
       } else {
         await apiService.updateUser(user.id, { isActive: true });
-        alert('✅ User activated successfully!');
+        alert('User activated successfully!');
       }
       loadUsers(); // Refresh the list
     } catch (err) {
-      alert('❌ Failed to update user status: ' + (err as Error).message);
+      alert('Failed to update user status: ' + (err as Error).message);
     }
   };
 
@@ -1314,10 +1315,10 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
 
     try {
       await apiService.deleteUser(user.id);
-      alert('✅ User deleted successfully!');
+      alert('User deleted successfully!');
       loadUsers(); // Refresh the list
     } catch (err) {
-      alert('❌ Failed to delete user: ' + (err as Error).message);
+      alert('Failed to delete user: ' + (err as Error).message);
     }
   };
 
@@ -1334,12 +1335,12 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
 
     try {
       await apiService.createUser(createForm);
-      alert('✅ User created successfully!');
+      alert('User created successfully!');
       setCreateForm({ displayName: '', email: '', password: '', role: '' });
       setShowCreateForm(false);
       loadUsers(); // Refresh the list
     } catch (err) {
-      alert('❌ Failed to create user: ' + (err as Error).message);
+      alert('Failed to create user: ' + (err as Error).message);
     }
   };
 
@@ -2037,7 +2038,7 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
         hierarchyTemplate: parsedHierarchy
       });
       await apiService.updateCompanyFormTemplate(selectedCompanyId, parsedFormTemplate);
-      setSuccess('✅ Company configuration saved.');
+      setSuccess('Configuration saved.');
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -2425,9 +2426,9 @@ const AdminPanel: React.FC = () => {
         typeof cats === 'number' && typeof items === 'number'
           ? ` (${cats} categories, ${items} items)`
           : '';
-      alert(`✅ ${msg || 'Done.'}${counts}`);
+      alert(`${msg || 'Done.'}${counts}`);
     } catch (error) {
-      alert(`❌ Failed to seed templates: ${(error as Error).message}`);
+      alert(`Failed to seed templates: ${(error as Error).message}`);
     }
   };
 
@@ -2683,8 +2684,8 @@ const App: React.FC = () => {
       <div className="App">
         <div className="login-container">
           <div className="login-form">
-            <h2>🔐 Admin Panel</h2>
-            <p>Checking authentication...</p>
+            <h2>Admin</h2>
+            <p className="login-subtitle">Checking session…</p>
           </div>
         </div>
       </div>
