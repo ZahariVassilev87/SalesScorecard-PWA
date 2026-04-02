@@ -119,48 +119,44 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
       id: 'prep',
       name: t('salesperson:cluster1'),
       color: '#8b5cf6',
-      weight: 0.30,
+      weight: 0.286,
       items: [
         { id: 'prep1', name: t('salesperson:coreProducts'), descriptions: [t('salesperson:prep1_1'), t('salesperson:prep1_2'), t('salesperson:prep1_3'), t('salesperson:prep1_4')] },
         { id: 'prep2', name: t('salesperson:establishmentType'), descriptions: [t('salesperson:prep2_1'), t('salesperson:prep2_2'), t('salesperson:prep2_3'), t('salesperson:prep2_4')] },
-        { id: 'prep3', name: t('salesperson:focusProducts'), descriptions: [t('salesperson:prep3_1'), t('salesperson:prep3_2'), t('salesperson:prep3_3'), t('salesperson:prep3_4')] },
-        { id: 'prep4', name: t('salesperson:currentSupplier'), descriptions: [t('salesperson:prep4_1'), t('salesperson:prep4_2'), t('salesperson:prep4_3'), t('salesperson:prep4_4')] },
-        { id: 'prep5', name: t('salesperson:priceAnalysis'), descriptions: [t('salesperson:prep5_1'), t('salesperson:prep5_2'), t('salesperson:prep5_3'), t('salesperson:prep5_4')] },
-        { id: 'prep6', name: t('salesperson:productStrategy'), descriptions: [t('salesperson:prep6_1'), t('salesperson:prep6_2'), t('salesperson:prep6_3'), t('salesperson:prep6_4')] },
-        { id: 'prep7', name: t('salesperson:metroModel'), descriptions: [t('salesperson:prep7_1'), t('salesperson:prep7_2'), t('salesperson:prep7_3'), t('salesperson:prep7_4')] },
+        { id: 'prep3', name: t('salesperson:menuDetailKnowledge'), descriptions: [t('salesperson:prep3_1'), t('salesperson:prep3_2'), t('salesperson:prep3_3'), t('salesperson:prep3_4')] },
+        { id: 'prep4', name: t('salesperson:productStrategy'), descriptions: [t('salesperson:prep4_1'), t('salesperson:prep4_2'), t('salesperson:prep4_3'), t('salesperson:prep4_4')] },
       ]
     },
     {
       id: 'prob',
       name: t('salesperson:cluster2'),
       color: '#3b82f6',
-      weight: 0.233,
+      weight: 0.286,
       items: [
         { id: 'prob1', name: t('salesperson:askedClientExperience'), descriptions: [t('salesperson:prob1_1'), t('salesperson:prob1_2'), t('salesperson:prob1_3'), t('salesperson:prob1_4')] },
         { id: 'prob2', name: t('salesperson:priceQualityDelivery'), descriptions: [t('salesperson:prob2_1'), t('salesperson:prob2_2'), t('salesperson:prob2_3'), t('salesperson:prob2_4')] },
         { id: 'prob3', name: t('salesperson:businessImpact'), descriptions: [t('salesperson:prob3_1'), t('salesperson:prob3_2'), t('salesperson:prob3_3'), t('salesperson:prob3_4')] },
-        { id: 'prob4', name: t('salesperson:missingProduct'), descriptions: [t('salesperson:prob4_1'), t('salesperson:prob4_2'), t('salesperson:prob4_3'), t('salesperson:prob4_4')] },
+        { id: 'prob4', name: t('salesperson:problemWithNonMetroProduct'), descriptions: [t('salesperson:prob4_1'), t('salesperson:prob4_2'), t('salesperson:prob4_3'), t('salesperson:prob4_4')] },
       ]
     },
     {
       id: 'obj',
       name: t('salesperson:cluster3'),
       color: '#10b981',
-      weight: 0.233,
+      weight: 0.143,
       items: [
         { id: 'obj1', name: t('salesperson:listenedFully'), descriptions: [t('salesperson:obj1_1'), t('salesperson:obj1_2'), t('salesperson:obj1_3'), t('salesperson:obj1_4')] },
-        { id: 'obj2', name: t('salesperson:validatedPerspective'), descriptions: [t('salesperson:obj2_1'), t('salesperson:obj2_2'), t('salesperson:obj2_3'), t('salesperson:obj2_4')] },
-        { id: 'obj3', name: t('salesperson:marketContext'), descriptions: [t('salesperson:obj3_1'), t('salesperson:obj3_2'), t('salesperson:obj3_3'), t('salesperson:obj3_4')] },
+        { id: 'obj2', name: t('salesperson:solutionMeetsClientAndMetroNeeds'), descriptions: [t('salesperson:obj2_1'), t('salesperson:obj2_2'), t('salesperson:obj2_3'), t('salesperson:obj2_4')] },
       ]
     },
     {
       id: 'prop',
       name: t('salesperson:cluster4'),
       color: '#f59e0b',
-      weight: 0.233,
+      weight: 0.286,
       items: [
-        { id: 'prop1', name: t('salesperson:presentedSolution'), descriptions: [t('salesperson:prop1_1'), t('salesperson:prop1_2'), t('salesperson:prop1_3'), t('salesperson:prop1_4')] },
-        { id: 'prop2', name: t('salesperson:clientPriority'), descriptions: [t('salesperson:prop2_1'), t('salesperson:prop2_2'), t('salesperson:prop2_3'), t('salesperson:prop2_4')] },
+        { id: 'prop1', name: t('salesperson:presentedSpecificProductFromMetro'), descriptions: [t('salesperson:prop1_1'), t('salesperson:prop1_2'), t('salesperson:prop1_3'), t('salesperson:prop1_4')] },
+        { id: 'prop2', name: t('salesperson:proposalSolvesClientProblem'), descriptions: [t('salesperson:prop2_1'), t('salesperson:prop2_2'), t('salesperson:prop2_3'), t('salesperson:prop2_4')] },
         { id: 'prop3', name: t('salesperson:proposedTest'), descriptions: [t('salesperson:prop3_1'), t('salesperson:prop3_2'), t('salesperson:prop3_3'), t('salesperson:prop3_4')] },
         { id: 'prop4', name: t('salesperson:nextStep'), descriptions: [t('salesperson:prop4_1'), t('salesperson:prop4_2'), t('salesperson:prop4_3'), t('salesperson:prop4_4')] },
       ]
@@ -197,10 +193,12 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
     const itemMap: Record<string, string> = {
       'Identify core products the client uses (in their menu) but does not buy from METRO': 'coreProducts',
       'Determined type of establishment (restaurant/hotel) and cuisine style': 'establishmentType',
+      'Does the salesperson know the client’s menu in detail?': 'menuDetailKnowledge',
       'Selected 1–2 focus products for the meeting': 'focusProducts',
       'Knows where the client currently orders from and why': 'currentSupplier',
       'Analyzed client\'s restaurant prices and quality/price preferences': 'priceAnalysis',
       'Prepared strategy for focus product (e.g. which mozzarella, which brand)': 'productStrategy',
+      'Prepared strategy for focus product': 'productStrategy',
       'Visit aligned with METRO contact model': 'metroModel',
       'Did the salesperson ask about opportunities to improve collaboration with METRO?': 'Did the salesperson ask about opportunities to improve collaboration with METRO?',
       'Did the salesperson propose specific products (prepared in advance) for the customer to start sourcing from METRO?': 'Did the salesperson propose specific products (prepared in advance) for the customer to start sourcing from METRO?',
@@ -208,6 +206,10 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
       'Listened fully to objection without interrupting': 'listenedFully',
       'Validated client\'s perspective': 'validatedPerspective',
       'Put objection in market context & showed METRO\'s response': 'Put objection in market context & showed METRO\'s response',
+      'Did salesperson offer the client a solution that also meets Metro’s needs?': 'solutionMeetsClientAndMetroNeeds',
+      'Did salesperson offer the client a solution that also meets Metro\'s needs?': 'solutionMeetsClientAndMetroNeeds',
+      'Did salesperson present a specific product that the client could start buying from Metro?': 'presentedSpecificProductFromMetro',
+      'Did salesperson make a proposal that solves a client problem?': 'proposalSolvesClientProblem',
       'Did the salesperson present a product/service as a sustainable partnership solution with METRO?': 'Did the salesperson present a product/service as a sustainable partnership solution with METRO?',
       'Did the salesperson emphasize the customer benefits of adding more products?': 'Did the salesperson emphasize the customer benefits of adding more products?',
       'Proposed test of key products': 'Proposed test of key products',
@@ -322,11 +324,11 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
         t('salesperson:obj3_3'),
         t('salesperson:obj3_4')
       ],
-      'Did the salesperson present a product/service as a sustainable partnership solution with METRO?': [
-        t('salesperson:highshare_prop1_1'),
-        t('salesperson:highshare_prop1_2'),
-        t('salesperson:highshare_prop1_3'),
-        t('salesperson:highshare_prop1_4')
+      'Did salesperson present a specific product that the client could start buying from Metro?': [
+        t('salesperson:prop1_1'),
+        t('salesperson:prop1_2'),
+        t('salesperson:prop1_3'),
+        t('salesperson:prop1_4')
       ],
       'Did the salesperson emphasize the customer benefits of adding more products?': [
         t('salesperson:highshare_prop2_1'),
