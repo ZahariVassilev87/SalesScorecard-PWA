@@ -240,11 +240,21 @@ interface LoginResponse {
   user: User;
 }
 
-// API Service — relative URLs in dev (empty base) so CRA `proxy` forwards to the Node backend; use env or origin in prod / cross-origin.
-const API_BASE =
-  process.env.REACT_APP_ADMIN_API_BASE_URL ||
-  process.env.REACT_APP_API_BASE_URL ||
-  (process.env.NODE_ENV === 'development' ? '' : window.location.origin);
+/**
+ * API base URL for fetch():
+ * - Default: '' → root-relative paths (`/auth/login`, `/public-admin/...`) so the browser calls
+ *   the same host/port as the admin (Express :3001, or CRA dev :3002 with package.json `proxy`).
+ * - Set REACT_APP_ADMIN_API_BASE_URL only when the admin is hosted on a different origin than the API.
+ */
+function getApiBase(): string {
+  const fromEnv = (process.env.REACT_APP_ADMIN_API_BASE_URL || process.env.REACT_APP_API_BASE_URL || '').trim();
+  if (fromEnv) {
+    return fromEnv.replace(/\/$/, '');
+  }
+  return '';
+}
+
+const API_BASE = getApiBase();
 
 class ApiService {
   private token: string | null = null;
@@ -655,7 +665,12 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
       const response = await apiService.login(email, password);
       onLogin(response.token);
     } catch (err) {
-      setError('Login failed. Please check your credentials.');
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(
+        msg.includes('Failed to fetch') || msg.includes('NetworkError')
+          ? 'Cannot reach the API. Use the admin on the same host as the backend (e.g. http://localhost:3001/public-admin/react-admin/) or run `npm start` on port 3002 with the API on 3001. If the API is elsewhere, set REACT_APP_ADMIN_API_BASE_URL when building.'
+          : msg
+      );
     } finally {
       setLoading(false);
     }

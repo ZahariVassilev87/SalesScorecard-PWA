@@ -8,7 +8,8 @@ const path = require('path');
 let webpush = null;
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// Default 3001 so the root PWA can use 3000 in dev (see DEV-ENVIRONMENT.md, docker-compose.dev.yml).
+const PORT = process.env.PORT || 3001;
 const DEFAULT_COMPANY_ID = 'company_metro';
 
 /**
@@ -140,6 +141,71 @@ async function runMigrations() {
           SET "isActive" = true 
           WHERE "isActive" IS NULL
         `);
+
+        // Company-level feature flags (defaults keep legacy behavior)
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS company_feature_flags (
+            "companyId" TEXT PRIMARY KEY,
+            "enableCompanyCustomization" BOOLEAN NOT NULL DEFAULT false,
+            "useLegacyEvaluationFlow" BOOLEAN NOT NULL DEFAULT true,
+            "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+
+        // Company-level scoring profile
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS company_scoring_profiles (
+            "companyId" TEXT PRIMARY KEY,
+            mode TEXT NOT NULL DEFAULT 'legacy_average',
+            settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+            "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+
+        // Company-level hierarchy template
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS company_hierarchy_templates (
+            "companyId" TEXT PRIMARY KEY,
+            template JSONB NOT NULL DEFAULT '{"rules":[]}'::jsonb,
+            "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+
+        // Backfill defaults for existing companies (safe legacy behavior)
+        await pool.query(`
+          INSERT INTO company_feature_flags ("companyId", "enableCompanyCustomization", "useLegacyEvaluationFlow", "createdAt", "updatedAt")
+          SELECT c.id, false, true, NOW(), NOW()
+          FROM companies c
+          ON CONFLICT ("companyId") DO NOTHING
+        `);
+
+        await pool.query(`
+          INSERT INTO company_scoring_profiles ("companyId", mode, settings, "createdAt", "updatedAt")
+          SELECT c.id, 'legacy_average', '{}'::jsonb, NOW(), NOW()
+          FROM companies c
+          ON CONFLICT ("companyId") DO NOTHING
+        `);
+
+        await pool.query(`
+          INSERT INTO company_hierarchy_templates ("companyId", template, "createdAt", "updatedAt")
+          SELECT c.id,
+                 '{
+                   "rules": [
+                     {"evaluatorRole":"REGIONAL_MANAGER","targetRoles":["SALES_LEAD"]},
+                     {"evaluatorRole":"REGIONAL_SALES_MANAGER","targetRoles":["SALES_LEAD"]},
+                     {"evaluatorRole":"SALES_LEAD","targetRoles":["SALESPERSON"]},
+                     {"evaluatorRole":"SALES_DIRECTOR","targetRoles":["REGIONAL_MANAGER","REGIONAL_SALES_MANAGER","SALES_LEAD","SALESPERSON"]},
+                     {"evaluatorRole":"ADMIN","targetRoles":["SALESPERSON","SALES_LEAD"]},
+                     {"evaluatorRole":"SUPER_ADMIN","targetRoles":["SALESPERSON","SALES_LEAD","REGIONAL_MANAGER","REGIONAL_SALES_MANAGER","SALES_DIRECTOR","ADMIN"]}
+                   ]
+                 }'::jsonb,
+                 NOW(), NOW()
+          FROM companies c
+          ON CONFLICT ("companyId") DO NOTHING
+        `);
         
         console.log('✅ Database migrations completed successfully');
   } catch (error) {
@@ -169,6 +235,152 @@ app.post('/admin/run-migrations', authenticateToken, async (req, res) => {
 // JWT Secrets (use environment variables in production)
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_for_access_tokens';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your_refresh_secret_key_for_refresh_tokens';
+const CUSTOMIZATION_ALLOWLIST = new Set(
+  (process.env.COMPANY_CUSTOMIZATION_COMPANIES || '')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean)
+);
+
+function getDefaultHierarchyTemplate() {
+  return {
+    rules: [
+      { evaluatorRole: 'REGIONAL_MANAGER', targetRoles: ['SALES_LEAD'] },
+      { evaluatorRole: 'REGIONAL_SALES_MANAGER', targetRoles: ['SALES_LEAD'] },
+      { evaluatorRole: 'SALES_LEAD', targetRoles: ['SALESPERSON'] },
+      { evaluatorRole: 'SALES_DIRECTOR', targetRoles: ['REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER', 'SALES_LEAD', 'SALESPERSON'] },
+      { evaluatorRole: 'ADMIN', targetRoles: ['SALESPERSON', 'SALES_LEAD'] },
+      { evaluatorRole: 'SUPER_ADMIN', targetRoles: ['SALESPERSON', 'SALES_LEAD', 'REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER', 'SALES_DIRECTOR', 'ADMIN'] }
+    ]
+  };
+}
+
+function getTargetRolesForEvaluator(hierarchyTemplate, evaluatorRole) {
+  const template = hierarchyTemplate && Array.isArray(hierarchyTemplate.rules)
+    ? hierarchyTemplate
+    : getDefaultHierarchyTemplate();
+  const row = template.rules.find(rule => rule.evaluatorRole === evaluatorRole);
+  return Array.isArray(row?.targetRoles) ? row.targetRoles : [];
+}
+
+async function getCompanyFeatureFlags(companyId) {
+  const safeCompanyId = companyId || DEFAULT_COMPANY_ID;
+  try {
+    const { rows } = await pool.query(
+      `SELECT "enableCompanyCustomization", "useLegacyEvaluationFlow"
+       FROM company_feature_flags
+       WHERE "companyId" = $1`,
+      [safeCompanyId]
+    );
+    const row = rows[0] || {};
+    const dbEnabled = row.enableCompanyCustomization === true;
+    const allowlisted = CUSTOMIZATION_ALLOWLIST.size === 0 || CUSTOMIZATION_ALLOWLIST.has(safeCompanyId);
+    return {
+      companyId: safeCompanyId,
+      enableCompanyCustomization: dbEnabled && allowlisted,
+      useLegacyEvaluationFlow: row.useLegacyEvaluationFlow !== false
+    };
+  } catch (error) {
+    return {
+      companyId: safeCompanyId,
+      enableCompanyCustomization: false,
+      useLegacyEvaluationFlow: true
+    };
+  }
+}
+
+async function getCompanyScoringProfile(companyId) {
+  const safeCompanyId = companyId || DEFAULT_COMPANY_ID;
+  try {
+    const { rows } = await pool.query(
+      `SELECT mode, settings
+       FROM company_scoring_profiles
+       WHERE "companyId" = $1`,
+      [safeCompanyId]
+    );
+    if (rows.length === 0) {
+      return { companyId: safeCompanyId, mode: 'legacy_average', settings: {} };
+    }
+    return {
+      companyId: safeCompanyId,
+      mode: rows[0].mode || 'legacy_average',
+      settings: rows[0].settings && typeof rows[0].settings === 'object' ? rows[0].settings : {}
+    };
+  } catch (error) {
+    return { companyId: safeCompanyId, mode: 'legacy_average', settings: {} };
+  }
+}
+
+async function getCompanyHierarchyTemplate(companyId) {
+  const safeCompanyId = companyId || DEFAULT_COMPANY_ID;
+  try {
+    const { rows } = await pool.query(
+      `SELECT template
+       FROM company_hierarchy_templates
+       WHERE "companyId" = $1`,
+      [safeCompanyId]
+    );
+    const raw = rows[0]?.template;
+    if (raw && Array.isArray(raw.rules)) {
+      return raw;
+    }
+    return getDefaultHierarchyTemplate();
+  } catch (error) {
+    return getDefaultHierarchyTemplate();
+  }
+}
+
+async function getBehaviorSchemaInfo() {
+  const categoryColumnsResult = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'behavior_categories'
+  `);
+  const itemColumnsResult = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'behavior_items'
+  `);
+  const categoryColumns = new Set(categoryColumnsResult.rows.map(r => r.column_name));
+  const itemColumns = new Set(itemColumnsResult.rows.map(r => r.column_name));
+  const categoryCompanyColumn = categoryColumns.has('companyId') ? '"companyId"' : (categoryColumns.has('company_id') ? 'company_id' : null);
+  const itemCompanyColumn = itemColumns.has('companyId') ? '"companyId"' : (itemColumns.has('company_id') ? 'company_id' : null);
+  const categoryIdColumn = itemColumns.has('categoryId') ? '"categoryId"' : (itemColumns.has('category_id') ? 'category_id' : '"categoryId"');
+  const hasItemWeight = itemColumns.has('weight');
+  const hasItemIsActive = itemColumns.has('isActive') || itemColumns.has('is_active');
+  const itemIsActiveColumn = itemColumns.has('isActive') ? '"isActive"' : (itemColumns.has('is_active') ? 'is_active' : null);
+  return { categoryCompanyColumn, itemCompanyColumn, categoryIdColumn, hasItemWeight, hasItemIsActive, itemIsActiveColumn };
+}
+
+async function loadCompanyBehaviorTemplate(companyId) {
+  const { categoryCompanyColumn, categoryIdColumn, hasItemWeight, hasItemIsActive, itemIsActiveColumn } = await getBehaviorSchemaInfo();
+  let categoriesQuery = `
+    SELECT bc.id, bc.name, bc."order", bc.weight
+    FROM behavior_categories bc
+  `;
+  const params = [];
+  if (categoryCompanyColumn) {
+    params.push(companyId || DEFAULT_COMPANY_ID);
+    categoriesQuery += ` WHERE bc.${categoryCompanyColumn} = $1`;
+  }
+  categoriesQuery += ' ORDER BY bc."order"';
+  const categoriesResult = await pool.query(categoriesQuery, params);
+  const categories = [];
+  for (const cat of categoriesResult.rows) {
+    const itemsResult = await pool.query(
+      `SELECT bi.id, bi.name, bi."order",
+              ${hasItemWeight ? 'COALESCE(bi.weight, 1.0)' : '1.0'} as weight,
+              ${hasItemIsActive && itemIsActiveColumn ? `COALESCE(bi.${itemIsActiveColumn}, true)` : 'true'} as "isActive"
+       FROM behavior_items bi
+       WHERE bi.${categoryIdColumn} = $1
+       ORDER BY bi."order"`,
+      [cat.id]
+    );
+    categories.push({
+      ...cat,
+      items: itemsResult.rows
+    });
+  }
+  return categories;
+}
 
 const defaultAllowedOrigins = [
   'https://d2tuhgmig1r5ut.cloudfront.net',
@@ -186,6 +398,21 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .filter(Boolean);
 
 const localDevOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+/** True for browser origins that are clearly local (localhost, 127.0.0.1, IPv6 loopback). */
+function isLocalDevOrigin(origin) {
+  if (!origin || typeof origin !== 'string') return false;
+  try {
+    const u = new URL(origin);
+    const h = u.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return true;
+    if (h === '[::1]' || h === '::1') return true;
+    return false;
+  } catch {
+    return localDevOriginPattern.test(origin);
+  }
+}
+
 const effectiveAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : defaultAllowedOrigins;
 
 // CORS supports strict override via ALLOWED_ORIGINS and safe defaults otherwise.
@@ -195,7 +422,7 @@ app.use(cors({
       return callback(null, true);
     }
 
-    if (effectiveAllowedOrigins.includes(origin) || localDevOriginPattern.test(origin)) {
+    if (effectiveAllowedOrigins.includes(origin) || localDevOriginPattern.test(origin) || isLocalDevOrigin(origin)) {
       return callback(null, true);
     }
 
@@ -235,8 +462,8 @@ app.get('/public-admin/react-admin/*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'react-admin', 'index.html'));
 });
 
-// Serve entire public directory under /public-admin for auxiliary pages
-app.use('/public-admin', express.static('public'));
+// NOTE: /public-admin static serving is registered after all API routes (see end of file)
+// so paths like GET /public-admin/companies/:id/config are not handled by express.static.
 
 // Serve admin-with-delete.html
 app.get('/admin-with-delete.html', (req, res) => {
@@ -1050,7 +1277,9 @@ app.post('/evaluations', authenticateToken, authorizeEvaluationCreation, async (
   
   const evaluationId = `eval_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     // Calculate overallScore AFTER validation (so we know all items are valid)
-    const overallScore = calculateOverallScore(req.body.items);
+    const featureFlags = await getCompanyFeatureFlags(companyId);
+    const scoringProfile = await getCompanyScoringProfile(companyId);
+    const overallScore = calculateOverallScore(req.body.items, scoringProfile, featureFlags);
     
     // Ensure overallScore is valid (between 1 and 4)
     if (!overallScore || overallScore < 1 || overallScore > 4) {
@@ -1124,6 +1353,7 @@ app.get('/evaluations/my', authenticateToken, async (req, res) => {
   try {
     const { companyId, includeAllCompanies } = resolveCompanyContext(req);
     const { userCol, teamCol } = await getUserTeamsColumns(pool);
+    const hierarchyTemplate = await getCompanyHierarchyTemplate(companyId);
 
     const managerIds = new Set([req.user.id]);
     const salespersonIds = new Set([req.user.id]);
@@ -1359,6 +1589,8 @@ app.get('/organizations/teams', authenticateToken, async (req, res) => {
   try {
     const { userCol, teamCol } = await getUserTeamsColumns(pool);
     const { companyId, includeAllCompanies } = resolveCompanyContext(req);
+    const hierarchyTemplate = await getCompanyHierarchyTemplate(companyId);
+    const targetRoles = getTargetRolesForEvaluator(hierarchyTemplate, req.user.role);
 
     let teamsQuery = `
       SELECT
@@ -1456,6 +1688,8 @@ app.get('/organizations/salespeople', authenticateToken, async (req, res) => {
   try {
     const { userCol, teamCol } = await getUserTeamsColumns(pool);
     const { companyId, includeAllCompanies } = resolveCompanyContext(req);
+    const hierarchyTemplate = await getCompanyHierarchyTemplate(companyId);
+    const targetRoles = getTargetRolesForEvaluator(hierarchyTemplate, req.user.role);
     
     // Hierarchical filtering based on role
     // REGIONAL_MANAGER sees SALES_LEADs in their teams
@@ -1477,16 +1711,32 @@ app.get('/organizations/salespeople', authenticateToken, async (req, res) => {
     if (req.user.role === 'REGIONAL_MANAGER' || req.user.role === 'REGIONAL_SALES_MANAGER') {
       // Regional Managers can evaluate Sales Leads in their teams
       params.push(req.user.id);
-      query += ` AND u.role = 'SALES_LEAD' AND t."managerId" = $1`;
+      query += ` AND t."managerId" = $1`;
+      if (targetRoles.length > 0) {
+        params.push(targetRoles);
+        query += ` AND u.role = ANY($${params.length}::text[])`;
+      } else {
+        query += ` AND u.role = 'SALES_LEAD'`;
+      }
       console.log('🔍 Regional Manager filtering: Only showing SALES_LEADs in their teams');
     } else if (req.user.role === 'SALES_LEAD') {
       // Sales Leads can evaluate Salespeople in their teams
-      // First, find which teams the Sales Lead is in
+      // Include teams where the Sales Lead is either a member OR the manager.
       params.push(req.user.id);
-      query += ` AND u.role = 'SALESPERSON' AND t.id IN (
-        SELECT ut2.${teamCol} 
-        FROM user_teams ut2 
+      if (targetRoles.length > 0) {
+        params.push(targetRoles);
+        query += ` AND u.role = ANY($${params.length}::text[])`;
+      } else {
+        query += ` AND u.role = 'SALESPERSON'`;
+      }
+      query += ` AND t.id IN (
+        SELECT ut2.${teamCol}
+        FROM user_teams ut2
         WHERE ut2.${userCol} = $1
+        UNION
+        SELECT t2.id
+        FROM teams t2
+        WHERE t2."managerId" = $1
       )`;
       console.log('🔍 Sales Lead filtering: Only showing SALESPEOPLEs in their teams');
     } else if (req.user.role === 'SALESPERSON') {
@@ -1494,9 +1744,14 @@ app.get('/organizations/salespeople', authenticateToken, async (req, res) => {
       params.push(req.user.id);
       query += ` AND u.id = $1`;
       console.log('🔍 Salesperson filtering: Only showing self');
-    } else if (req.user.role === 'ADMIN' || req.user.role === 'SALES_DIRECTOR') {
+    } else if (req.user.role === 'ADMIN' || req.user.role === 'SALES_DIRECTOR' || req.user.role === 'SUPER_ADMIN') {
       // Admins and Sales Directors can see everyone
-      query += ` AND u.role IN ('SALESPERSON', 'SALES_LEAD')`;
+      if (targetRoles.length > 0) {
+        params.push(targetRoles);
+        query += ` AND u.role = ANY($${params.length}::text[])`;
+      } else {
+        query += ` AND u.role IN ('SALESPERSON', 'SALES_LEAD')`;
+      }
       console.log('🔍 Admin/Director filtering: Showing all salespeople and leads');
     } else {
       // Unknown role - return empty
@@ -1568,17 +1823,17 @@ app.get('/users/my-team', authenticateToken, async (req, res) => {
     const { companyId, includeAllCompanies } = resolveCompanyContext(req);
     const { userCol, teamCol } = await getUserTeamsColumns(pool);
     
-    // Find the user's team(s)
+    // Find the user's team(s): teams they belong to OR teams they manage.
     let userTeamsQuery = `
       SELECT t.id, t.name, t."managerId", t."regionId",
         r.name AS region_name,
         m.id AS manager_id, m.email AS manager_email, 
         m."displayName" AS manager_name, m.role AS manager_role
       FROM teams t
-      INNER JOIN user_teams ut ON ut.${teamCol} = t.id
+      LEFT JOIN user_teams ut ON ut.${teamCol} = t.id
       LEFT JOIN regions r ON r.id = t."regionId"
       LEFT JOIN users m ON m.id = t."managerId"
-      WHERE ut.${userCol} = $1
+      WHERE (ut.${userCol} = $1 OR t."managerId" = $1)
     `;
     const userTeamsParams = [req.user.id];
     if (!includeAllCompanies) {
@@ -1602,16 +1857,7 @@ app.get('/users/my-team', authenticateToken, async (req, res) => {
     
     console.log(`✅ Found team: ${teamRow.name} (${teamId})`);
     
-    // Get all members of this team
-    const subordinateRolesMap = {
-      REGIONAL_MANAGER: ['SALES_LEAD'],
-      REGIONAL_SALES_MANAGER: ['SALES_LEAD'],
-      SALES_LEAD: ['SALESPERSON'],
-      SALES_DIRECTOR: ['REGIONAL_MANAGER', 'REGIONAL_SALES_MANAGER', 'SALES_LEAD', 'SALESPERSON'],
-      ADMIN: null,
-      SUPER_ADMIN: null
-    };
-    const subordinateRoles = subordinateRolesMap[req.user.role] ?? null;
+    // Get all active members of this team for My Team screen.
     
     let membersQuery = `
       SELECT u.id, u.email, u."displayName", u.role, u."isActive"
@@ -1621,10 +1867,7 @@ app.get('/users/my-team', authenticateToken, async (req, res) => {
         AND u."isActive" = true
     `;
     const memberParams = [teamId];
-    if (subordinateRoles && subordinateRoles.length > 0) {
-      memberParams.push(subordinateRoles);
-      membersQuery += ` AND u.role = ANY($${memberParams.length}::text[])`;
-    }
+    // Do not restrict by subordinate roles here; My Team should show full team composition.
     membersQuery += `
       ORDER BY 
         CASE u.role
@@ -2146,22 +2389,31 @@ app.get('/users', authenticateToken, (req, res) => {
 // Scoring categories
 app.get('/scoring/categories', authenticateToken, async (req, res) => {
   const customerType = req.query.customerType || req.query.customer_type || null;
+  const { companyId } = resolveCompanyContext(req);
   console.log('🔍 [CATEGORIES] Request from:', req.user.email, 'role:', req.user.role);
   console.log('🔍 [CATEGORIES] Query params:', req.query);
   console.log('🔍 [CATEGORIES] customerType:', customerType, 'type:', typeof customerType);
   
   try {
-    // Determine which form to return based on user role
-    // REGIONAL_MANAGER evaluates SALES_LEADs -> return SALES_LEAD forms
-    // SALES_LEAD evaluates SALESPEOPLEs -> return SALESPERSON forms
-    
+    const featureFlags = await getCompanyFeatureFlags(companyId);
+    const hierarchyTemplate = await getCompanyHierarchyTemplate(companyId);
+
+    // Determine which form to return based on user role.
+    // RM/RSM coaching must always evaluate SALES_LEAD, regardless of hierarchy rule order.
     let targetRole = null;
     let customerTypeFilter = null;
-    
+
     if (req.user.role === 'REGIONAL_MANAGER' || req.user.role === 'REGIONAL_SALES_MANAGER') {
       targetRole = 'SALES_LEAD';
       console.log('🔍 Regional Manager - returning Sales Lead Coaching Evaluation');
     } else {
+      const hierarchyTargetRoles = getTargetRolesForEvaluator(hierarchyTemplate, req.user.role);
+      if (hierarchyTargetRoles.length > 0) {
+        targetRole = hierarchyTargetRoles[0];
+      }
+    }
+
+    if (!targetRole) {
       // SALES_LEAD and others evaluate SALESPERSON
       targetRole = 'SALESPERSON';
       // Check customerType for SALESPERSON evaluations
@@ -2176,15 +2428,25 @@ app.get('/scoring/categories', authenticateToken, async (req, res) => {
     // Build query based on customerType
     let categoriesQuery;
     let queryParams;
+
+    const categoryColumnsResult = await pool.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'behavior_categories'
+    `);
+    const categoryColumns = new Set(categoryColumnsResult.rows.map(row => row.column_name));
+    const categoryCompanyColumn = categoryColumns.has('companyId')
+      ? '"companyId"'
+      : (categoryColumns.has('company_id') ? 'company_id' : null);
     
     if (customerTypeFilter === 'HIGH_SHARE') {
       // For high-share, look for categories with HIGH_SHARE in name or a specific marker
       categoriesQuery = `
         SELECT bc.id, bc.name, bc."order", bc.weight
         FROM behavior_categories bc
-        WHERE (bc.name LIKE '%' || $1 || '%' AND bc.name LIKE '%HIGH_SHARE%')
-           OR (bc.name LIKE '%' || $1 || '%' AND bc.name LIKE '%High Share%')
-        ORDER BY bc."order"
+        WHERE (
+          (bc.name LIKE '%' || $1 || '%' AND bc.name LIKE '%HIGH_SHARE%')
+          OR (bc.name LIKE '%' || $1 || '%' AND bc.name LIKE '%High Share%')
+        )
       `;
       queryParams = [targetRole];
     } else {
@@ -2194,10 +2456,19 @@ app.get('/scoring/categories', authenticateToken, async (req, res) => {
         FROM behavior_categories bc
         WHERE bc.name LIKE '%' || $1 || '%'
           AND (bc.name NOT LIKE '%HIGH_SHARE%' AND bc.name NOT LIKE '%High Share%')
-        ORDER BY bc."order"
       `;
       queryParams = [targetRole];
     }
+
+    if (
+      featureFlags.enableCompanyCustomization &&
+      featureFlags.useLegacyEvaluationFlow === false &&
+      categoryCompanyColumn
+    ) {
+      categoriesQuery += ` AND bc.${categoryCompanyColumn} = $${queryParams.length + 1}`;
+      queryParams.push(companyId || DEFAULT_COMPANY_ID);
+    }
+    categoriesQuery += ' ORDER BY bc."order"';
     
     const categoriesResult = await pool.query(categoriesQuery, queryParams);
     console.log('🔍 [CATEGORIES] Query returned', categoriesResult.rows.length, 'categories');
@@ -2369,13 +2640,34 @@ app.get('/analytics/team', authenticateToken, (req, res) => {
 });
 
 // Helper functions
-function calculateOverallScore(items) {
+function calculateOverallScore(items, scoringProfile = { mode: 'legacy_average', settings: {} }, featureFlags = { enableCompanyCustomization: false, useLegacyEvaluationFlow: true }) {
   if (!items || items.length === 0) return null; // Return null instead of 0 for invalid data
   const validItems = items.filter(item => {
     const score = item.rating || item.score;
     return score && score >= 1 && score <= 4;
   });
   if (validItems.length === 0) return null; // No valid items
+
+  const canUseCustomScoring =
+    featureFlags?.enableCompanyCustomization === true &&
+    featureFlags?.useLegacyEvaluationFlow === false &&
+    scoringProfile?.mode === 'weighted_average';
+
+  if (canUseCustomScoring) {
+    const weightsByBehaviorItemId = scoringProfile?.settings?.weightsByBehaviorItemId || {};
+    const weighted = validItems.reduce((acc, item) => {
+      const score = item.rating || item.score;
+      const weight = Number(weightsByBehaviorItemId[item.behaviorItemId] ?? 1);
+      return {
+        totalWeight: acc.totalWeight + (Number.isFinite(weight) && weight > 0 ? weight : 1),
+        weightedScore: acc.weightedScore + score * (Number.isFinite(weight) && weight > 0 ? weight : 1)
+      };
+    }, { totalWeight: 0, weightedScore: 0 });
+    if (weighted.totalWeight > 0) {
+      return Math.round((weighted.weightedScore / weighted.totalWeight) * 100) / 100;
+    }
+  }
+
   const totalScore = validItems.reduce((sum, item) => sum + (item.rating || item.score), 0);
   return Math.round((totalScore / validItems.length) * 100) / 100;
 }
@@ -3333,6 +3625,246 @@ app.post('/public-admin/companies/:companyId/seed-defaults', authenticateToken, 
   }
 });
 
+app.get('/public-admin/companies/:companyId/config', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can view company configuration' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+  try {
+    const [flags, scoringProfile, hierarchyTemplate] = await Promise.all([
+      getCompanyFeatureFlags(companyId),
+      getCompanyScoringProfile(companyId),
+      getCompanyHierarchyTemplate(companyId)
+    ]);
+    res.json({
+      companyId,
+      featureFlags: flags,
+      scoringProfile,
+      hierarchyTemplate
+    });
+  } catch (error) {
+    console.error('Error getting company config:', error);
+    res.status(500).json({ error: 'Failed to load company configuration' });
+  }
+});
+
+app.put('/public-admin/companies/:companyId/config', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can update company configuration' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+
+  const featureFlags = req.body?.featureFlags || {};
+  const scoringProfile = req.body?.scoringProfile || {};
+  const hierarchyTemplate = req.body?.hierarchyTemplate || {};
+
+  const normalizedRules = Array.isArray(hierarchyTemplate.rules)
+    ? hierarchyTemplate.rules
+        .filter(rule => typeof rule?.evaluatorRole === 'string' && Array.isArray(rule?.targetRoles))
+        .map(rule => ({
+          evaluatorRole: rule.evaluatorRole,
+          targetRoles: rule.targetRoles.filter(role => typeof role === 'string')
+        }))
+    : getDefaultHierarchyTemplate().rules;
+
+  const mode = typeof scoringProfile.mode === 'string' ? scoringProfile.mode : 'legacy_average';
+  const settings = scoringProfile.settings && typeof scoringProfile.settings === 'object'
+    ? scoringProfile.settings
+    : {};
+
+  try {
+    await pool.query(
+      `
+        INSERT INTO company_feature_flags ("companyId", "enableCompanyCustomization", "useLegacyEvaluationFlow", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, NOW(), NOW())
+        ON CONFLICT ("companyId")
+        DO UPDATE SET
+          "enableCompanyCustomization" = EXCLUDED."enableCompanyCustomization",
+          "useLegacyEvaluationFlow" = EXCLUDED."useLegacyEvaluationFlow",
+          "updatedAt" = NOW()
+      `,
+      [
+        companyId,
+        featureFlags.enableCompanyCustomization === true,
+        featureFlags.useLegacyEvaluationFlow !== false
+      ]
+    );
+
+    await pool.query(
+      `
+        INSERT INTO company_scoring_profiles ("companyId", mode, settings, "createdAt", "updatedAt")
+        VALUES ($1, $2, $3::jsonb, NOW(), NOW())
+        ON CONFLICT ("companyId")
+        DO UPDATE SET
+          mode = EXCLUDED.mode,
+          settings = EXCLUDED.settings,
+          "updatedAt" = NOW()
+      `,
+      [companyId, mode, JSON.stringify(settings)]
+    );
+
+    await pool.query(
+      `
+        INSERT INTO company_hierarchy_templates ("companyId", template, "createdAt", "updatedAt")
+        VALUES ($1, $2::jsonb, NOW(), NOW())
+        ON CONFLICT ("companyId")
+        DO UPDATE SET
+          template = EXCLUDED.template,
+          "updatedAt" = NOW()
+      `,
+      [companyId, JSON.stringify({ rules: normalizedRules })]
+    );
+
+    const result = await Promise.all([
+      getCompanyFeatureFlags(companyId),
+      getCompanyScoringProfile(companyId),
+      getCompanyHierarchyTemplate(companyId)
+    ]);
+
+    res.json({
+      message: 'Company configuration updated successfully',
+      companyId,
+      featureFlags: result[0],
+      scoringProfile: result[1],
+      hierarchyTemplate: result[2]
+    });
+  } catch (error) {
+    console.error('Error updating company config:', error);
+    res.status(500).json({ error: 'Failed to update company configuration', details: error.message });
+  }
+});
+
+app.get('/public-admin/companies/:companyId/form-template', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can view form templates' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+  try {
+    const template = await loadCompanyBehaviorTemplate(companyId);
+    res.json({ companyId, categories: template });
+  } catch (error) {
+    console.error('Error loading company form template:', error);
+    res.status(500).json({ error: 'Failed to load form template', details: error.message });
+  }
+});
+
+app.put('/public-admin/companies/:companyId/form-template', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can update form templates' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  const categories = Array.isArray(req.body?.categories) ? req.body.categories : [];
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+  if (categories.length === 0) {
+    return res.status(400).json({ error: 'At least one category is required.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const {
+      categoryCompanyColumn,
+      itemCompanyColumn,
+      categoryIdColumn,
+      hasItemWeight,
+      hasItemIsActive,
+      itemIsActiveColumn
+    } = await getBehaviorSchemaInfo();
+    if (!categoryCompanyColumn) {
+      return res.status(400).json({ error: 'Current schema does not support company-scoped form templates.' });
+    }
+
+    await client.query('BEGIN');
+
+    // Remove existing company template rows and replace atomically.
+    const existingCategoriesResult = await client.query(
+      `SELECT id FROM behavior_categories WHERE ${categoryCompanyColumn} = $1`,
+      [companyId]
+    );
+    const existingCategoryIds = existingCategoriesResult.rows.map(row => row.id);
+    if (existingCategoryIds.length > 0) {
+      await client.query(
+        `DELETE FROM behavior_items WHERE ${categoryIdColumn} = ANY($1::text[])`,
+        [existingCategoryIds]
+      );
+    }
+    await client.query(
+      `DELETE FROM behavior_categories WHERE ${categoryCompanyColumn} = $1`,
+      [companyId]
+    );
+
+    for (const [catIndex, category] of categories.entries()) {
+      const categoryId = category.id && typeof category.id === 'string' ? category.id : crypto.randomUUID();
+      await client.query(
+        `INSERT INTO behavior_categories (id, name, "order", weight, ${categoryCompanyColumn}, "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+        [
+          categoryId,
+          category.name || `Category ${catIndex + 1}`,
+          Number.isFinite(Number(category.order)) ? Number(category.order) : catIndex + 1,
+          Number.isFinite(Number(category.weight)) ? Number(category.weight) : 1,
+          companyId
+        ]
+      );
+
+      const items = Array.isArray(category.items) ? category.items : [];
+      for (const [itemIndex, item] of items.entries()) {
+        const itemId = item.id && typeof item.id === 'string' ? item.id : crypto.randomUUID();
+        const insertColumns = ['id', categoryIdColumn, 'name', '"order"', '"createdAt"', '"updatedAt"'];
+        const insertValues = [
+          itemId,
+          categoryId,
+          item.name || `Item ${itemIndex + 1}`,
+          Number.isFinite(Number(item.order)) ? Number(item.order) : itemIndex + 1,
+          new Date(),
+          new Date()
+        ];
+        if (hasItemWeight) {
+          insertColumns.splice(4, 0, 'weight');
+          insertValues.splice(4, 0, Number.isFinite(Number(item.weight)) ? Number(item.weight) : 1);
+        }
+        if (hasItemIsActive && itemIsActiveColumn) {
+          insertColumns.splice(hasItemWeight ? 5 : 4, 0, itemIsActiveColumn);
+          insertValues.splice(hasItemWeight ? 5 : 4, 0, item.isActive !== false);
+        }
+        if (itemCompanyColumn) {
+          insertColumns.splice(2, 0, itemCompanyColumn);
+          insertValues.splice(2, 0, companyId);
+        }
+        const placeholders = insertValues.map((_, index) => `$${index + 1}`).join(', ');
+        await client.query(
+          `INSERT INTO behavior_items (${insertColumns.join(', ')}) VALUES (${placeholders})`,
+          insertValues
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    const saved = await loadCompanyBehaviorTemplate(companyId);
+    res.json({
+      message: 'Company form template updated successfully',
+      companyId,
+      categories: saved
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error updating company form template:', error);
+    res.status(500).json({ error: 'Failed to update form template', details: error.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.get('/public-admin/regions', authenticateToken, async (req, res) => {
   try {
     const { companyId, includeAllCompanies } = resolveCompanyContext(req);
@@ -4066,5 +4598,9 @@ app.delete('/public-admin/teams/:id', authenticateToken, async (req, res) => {
     client.release();
   }
 });
+
+// Serve entire public directory under /public-admin for auxiliary pages (must be after API routes
+// so dynamic paths such as /public-admin/companies/:companyId/config reach the handlers above).
+app.use('/public-admin', express.static('public'));
 
 module.exports = app;
