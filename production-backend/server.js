@@ -1,108 +1,34 @@
 const path = require('path');
-// Load production-backend/.env first, then repo-root .env.dev (fills DATABASE_URL etc. when missing).
-require('dotenv').config({ path: path.join(__dirname, '.env') });
-require('dotenv').config({ path: path.join(__dirname, '..', '.env.dev') });
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
 const crypto = require('crypto');
 let webpush = null;
 
+const env = require('./src/config/env');
+const { pool } = require('./src/config/database');
+const { createCorsMiddleware } = require('./src/config/cors');
+const { createAuthenticateToken } = require('./src/middleware/authenticateToken');
+const { authorizeEvaluationCreation } = require('./src/middleware/requireRoles');
+const { createCompanyContextHelpers } = require('./src/middleware/companyContext');
+const { forwardErrorToExpressDefault } = require('./src/middleware/errorHandler');
+
 const app = express();
 // Default 3001 so the root PWA can use 3000 in dev (see DEV-ENVIRONMENT.md, docker-compose.dev.yml).
-const PORT = process.env.PORT || 3001;
-const DEFAULT_COMPANY_ID = 'company_metro';
+const PORT = env.PORT;
+const DEFAULT_COMPANY_ID = env.DEFAULT_COMPANY_ID;
+const JWT_SECRET = env.JWT_SECRET;
+const REFRESH_SECRET = env.REFRESH_SECRET;
+const CUSTOMIZATION_ALLOWLIST = env.CUSTOMIZATION_ALLOWLIST;
+const databaseUrl = env.databaseUrl;
 
-/**
- * Resolve company context for a request.
- * - Non super-admins are always scoped to their own company.
- * - Super-admins can pass ?companyId=<id> (or "all") on the query string,
- *   or provide companyId in the request body / header.
- */
-function resolveCompanyContext(req) {
-  const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
+const { resolveCompanyContext, normalizeCompanyId, slugifyCompanyName } = createCompanyContextHelpers(
+  DEFAULT_COMPANY_ID
+);
 
-  const queryCompanyId = typeof req.query?.companyId === 'string' ? req.query.companyId.trim() : undefined;
-  const bodyCompanyId = typeof req.body === 'object' && req.body !== null && typeof req.body.companyId === 'string'
-    ? req.body.companyId.trim()
-    : undefined;
-  const headerCompanyId = typeof req.headers['x-company-id'] === 'string'
-    ? req.headers['x-company-id'].trim()
-    : undefined;
-
-  const explicitCompanyId = queryCompanyId || bodyCompanyId || headerCompanyId;
-
-  if (isSuperAdmin) {
-    if (explicitCompanyId && explicitCompanyId.toLowerCase() === 'all') {
-      return { companyId: null, includeAllCompanies: true };
-    }
-    if (explicitCompanyId) {
-      return { companyId: explicitCompanyId, includeAllCompanies: false };
-    }
-    // Default for super-admins with no explicit selection: include all.
-    return { companyId: null, includeAllCompanies: true };
-  }
-
-  return {
-    companyId: req.user?.companyId || DEFAULT_COMPANY_ID,
-    includeAllCompanies: false
-  };
-}
-
-function normalizeCompanyId(rawId) {
-  if (typeof rawId !== 'string') {
-    return null;
-  }
-  const trimmed = rawId.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const normalized = trimmed.toLowerCase().replace(/\s+/g, '_');
-  if (!/^[a-z0-9_-]+$/.test(normalized)) {
-    return null;
-  }
-  return normalized;
-}
-
-function slugifyCompanyName(rawName) {
-  if (typeof rawName !== 'string') {
-    return null;
-  }
-  const slug = rawName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
-  return slug || null;
-}
-
-// Database connection (must be non-empty or all authenticated routes return 500)
-const DEFAULT_LOCAL_DEV_DATABASE_URL =
-  'postgres://scorecard:scorecard_dev_pass@127.0.0.1:5432/salesscorecard_dev';
-let databaseUrl = (process.env.DATABASE_URL || '').trim();
-if (!databaseUrl && process.env.NODE_ENV !== 'production') {
-  databaseUrl = DEFAULT_LOCAL_DEV_DATABASE_URL;
-  console.warn(
-    '[server] DATABASE_URL unset — using local dev default (docker-compose.dev.yml / seed-dev-data.js). Set DATABASE_URL in production.'
-  );
-}
-if (!databaseUrl) {
-  console.error(
-    '[server] FATAL: DATABASE_URL is not set. Add it to production-backend/.env or the environment.'
-  );
-}
-const isLocalDatabase =
-  databaseUrl.includes('localhost') ||
-  databaseUrl.includes('@db:') ||
-  databaseUrl.includes('@127.0.0.1:');
-
-const pool = new Pool({
-  connectionString: databaseUrl,
-  ssl: isLocalDatabase ? false : { rejectUnauthorized: false }
+const authenticateToken = createAuthenticateToken({
+  jwtSecret: JWT_SECRET,
+  defaultCompanyId: DEFAULT_COMPANY_ID,
 });
 
 // Database migrations on startup
@@ -247,16 +173,6 @@ app.post('/admin/run-migrations', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Failed to run migrations', error: error.message });
   }
 });
-
-// JWT Secrets (use environment variables in production)
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_for_access_tokens';
-const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your_refresh_secret_key_for_refresh_tokens';
-const CUSTOMIZATION_ALLOWLIST = new Set(
-  (process.env.COMPANY_CUSTOMIZATION_COMPANIES || '')
-    .split(',')
-    .map(v => v.trim())
-    .filter(Boolean)
-);
 
 function buildLoginResponse(user) {
   const token = jwt.sign(
@@ -433,58 +349,8 @@ async function loadCompanyBehaviorTemplate(companyId) {
   return categories;
 }
 
-const defaultAllowedOrigins = [
-  'https://d2tuhgmig1r5ut.cloudfront.net',
-  'https://scorecard.instorm.io',
-  'https://api.scorecard.instorm.io',
-  'https://api.instorm.io',
-  'https://instorm.io',
-  'https://www.instorm.io',
-  'http://localhost:3000'
-];
-
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
-  .split(',')
-  .map(origin => origin.trim())
-  .filter(Boolean);
-
-const localDevOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-
-/** True for browser origins that are clearly local (localhost, 127.0.0.1, IPv6 loopback). */
-function isLocalDevOrigin(origin) {
-  if (!origin || typeof origin !== 'string') return false;
-  try {
-    const u = new URL(origin);
-    const h = u.hostname;
-    if (h === 'localhost' || h === '127.0.0.1') return true;
-    if (h === '[::1]' || h === '::1') return true;
-    return false;
-  } catch {
-    return localDevOriginPattern.test(origin);
-  }
-}
-
-// Keep production-safe defaults even when ALLOWED_ORIGINS is provided.
-// Env entries extend the allowlist instead of replacing critical web origins.
-const effectiveAllowedOrigins = Array.from(
-  new Set([...defaultAllowedOrigins, ...allowedOrigins])
-);
-
 // CORS supports strict override via ALLOWED_ORIGINS and safe defaults otherwise.
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    if (effectiveAllowedOrigins.includes(origin) || localDevOriginPattern.test(origin) || isLocalDevOrigin(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(new Error(`CORS blocked origin: ${origin}`));
-  },
-  credentials: true
-}));
+app.use(createCorsMiddleware());
 
 // React Admin SPA: register HTML routes BEFORE express.static so index.html is not served
 // from static middleware (which would ignore Cache-Control below and ship stale script tags).
@@ -573,43 +439,6 @@ try {
 } catch (e) {
   console.log('ℹ️ web-push not installed; push send endpoint will be disabled');
 }
-
-// Authentication middleware
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided', error: 'Unauthorized', statusCode: 401 });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      console.log('Token verification failed:', err.message);
-      return res.status(403).json({ message: 'Forbidden', statusCode: 403 });
-    }
-    req.user = {
-      ...user,
-      companyId: user.companyId || DEFAULT_COMPANY_ID
-    };
-    next();
-  });
-}
-
-// Authorization middleware for evaluation creation
-const authorizeEvaluationCreation = (req, res, next) => {
-  const userRole = req.user.role;
-  const allowedRoles = ['ADMIN', 'SALES_DIRECTOR', 'REGIONAL_SALES_MANAGER', 'REGIONAL_MANAGER', 'SALES_LEAD'];
-  
-  if (!allowedRoles.includes(userRole)) {
-    return res.status(403).json({ 
-      message: 'Insufficient permissions to create evaluations', 
-      statusCode: 403 
-    });
-  }
-  
-  next();
-};
 
 // Utility: detect user_teams column naming (camelCase vs snake_case)
 async function getUserTeamsColumns(client) {
@@ -4967,5 +4796,7 @@ app.delete('/public-admin/teams/:id', authenticateToken, async (req, res) => {
 // Serve entire public directory under /public-admin for auxiliary pages (must be after API routes
 // so dynamic paths such as /public-admin/companies/:companyId/config reach the handlers above).
 app.use('/public-admin', express.static('public'));
+
+app.use(forwardErrorToExpressDefault);
 
 module.exports = app;
