@@ -12,10 +12,13 @@ import AnalyticsView from './AnalyticsView';
 import ExportView from './ExportView';
 import TeamManagementView from './TeamManagementView';
 import LanguageSwitcher from './LanguageSwitcher';
-import MobileDebugPanel from './MobileDebugPanel';
 import { offlineService } from '../utils/offlineService';
 import { notificationService } from '../utils/notificationService';
 import { apiService, Company } from '../services/api';
+import { canUseVoiceDebriefPilot } from '../config/voiceDebriefPilot';
+import VoiceDebriefPilot from './VoiceDebriefPilot';
+import { isDevAiPanelEnabled } from '../config/devAiPanel';
+import DevAiPlayground from './DevAiPlayground';
 
 const SalesApp: React.FC = () => {
   const { user, logout } = useAuth();
@@ -206,49 +209,6 @@ const SalesApp: React.FC = () => {
           </button>
           )}
           
-          {/* Notification Settings - Hidden on mobile */}
-            <button 
-              onClick={async () => {
-                try {
-                  const isSubscribed = await notificationService.getSubscription();
-                  if (isSubscribed) {
-                    await notificationService.unsubscribeFromPush();
-                    notificationService.showNotification('🔔 Notifications Disabled', {
-                      body: 'You have been unsubscribed from push notifications.'
-                    });
-                  } else {
-                    const subscription = await notificationService.subscribeToPush();
-                    if (subscription) {
-                      notificationService.showNotification('🔔 Notifications Enabled', {
-                        body: 'You will now receive push notifications for important updates.'
-                      });
-                    }
-                  }
-                } catch (error) {
-                  console.error('Failed to toggle notifications:', error);
-                }
-              }}
-              className="notification-button desktop-only"
-              title="Toggle Notifications"
-              style={{
-                background: '#28a745',
-                color: 'white',
-              border: 'none',
-              fontSize: '16px',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: '40px',
-              height: '40px',
-              marginRight: '8px'
-            }}
-          >
-            🔔
-          </button>
-          
           {/* <ThemeToggle /> - Dark mode disabled */}
           <LanguageSwitcher />
           <button 
@@ -294,6 +254,32 @@ const SalesApp: React.FC = () => {
               <span>🏢</span>
               <span>{t('navigation.dashboard')}</span>
             </button>
+            {canUseVoiceDebriefPilot(user?.role || '') && (
+              <button
+                className={activeTab === 'voice-debrief-pilot' ? 'nav-button active' : 'nav-button'}
+                onClick={() => {
+                  handleTabChange('voice-debrief-pilot');
+                  closeMobileMenu();
+                }}
+                title="Pilot: voice debrief (separate from standard evaluations)"
+              >
+                <span>🎙️</span>
+                <span>Voice debrief</span>
+              </button>
+            )}
+            {isDevAiPanelEnabled() && (
+              <button
+                className={activeTab === 'dev-ai-playground' ? 'nav-button active' : 'nav-button'}
+                onClick={() => {
+                  handleTabChange('dev-ai-playground');
+                  closeMobileMenu();
+                }}
+                title="Dev only: test OpenAI via backend"
+              >
+                <span>🤖</span>
+                <span>Dev AI</span>
+              </button>
+            )}
             {canExport(user?.role || '') && (
               <button
                 className={activeTab === 'export' ? 'nav-button active' : 'nav-button'}
@@ -320,6 +306,33 @@ const SalesApp: React.FC = () => {
               >
                 <span>✏️</span>
                 <span>{t('navigation.evaluation')}</span>
+              </button>
+            )}
+
+            {canUseVoiceDebriefPilot(user?.role || '') && (
+              <button
+                className={activeTab === 'voice-debrief-pilot' ? 'nav-button active' : 'nav-button'}
+                onClick={() => {
+                  handleTabChange('voice-debrief-pilot');
+                  closeMobileMenu();
+                }}
+                title="Pilot: voice debrief (separate from standard evaluations)"
+              >
+                <span>🎙️</span>
+                <span>Voice debrief</span>
+              </button>
+            )}
+            {isDevAiPanelEnabled() && (
+              <button
+                className={activeTab === 'dev-ai-playground' ? 'nav-button active' : 'nav-button'}
+                onClick={() => {
+                  handleTabChange('dev-ai-playground');
+                  closeMobileMenu();
+                }}
+                title="Dev only: test OpenAI via backend"
+              >
+                <span>🤖</span>
+                <span>Dev AI</span>
               </button>
             )}
             
@@ -395,17 +408,6 @@ const SalesApp: React.FC = () => {
               </button>
             )}
             
-            {/* Mobile Notification Settings */}
-            <button
-              className={activeTab === 'notifications' ? 'nav-button active mobile-notification-button' : 'nav-button mobile-notification-button'}
-              onClick={() => {
-                handleTabChange('notifications');
-                closeMobileMenu();
-              }}
-            >
-              <span>🔔</span>
-              <span>Notifications</span>
-            </button>
           </>
         )}
       </nav>
@@ -440,10 +442,13 @@ const SalesApp: React.FC = () => {
         {activeTab === 'analytics' && <AnalyticsView />}
         {activeTab === 'export' && <ExportView />}
         {activeTab === 'teams' && <TeamManagementView />}
+        {activeTab === 'voice-debrief-pilot' && canUseVoiceDebriefPilot(user?.role || '') && (
+          <VoiceDebriefPilot onClose={() => handleTabChange('dashboard')} />
+        )}
+        {activeTab === 'dev-ai-playground' && isDevAiPanelEnabled() && (
+          <DevAiPlayground onNavigate={handleTabChange} />
+        )}
       </main>
-
-      {/* Mobile debug panel - shows on iOS PWA */}
-      <MobileDebugPanel />
     </div>
   );
 };
