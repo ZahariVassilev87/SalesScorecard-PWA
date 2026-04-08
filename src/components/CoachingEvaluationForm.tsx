@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiService, User } from '../services/api';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
@@ -8,6 +8,40 @@ interface CoachingEvaluationFormProps {
   onSuccess: () => void;
   onCancel: () => void;
 }
+
+const API_BASE = (process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
+// Dictation hard limit for comment fields
+const MAX_DICTATION_COMMENT_CHARS = 2000;
+
+const sanitizeObjectArtifacts = (value: string) =>
+  String(value || '')
+    .replace(/\[object Object\]/gi, '')
+    .replace(/\bobject object\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const toUserFriendlyTranscriptionError = (raw: unknown, isBg: boolean) => {
+  const msg =
+    typeof raw === 'string'
+      ? raw
+      : raw && typeof raw === 'object' && 'message' in raw
+        ? String((raw as { message?: unknown }).message || '')
+        : '';
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes('too large') ||
+    lower.includes('payload') ||
+    lower.includes('entity too large') ||
+    lower.includes('413') ||
+    lower.includes('[object object]') ||
+    lower.includes('object object')
+  ) {
+    return isBg
+      ? 'Достигнат е лимитът за запис. Записаното е запазено; допиши остатъка ръчно.'
+      : 'Recording limit reached. Saved transcription is kept; type the rest manually.';
+  }
+  return msg || (isBg ? 'Грешка при транскрипция.' : 'Transcription failed.');
+};
 
 const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSuccess, onCancel }) => {
   const { t } = useTranslation();
@@ -28,6 +62,12 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
   // Coaching scores and comments
   const [scores, setScores] = useState<Record<string, number>>({});
   const [clusterComments, setClusterComments] = useState<Record<string, string>>({});
+  const [activeVoiceTarget, setActiveVoiceTarget] = useState<string | null>(null);
+  const [transcribingTarget, setTranscribingTarget] = useState<string | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceErrorTarget, setVoiceErrorTarget] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -62,6 +102,20 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
 
     loadData();
   }, [t, user?.id]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        recorderRef.current?.stop();
+      } catch {
+        // ignore
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
 
   // Hardcoded coaching categories (source of truth for RM/RSM coaching form).
   // Weights proportional to criterion count (12 total): 3 + 2 + 4 + 3.
@@ -117,7 +171,159 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
   };
 
   const handleClusterCommentChange = (categoryId: string, comment: string) => {
-    setClusterComments(prev => ({ ...prev, [categoryId]: comment }));
+    const cleaned = sanitizeObjectArtifacts(comment);
+    setClusterComments(prev => ({ ...prev, [categoryId]: cleaned }));
+  };
+
+  const appendWithLimit = (prev: string, incoming: string) => {
+    const safePrev = sanitizeObjectArtifacts(prev);
+    const safeIncoming = sanitizeObjectArtifacts(incoming);
+    if (!safeIncoming) {
+      return { value: safePrev, hitLimit: false };
+    }
+    const merged = safePrev ? `${safePrev} ${safeIncoming}` : safeIncoming;
+    if (merged.length <= MAX_DICTATION_COMMENT_CHARS) {
+      return { value: merged, hitLimit: false };
+    }
+    return { value: merged.slice(0, MAX_DICTATION_COMMENT_CHARS), hitLimit: true };
+  };
+
+  const transcribeAudioBlob = async (blob: Blob) => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const raw = result.includes(',') ? result.split(',')[1] : result;
+        resolve(raw);
+      };
+      reader.onerror = () => reject(new Error('Failed to read audio'));
+      reader.readAsDataURL(blob);
+    });
+
+    const response = await fetch(`${API_BASE}/dev/ai/transcribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        audioBase64: base64,
+        mimeType: blob.type || 'audio/webm',
+        language: 'bg',
+        model: 'whisper-1'
+      })
+    });
+    const raw = await response.text();
+    let payload: any = null;
+    try {
+      payload = raw ? JSON.parse(raw) : {};
+    } catch {
+      payload = null;
+    }
+    if (!payload) {
+      throw new Error(
+        i18n.language === 'bg'
+          ? 'Грешка при транскрипция: сървърът върна невалиден отговор.'
+          : 'Transcription failed: server returned a non-JSON response.'
+      );
+    }
+    if (!response.ok) {
+      const payloadErr =
+        typeof payload?.error === 'string'
+          ? payload.error
+          : typeof payload?.error?.message === 'string'
+            ? payload.error.message
+            : `Transcription failed (HTTP ${response.status})`;
+      throw new Error(payloadErr);
+    }
+    const rawText =
+      typeof payload?.text === 'string'
+        ? payload.text
+        : typeof payload?.text?.text === 'string'
+          ? payload.text.text
+          : '';
+    return String(rawText || '').trim();
+  };
+
+  const stopVoiceInput = () => {
+    try {
+      recorderRef.current?.stop();
+    } catch {
+      // ignore
+    }
+  };
+
+  const startVoiceInput = (targetId: string, appendText: (text: string) => void) => {
+    (async () => {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        setVoiceError(i18n.language === 'bg' ? 'Аудио записът не се поддържа в този браузър.' : 'Audio recording is not supported in this browser.');
+        setVoiceErrorTarget(targetId);
+        return;
+      }
+      setVoiceError(null);
+      setVoiceErrorTarget(null);
+      if (activeVoiceTarget && activeVoiceTarget !== targetId) {
+        stopVoiceInput();
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+        const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+        const mimeType = preferred.find((m) => {
+          try {
+            return MediaRecorder.isTypeSupported(m);
+          } catch {
+            return false;
+          }
+        });
+        const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        recorderRef.current = recorder;
+        let stopped = false;
+        const chunks: Blob[] = [];
+
+        recorder.ondataavailable = (ev) => {
+          if (ev.data && ev.data.size > 0) {
+            chunks.push(ev.data);
+          }
+        };
+        recorder.onerror = () => {
+          setVoiceError(i18n.language === 'bg' ? 'Грешка при записа на аудио.' : 'Audio recording failed.');
+          setVoiceErrorTarget(targetId);
+          setActiveVoiceTarget(null);
+        };
+        recorder.onstop = async () => {
+          if (stopped) return;
+          stopped = true;
+          setActiveVoiceTarget(null);
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
+          }
+          recorderRef.current = null;
+          const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+          if (blob.size < 800) return;
+          setTranscribingTarget(targetId);
+          try {
+            const text = String(await transcribeAudioBlob(blob)).trim();
+            if (!text || text === '[object Object]' || text.toLowerCase() === 'object object') {
+              setVoiceError(toUserFriendlyTranscriptionError('object object', i18n.language === 'bg'));
+              setVoiceErrorTarget(targetId);
+              return;
+            }
+            appendText(text);
+          } catch (e) {
+            setVoiceError(toUserFriendlyTranscriptionError(e, i18n.language === 'bg'));
+            setVoiceErrorTarget(targetId);
+          } finally {
+            setTranscribingTarget(null);
+          }
+        };
+
+        recorder.start();
+        setActiveVoiceTarget(targetId);
+      } catch {
+        setVoiceError(i18n.language === 'bg' ? 'Не може да се стартира микрофонът.' : 'Could not start microphone.');
+        setVoiceErrorTarget(targetId);
+        setActiveVoiceTarget(null);
+      }
+    })();
   };
 
   const calculateClusterScore = (categoryId: string) => {
@@ -393,24 +599,107 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
                 >
                   Cluster comment
                 </label>
-                <textarea
-                  placeholder={i18n.language === 'bg' ? 'Дай конкретен пример от разговора' : 'Give concrete example from the conversation'}
-                  value={clusterComments[category.id] || ''}
-                  onChange={(e) => handleClusterCommentChange(category.id, e.target.value)}
-                  rows={3}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: `2px solid ${category.color}30`,
-                    borderRadius: '12px',
-                    fontSize: '0.875rem',
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
-                    boxSizing: 'border-box',
-                    background: 'white',
-                    color: 'var(--gray-700)'
-                  }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetId = `cluster:${category.id}`;
+                      if (activeVoiceTarget === targetId) {
+                        stopVoiceInput();
+                        return;
+                      }
+                      startVoiceInput(targetId, (t) => {
+                        setClusterComments(prev => {
+                          const current = prev[category.id] || '';
+                          const out = appendWithLimit(current, t);
+                          if (out.hitLimit) {
+                            setVoiceError(
+                              i18n.language === 'bg'
+                                ? `Достигнат е лимитът за диктовка (${MAX_DICTATION_COMMENT_CHARS} символа).`
+                                : `Dictation limit reached (${MAX_DICTATION_COMMENT_CHARS} characters).`
+                            );
+                            setVoiceErrorTarget(targetId);
+                            stopVoiceInput();
+                          }
+                          return { ...prev, [category.id]: out.value };
+                        });
+                      });
+                    }}
+                    title={activeVoiceTarget === `cluster:${category.id}` ? 'Stop voice input' : 'Start voice input'}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '10px',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '999px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#3f4349',
+                      fontSize: '0.95rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2
+                    }}
+                    aria-label={activeVoiceTarget === `cluster:${category.id}` ? 'Stop voice input' : 'Start voice input'}
+                  >
+                    {activeVoiceTarget === `cluster:${category.id}` ? (
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '999px',
+                          background: '#ef4444',
+                          boxShadow: '0 0 0 0 rgba(239,68,68,.65)',
+                          animation: 'voicePulse 1.25s ease-out infinite'
+                        }}
+                      />
+                    ) : (
+                      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                        <path
+                          fill="currentColor"
+                          d="M12 15.5a3.5 3.5 0 0 0 3.5-3.5V7a3.5 3.5 0 1 0-7 0v5a3.5 3.5 0 0 0 3.5 3.5Zm6-3.5a1 1 0 0 0-2 0 4 4 0 1 1-8 0 1 1 0 0 0-2 0 6 6 0 0 0 5 5.91V20H9.5a1 1 0 1 0 0 2h5a1 1 0 1 0 0-2H13v-2.09A6 6 0 0 0 18 12Z"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                  <textarea
+                    placeholder={i18n.language === 'bg' ? 'Дай конкретен пример от разговора' : 'Give concrete example from the conversation'}
+                    value={clusterComments[category.id] || ''}
+                    onChange={(e) => handleClusterCommentChange(category.id, e.target.value)}
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: '12px 48px 12px 12px',
+                      border: `2px solid ${category.color}30`,
+                      borderRadius: '12px',
+                      fontSize: '0.875rem',
+                      fontFamily: 'inherit',
+                      resize: 'vertical',
+                      boxSizing: 'border-box',
+                      background: 'white',
+                      color: 'var(--gray-700)'
+                    }}
+                  />
+                </div>
+                {activeVoiceTarget === `cluster:${category.id}` && (
+                  <div style={{ marginTop: '0.35rem', marginBottom: '0.5rem', fontSize: '0.78rem', color: '#b91c1c' }}>
+                    {i18n.language === 'bg' ? 'Записва... натисни иконата, за да спреш.' : 'Recording... tap the icon to stop.'}
+                  </div>
+                )}
+                {transcribingTarget === `cluster:${category.id}` && (
+                  <div style={{ marginTop: '0.35rem', marginBottom: '0.5rem', fontSize: '0.78rem', color: '#475569' }}>
+                    {i18n.language === 'bg' ? 'Транскрибиране...' : 'Transcribing...'}
+                  </div>
+                )}
+                {voiceError && voiceErrorTarget === `cluster:${category.id}` && (
+                  <div style={{ marginBottom: '0.5rem', fontSize: '0.8rem', color: '#b91c1c' }}>
+                    {voiceError}
+                  </div>
+                )}
               </div>
 
               {/* Cluster Score Display */}
@@ -452,15 +741,107 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
           <h3>{t('common:evaluation.overallAssessment')}</h3>
           <div className="form-group">
             <label htmlFor="overallComment">{t('common:evaluation.overallComment')}</label>
-            <textarea
-              id="overallComment"
-              value={overallComment}
-              onChange={(e) => setOverallComment(e.target.value)}
-              rows={4}
-              placeholder="Provide overall feedback and recommendations..."
-            />
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeVoiceTarget === 'overall') {
+                    stopVoiceInput();
+                    return;
+                  }
+                  startVoiceInput('overall', (t) => {
+                    setOverallComment((prev) => {
+                      const out = appendWithLimit(prev, t);
+                      if (out.hitLimit) {
+                        setVoiceError(
+                          i18n.language === 'bg'
+                            ? `Достигнат е лимитът за диктовка (${MAX_DICTATION_COMMENT_CHARS} символа).`
+                            : `Dictation limit reached (${MAX_DICTATION_COMMENT_CHARS} characters).`
+                        );
+                        setVoiceErrorTarget('overall');
+                        stopVoiceInput();
+                      }
+                      return out.value;
+                    });
+                  });
+                }}
+                title={activeVoiceTarget === 'overall' ? 'Stop voice input' : 'Start voice input'}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '10px',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '999px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#3f4349',
+                  fontSize: '0.95rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 2
+                }}
+                aria-label={activeVoiceTarget === 'overall' ? 'Stop voice input' : 'Start voice input'}
+              >
+                {activeVoiceTarget === 'overall' ? (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '999px',
+                      background: '#ef4444',
+                      boxShadow: '0 0 0 0 rgba(239,68,68,.65)',
+                      animation: 'voicePulse 1.25s ease-out infinite'
+                    }}
+                  />
+                ) : (
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                    <path
+                      fill="currentColor"
+                      d="M12 15.5a3.5 3.5 0 0 0 3.5-3.5V7a3.5 3.5 0 1 0-7 0v5a3.5 3.5 0 0 0 3.5 3.5Zm6-3.5a1 1 0 0 0-2 0 4 4 0 1 1-8 0 1 1 0 0 0-2 0 6 6 0 0 0 5 5.91V20H9.5a1 1 0 1 0 0 2h5a1 1 0 1 0 0-2H13v-2.09A6 6 0 0 0 18 12Z"
+                    />
+                  </svg>
+                )}
+              </button>
+              <textarea
+                id="overallComment"
+                value={overallComment}
+                onChange={(e) =>
+                  setOverallComment(sanitizeObjectArtifacts(e.target.value))
+                }
+                rows={4}
+                placeholder="Provide overall feedback and recommendations..."
+                style={{ paddingRight: '48px' }}
+              />
+            </div>
+            {activeVoiceTarget === 'overall' && (
+              <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', color: '#b91c1c' }}>
+                {i18n.language === 'bg' ? 'Записва... натисни иконата, за да спреш.' : 'Recording... tap the icon to stop.'}
+              </div>
+            )}
+            {transcribingTarget === 'overall' && (
+              <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', color: '#475569' }}>
+                {i18n.language === 'bg' ? 'Транскрибиране...' : 'Transcribing...'}
+              </div>
+            )}
+            {voiceError && voiceErrorTarget === 'overall' && (
+              <div style={{ marginTop: '0.35rem', fontSize: '0.8rem', color: '#b91c1c' }}>
+                {voiceError}
+              </div>
+            )}
           </div>
         </div>
+
+        <style>{`
+          @keyframes voicePulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,.65); }
+            70% { transform: scale(1.06); box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+          }
+        `}</style>
 
         {error && (
           <div

@@ -1,10 +1,13 @@
+const path = require('path');
+// Load production-backend/.env first, then repo-root .env.dev (fills DATABASE_URL etc. when missing).
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env.dev') });
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const crypto = require('crypto');
-const path = require('path');
 let webpush = null;
 
 const app = express();
@@ -77,8 +80,21 @@ function slugifyCompanyName(rawName) {
   return slug || null;
 }
 
-// Database connection
-const databaseUrl = process.env.DATABASE_URL || '';
+// Database connection (must be non-empty or all authenticated routes return 500)
+const DEFAULT_LOCAL_DEV_DATABASE_URL =
+  'postgres://scorecard:scorecard_dev_pass@127.0.0.1:5432/salesscorecard_dev';
+let databaseUrl = (process.env.DATABASE_URL || '').trim();
+if (!databaseUrl && process.env.NODE_ENV !== 'production') {
+  databaseUrl = DEFAULT_LOCAL_DEV_DATABASE_URL;
+  console.warn(
+    '[server] DATABASE_URL unset — using local dev default (docker-compose.dev.yml / seed-dev-data.js). Set DATABASE_URL in production.'
+  );
+}
+if (!databaseUrl) {
+  console.error(
+    '[server] FATAL: DATABASE_URL is not set. Add it to production-backend/.env or the environment.'
+  );
+}
 const isLocalDatabase =
   databaseUrl.includes('localhost') ||
   databaseUrl.includes('@db:') ||
@@ -241,6 +257,41 @@ const CUSTOMIZATION_ALLOWLIST = new Set(
     .map(v => v.trim())
     .filter(Boolean)
 );
+
+function buildLoginResponse(user) {
+  const token = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      displayName: user.displayName,
+      companyId: user.companyId || DEFAULT_COMPANY_ID
+    },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+  const refreshToken = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      companyId: user.companyId || DEFAULT_COMPANY_ID
+    },
+    REFRESH_SECRET,
+    { expiresIn: '7d' }
+  );
+  return {
+    token,
+    refreshToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      role: user.role,
+      isActive: user.isActive,
+      companyId: user.companyId || DEFAULT_COMPANY_ID
+    }
+  };
+}
 
 function getDefaultHierarchyTemplate() {
   return {
@@ -431,39 +482,39 @@ app.use(cors({
   credentials: true
 }));
 
-// Serve React Admin panel static files
-app.use('/public-admin/react-admin', express.static('public/react-admin'));
+// React Admin SPA: register HTML routes BEFORE express.static so index.html is not served
+// from static middleware (which would ignore Cache-Control below and ship stale script tags).
+const adminIndexPath = path.join(__dirname, 'public', 'react-admin', 'index.html');
+const adminStaticRoot = path.join(__dirname, 'public', 'react-admin');
 
-// Force fresh index.html for admin (avoid stale cached UI)
-app.get('/public-admin/react-admin/', (req, res) => {
+function sendAdminIndexHtml(res) {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
-  res.sendFile(path.join(__dirname, 'public', 'react-admin', 'index.html'));
+  res.sendFile(adminIndexPath);
+}
+
+['/public-admin/react-admin', '/public-admin/react-admin/', '/public-admin/react-admin/index.html'].forEach((adminIndexRoute) => {
+  app.get(adminIndexRoute, (req, res) => {
+    sendAdminIndexHtml(res);
+  });
 });
 
-app.get('/public-admin/react-admin/index.html', (req, res) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
-  res.sendFile(path.join(__dirname, 'public', 'react-admin', 'index.html'));
-});
+app.use(
+  '/public-admin/react-admin',
+  express.static(adminStaticRoot, { index: false })
+);
 
-// Handle deep links inside React Admin by serving index.html for page routes (not static files)
+// Client-side routes (same index.html; not for missing .js/.css — those 404 after static)
 app.get('/public-admin/react-admin/*', (req, res) => {
-  // Skip static files (js, css, images, etc.)
   if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/)) {
     return res.status(404).send('Not found');
   }
-  
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
-  res.sendFile(path.join(__dirname, 'public', 'react-admin', 'index.html'));
+  sendAdminIndexHtml(res);
 });
 
-// NOTE: /public-admin static serving is registered after all API routes (see end of file)
-// so paths like GET /public-admin/companies/:id/config are not handled by express.static.
+// NOTE: Admin JSON APIs live under /public-admin/... and are registered as routes; they are not
+// shadowed by this static mount because they do not match /public-admin/react-admin/ file paths.
 
 // Serve admin-with-delete.html
 app.get('/admin-with-delete.html', (req, res) => {
@@ -484,7 +535,8 @@ app.get('/clear-offline-data.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'clear-offline-data.html'));
 });
 
-app.use(bodyParser.json());
+// Global JSON limit must accommodate larger audio base64 payloads for /dev/ai/transcribe.
+app.use(bodyParser.json({ limit: '100mb' }));
 
 // In-memory storage for evaluations (in production, use database)
 let storedEvaluations = [];
@@ -652,10 +704,18 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check endpoint (includes DB — login fails with 500 if database is disconnected)
+app.get('/health', async (req, res) => {
+  let database = 'unknown';
+  try {
+    await pool.query('SELECT 1');
+    database = 'connected';
+  } catch (e) {
+    database = 'disconnected';
+  }
   res.json({
-    status: 'ok',
+    status: database === 'connected' ? 'ok' : 'degraded',
+    database,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
@@ -972,6 +1032,8 @@ app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
   console.log('Login attempt:', { email, password: '***' });
 
+  const bcrypt = require('bcrypt');
+
   try {
     const result = await pool.query(
       'SELECT id, email, password, role, "displayName", "isActive", "companyId" FROM users WHERE email = $1 AND "isActive" = true',
@@ -979,70 +1041,40 @@ app.post('/auth/login', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ 
-        message: 'Invalid email or password', 
-        error: 'Unauthorized', 
-        statusCode: 401 
+      return res.status(401).json({
+        message: 'Invalid email or password',
+        error: 'Unauthorized',
+        statusCode: 401
       });
     }
 
     const user = result.rows[0];
-    
-    // Use bcrypt to compare hashed password
-    const bcrypt = require('bcrypt');
+
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    
+
     if (!isPasswordValid) {
-      return res.status(401).json({ 
-        message: 'Invalid email or password', 
-        error: 'Unauthorized', 
-        statusCode: 401 
+      return res.status(401).json({
+        message: 'Invalid email or password',
+        error: 'Unauthorized',
+        statusCode: 401
       });
     }
 
-    const token = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
-        role: user.role,
-        displayName: user.displayName,
-        companyId: user.companyId || DEFAULT_COMPANY_ID
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    const refreshToken = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email,
-        companyId: user.companyId || DEFAULT_COMPANY_ID 
-      },
-      REFRESH_SECRET,
-      { expiresIn: '7d' }
-    );
-
     console.log('Login successful for user:', user.email);
-
-    res.json({
-      token,
-      refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        role: user.role,
-        isActive: user.isActive,
-        companyId: user.companyId || DEFAULT_COMPANY_ID
-      }
-    });
+    return res.json(buildLoginResponse(user));
   } catch (error) {
     console.error('Database error during login:', error);
-    res.status(500).json({ 
-      message: 'Internal server error', 
-      error: 'DatabaseError', 
-      statusCode: 500 
-    });
+    const payload = {
+      message: 'Internal server error',
+      error: 'DatabaseError',
+      statusCode: 500,
+      hint:
+        'Usually: PostgreSQL not running, DATABASE_URL wrong, or DB not migrated/seeded. See DEV-ENVIRONMENT.md and ./start-dev.sh --seed.'
+    };
+    if (process.env.NODE_ENV === 'development') {
+      payload.details = error && error.message ? String(error.message) : String(error);
+    }
+    res.status(500).json(payload);
   }
 });
 
@@ -1059,17 +1091,7 @@ app.post('/auth/refresh', (req, res) => {
       return res.status(403).json({ message: 'Invalid refresh token' });
     }
 
-    try {
-      const result = await pool.query(
-        'SELECT id, email, role, \"displayName\", \"companyId\" FROM users WHERE id = $1 AND \"isActive\" = true',
-        [tokenPayload.id]
-      );
-
-      if (result.rows.length === 0) {
-        return res.status(401).json({ message: 'User not found or inactive' });
-      }
-
-      const user = result.rows[0];
+    const issueRefresh = (user) => {
       const payload = {
         id: user.id,
         email: user.email,
@@ -1077,15 +1099,26 @@ app.post('/auth/refresh', (req, res) => {
         displayName: user.displayName,
         companyId: user.companyId || DEFAULT_COMPANY_ID
       };
-
       const newToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
       const newRefreshToken = jwt.sign(
         { id: user.id, email: user.email, companyId: user.companyId || DEFAULT_COMPANY_ID },
         REFRESH_SECRET,
         { expiresIn: '7d' }
       );
-
       res.json({ token: newToken, refreshToken: newRefreshToken });
+    };
+
+    try {
+      const result = await pool.query(
+        'SELECT id, email, role, \"displayName\", \"companyId\" FROM users WHERE id = $1 AND \"isActive\" = true',
+        [tokenPayload.id]
+      );
+
+      if (result.rows.length > 0) {
+        return issueRefresh(result.rows[0]);
+      }
+
+      return res.status(401).json({ message: 'User not found or inactive' });
     } catch (dbError) {
       console.error('Error refreshing token:', dbError);
       res.status(500).json({ message: 'Failed to refresh token' });
@@ -2829,8 +2862,328 @@ app.post('/admin/reset-passwords', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * Dev-only AI playground: call OpenAI from local/staging to experiment with prompts.
+ * Not for production traffic unless you explicitly enable and secure it.
+ *
+ * Env:
+ *   AI_DEV_ENABLED=true
+ *   OPENAI_API_KEY=sk-...
+ * Optional: AI_DEV_BEARER_TOKEN=secret  → require Authorization: Bearer <secret> on /dev/ai/*
+ *
+ * This does NOT "train" a model — it sends chat requests. Fine-tuning is a separate OpenAI workflow.
+ */
+function devAiGate(req, res, next) {
+  const token = process.env.AI_DEV_BEARER_TOKEN;
+  if (!token) {
+    return next();
+  }
+  const auth = req.headers.authorization;
+  if (auth !== `Bearer ${token}`) {
+    return res.status(401).json({ error: 'Dev AI: missing or invalid Authorization Bearer token' });
+  }
+  return next();
+}
+
+/**
+ * Product context for Dev AI (chat / command / analyze-debrief). Keeps the model aligned with what the PWA is.
+ * Optional: append AI_DEV_EXTRA_CONTEXT (plain text) for company- or env-specific notes.
+ */
+function getDevAiPwaContext() {
+  const base = `You are assisting users inside the Sales Scorecard PWA (Progressive Web App): a web app for field sales organizations to record structured performance evaluations, view history and analytics, and collaborate with managers and teams.
+
+What "PWA" means here: a browser-based app that can be installed on a device, focused on sales scorecards—not a generic "AI app."
+
+How the app works at a high level:
+- Users sign in against the backend API (JWT). Roles (e.g. salesperson, manager, director) control which screens and data they see.
+- Evaluations use company-specific behavior categories and items from GET /scoring/categories (scorecard rows, typically rated 1–4).
+- The Evaluation flow is the main scorecard submission; other areas include dashboard, history, analytics, teams, notifications, and role-specific views.
+- Voice debrief (pilot) lets reps narrate a meeting in steps keyed to live scorecard items; answers can be analyzed in Dev AI with an optional rubric. That pilot data is local to the device unless submitted elsewhere by design.
+
+Your role in Dev AI:
+- Help users understand features, navigation, and how evaluation/debrief relate to the scorecard.
+- You do not have direct access to the user's database, live scores, or secrets—only what the request includes.
+- You are not "the product" making policy; stay accurate and say when something is unknown or environment-specific.
+- Dev AI calls are stateless unless the client sends prior messages; there is no separate persistent ChatGPT memory for this app.`;
+
+  const extra = process.env.AI_DEV_EXTRA_CONTEXT && String(process.env.AI_DEV_EXTRA_CONTEXT).trim();
+  return extra ? `${base}\n\nAdditional context (from environment):\n${extra}` : base;
+}
+
+if (process.env.AI_DEV_ENABLED === 'true') {
+  app.get('/dev/ai/status', devAiGate, (req, res) => {
+    res.json({
+      ok: true,
+      hasApiKey: Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()),
+      bearerRequired: Boolean(process.env.AI_DEV_BEARER_TOKEN),
+      nodeEnv: process.env.NODE_ENV || 'development',
+      hint: 'POST /dev/ai/chat with JSON { "messages": [{ "role": "user", "content": "..." }], "model": "gpt-4o-mini" }'
+    });
+  });
+
+  app.post('/dev/ai/chat', devAiGate, bodyParser.json({ limit: '512kb' }), async (req, res) => {
+    const apiKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim();
+    if (!apiKey) {
+      return res.status(503).json({ error: 'OPENAI_API_KEY is not set' });
+    }
+    const messages = req.body && req.body.messages;
+    const model =
+      typeof req.body.model === 'string' && req.body.model.trim()
+        ? req.body.model.trim()
+        : 'gpt-4o-mini';
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Request body must include a non-empty "messages" array' });
+    }
+    const ctx = getDevAiPwaContext();
+    const messagesWithContext =
+      messages[0]?.role === 'system'
+        ? [{ role: 'system', content: `${ctx}\n\n${messages[0].content}` }, ...messages.slice(1)]
+        : [{ role: 'system', content: ctx }, ...messages];
+    try {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: messagesWithContext,
+          temperature: typeof req.body.temperature === 'number' ? req.body.temperature : 0.3
+        })
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        return res.status(r.status >= 400 && r.status < 600 ? r.status : 502).json(data);
+      }
+      return res.json(data);
+    } catch (error) {
+      console.error('Dev AI chat error:', error);
+      return res.status(500).json({ error: 'Dev AI request failed', details: error.message });
+    }
+  });
+
+  /** Audio transcription (Bulgarian-ready) for mobile dictation in evaluation comments. */
+  app.post('/dev/ai/transcribe', devAiGate, bodyParser.json({ limit: '100mb' }), async (req, res) => {
+    const apiKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim();
+    if (!apiKey) {
+      return res.status(503).json({ error: 'OPENAI_API_KEY is not set' });
+    }
+    const audioBase64 = typeof req.body?.audioBase64 === 'string' ? req.body.audioBase64.trim() : '';
+    const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType.trim() : 'audio/webm';
+    const language = typeof req.body?.language === 'string' && req.body.language.trim() ? req.body.language.trim() : 'bg';
+    const model = typeof req.body?.model === 'string' && req.body.model.trim() ? req.body.model.trim() : 'whisper-1';
+    if (!audioBase64) {
+      return res.status(400).json({ error: 'body.audioBase64 is required' });
+    }
+
+    try {
+      const b64 = audioBase64.includes(',') ? audioBase64.split(',').pop() : audioBase64;
+      const bytes = Buffer.from(b64 || '', 'base64');
+      if (!bytes || bytes.length < 256) {
+        return res.status(400).json({ error: 'Audio payload is too small' });
+      }
+      const ext =
+        mimeType.includes('mp4') ? 'm4a' :
+        mimeType.includes('wav') ? 'wav' :
+        mimeType.includes('ogg') ? 'ogg' :
+        mimeType.includes('mpeg') ? 'mp3' : 'webm';
+
+      const form = new FormData();
+      form.append('file', new Blob([bytes], { type: mimeType }), `speech.${ext}`);
+      form.append('model', model);
+      form.append('language', language);
+
+      const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: form
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        return res.status(r.status >= 400 && r.status < 600 ? r.status : 502).json(data);
+      }
+      return res.json({ text: typeof data?.text === 'string' ? data.text : '', openai: data });
+    } catch (error) {
+      console.error('Dev AI transcribe error:', error);
+      return res.status(500).json({ error: 'Dev AI transcribe failed', details: error.message });
+    }
+  });
+
+  const DEV_AI_ALLOWED_TABS = new Set([
+    'dashboard',
+    'history',
+    'evaluation',
+    'analytics',
+    'export',
+    'team',
+    'teams',
+    'notifications',
+    'director-dashboard',
+    'voice-debrief-pilot',
+    'dev-ai-playground'
+  ]);
+
+  /** Natural-language command → JSON with optional in-app navigation (allowlist only). */
+  app.post('/dev/ai/command', devAiGate, bodyParser.json({ limit: '32kb' }), async (req, res) => {
+    const apiKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim();
+    if (!apiKey) {
+      return res.status(503).json({ error: 'OPENAI_API_KEY is not set' });
+    }
+    const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+    if (!text) {
+      return res.status(400).json({ error: 'body.text is required' });
+    }
+    const model =
+      typeof req.body?.model === 'string' && req.body.model.trim()
+        ? req.body.model.trim()
+        : 'gpt-4o-mini';
+    const system = `${getDevAiPwaContext()}
+
+You are also the in-app dev assistant: users speak in natural language. Answer briefly using the product context above when relevant.
+
+Return a single JSON object only (no markdown), with exactly these keys:
+- "reply": string — short friendly confirmation or answer (you may explain what a screen is for using the context above).
+- "navigate": string or null — ONLY if the user clearly wants to switch app screen. Must be one of these exact values or null:
+  "dashboard","history","evaluation","analytics","export","team","teams","notifications","director-dashboard","voice-debrief-pilot","dev-ai-playground"
+  Examples: "go to history" → navigate "history"; "open voice debrief" → "voice-debrief-pilot"; "dev ai" → "dev-ai-playground".
+  If the request is not navigation, set navigate to null.`;
+
+    try {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: text }
+          ]
+        })
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        return res.status(r.status >= 400 && r.status < 600 ? r.status : 502).json(data);
+      }
+      const raw = data?.choices?.[0]?.message?.content;
+      let parsed;
+      try {
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : null;
+      } catch {
+        return res.status(502).json({ error: 'Model did not return valid JSON', raw });
+      }
+      let navigate = parsed && typeof parsed.navigate === 'string' ? parsed.navigate.trim() : null;
+      if (navigate && !DEV_AI_ALLOWED_TABS.has(navigate)) {
+        navigate = null;
+      }
+      return res.json({
+        reply: typeof parsed?.reply === 'string' ? parsed.reply : '',
+        navigate,
+        openai: data
+      });
+    } catch (error) {
+      console.error('Dev AI command error:', error);
+      return res.status(500).json({ error: 'Dev AI command failed', details: error.message });
+    }
+  });
+
+  /** Analyze voice-debrief Q&A → structured coaching outcome (JSON). */
+  app.post('/dev/ai/analyze-debrief', devAiGate, bodyParser.json({ limit: '256kb' }), async (req, res) => {
+    const apiKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim();
+    if (!apiKey) {
+      return res.status(503).json({ error: 'OPENAI_API_KEY is not set' });
+    }
+    const answers = req.body && req.body.answers;
+    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+      return res.status(400).json({ error: 'body.answers must be an object (behaviorItemId -> answer text)' });
+    }
+    const rubric = req.body && req.body.rubric;
+    const hasRubric =
+      rubric &&
+      typeof rubric === 'object' &&
+      !Array.isArray(rubric) &&
+      Array.isArray(rubric.categories);
+    const model =
+      typeof req.body?.model === 'string' && req.body.model.trim()
+        ? req.body.model.trim()
+        : 'gpt-4o-mini';
+    const system = `${getDevAiPwaContext()}
+
+You are a sales scorecard analyst for the Sales Scorecard PWA. The answers come from a self-service voice/text debrief aligned to the same behavior items as the formal evaluation form (pilot data is user-reported unless stated otherwise).
+
+You receive:
+(1) ANSWERS: object mapping behavior item id (UUID strings) to the salesperson's free-text answer for that behavior.
+(2) Optional RUBRIC: company scorecard with categories (name, weight) and items (id, name, optional descriptions[] for levels 1–4).
+
+When RUBRIC is provided, each key in ANSWERS must correspond to an item id in the rubric. Score each answered item on the SAME 1–4 scale as the scorecard (1 = poor, 4 = excellent). Use item descriptions when present to calibrate levels; otherwise use professional judgment from the behavior name.
+
+When RUBRIC is missing, infer scores from behavior ids only if you can; otherwise focus on qualitative feedback.
+
+Return a single JSON object only (no markdown) with these keys:
+- "criterion_scores": array of objects, each: { "behavior_item_id": string, "name": string, "score": integer 1-4, "rationale": string (one sentence, evidence-based) }. Include one entry per answered item you can score; omit items with empty or non-informative answers and explain in "gaps".
+- "overall_score": number between 1 and 4 (weighted by category weight when rubric provides weights; otherwise unweighted mean of criterion scores returned)
+- "summary": string (2-4 sentences)
+- "strengths": array of 1-4 short strings (evidence-based)
+- "gaps": array of 1-4 short strings
+- "suggested_actions": array of 1-4 concrete next steps
+- "quality_score": integer 1-5 (how specific and useful the raw answers are for scoring)
+- "quality_note": one short sentence
+
+Base scores ONLY on evidence in each item's answer. Do not invent observed behaviors that were not described.`;
+
+    const userPayload = hasRubric
+      ? `RUBRIC_JSON:\n${JSON.stringify(rubric)}\n\nANSWERS_JSON:\n${JSON.stringify(answers, null, 2)}`
+      : `ANSWERS_JSON:\n${JSON.stringify(answers, null, 2)}`;
+
+    try {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.25,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: userPayload }
+          ]
+        })
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        return res.status(r.status >= 400 && r.status < 600 ? r.status : 502).json(data);
+      }
+      const raw = data?.choices?.[0]?.message?.content;
+      let outcome;
+      try {
+        outcome = typeof raw === 'string' ? JSON.parse(raw) : null;
+      } catch {
+        return res.status(502).json({ error: 'Model did not return valid JSON', raw });
+      }
+      return res.json({ outcome, openai: data });
+    } catch (error) {
+      console.error('Dev AI analyze-debrief error:', error);
+      return res.status(500).json({ error: 'Dev AI analyze-debrief failed', details: error.message });
+    }
+  });
+
+  console.log(
+    '🤖 Dev AI routes: GET /dev/ai/status, POST /dev/ai/chat, POST /dev/ai/transcribe, POST /dev/ai/command, POST /dev/ai/analyze-debrief'
+  );
+}
+
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Production backend server running on port ${PORT}`);
   console.log('📋 Available endpoints:');
   console.log('  POST /auth/login - Login with email/password');
@@ -2859,8 +3212,16 @@ app.listen(PORT, () => {
   console.log('  GET /health - Health check');
   console.log('  GET /public-admin/react-admin - React Admin panel');
   console.log('🔑 Using real database authentication');
-  console.log('  Connect to your PostgreSQL database using DATABASE_URL');
+  console.log(`  DATABASE_URL: ${databaseUrl ? databaseUrl.replace(/:[^:@]+@/, ':****@') : '(missing)'}`);
   console.log('  All endpoints now return real data from your database');
+  try {
+    await pool.query('SELECT 1');
+    console.log('✅ Database connection: OK');
+  } catch (dbErr) {
+    console.error('❌ Database connection FAILED — /auth/login and data routes will return 500 until PostgreSQL is up.');
+    console.error('   Fix: start Postgres (e.g. docker compose -f docker-compose.dev.yml up -d), then node seed-dev-data.js from repo root.');
+    console.error('   Error:', dbErr.message || dbErr);
+  }
 });
 
 // Sales Director Analytics Dashboard
