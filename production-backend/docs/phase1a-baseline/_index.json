@@ -36,6 +36,12 @@
     "status": 200
   },
   {
+    "name": "analytics.team.success",
+    "route": "/analytics/team",
+    "method": "GET",
+    "status": 200
+  },
+  {
     "name": "evaluations.my.unauthorized_no_token",
     "route": "/evaluations/my",
     "method": "GET",

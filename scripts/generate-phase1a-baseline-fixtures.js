@@ -144,6 +144,16 @@ async function main() {
     response: dash.body,
   });
 
+  const team = await req('GET', '/analytics/team', { headers: auth });
+  fixtures.push({
+    name: 'analytics.team.success',
+    method: 'GET',
+    route: '/analytics/team',
+    request: null,
+    status: team.status,
+    response: team.body,
+  });
+
   const myUnauthorized = await req('GET', '/evaluations/my');
   fixtures.push({
     name: 'evaluations.my.unauthorized_no_token',

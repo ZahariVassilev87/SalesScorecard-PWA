@@ -1,0 +1,11 @@
+{
+  "name": "analytics.team.success",
+  "method": "GET",
+  "route": "/analytics/team",
+  "request": null,
+  "status": 200,
+  "response": {
+    "teamEvaluations": [],
+    "teamAverageScore": 0
+  }
+}

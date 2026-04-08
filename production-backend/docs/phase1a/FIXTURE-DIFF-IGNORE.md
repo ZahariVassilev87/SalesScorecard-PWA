@@ -21,6 +21,7 @@ When comparing two JSON fixture snapshots, **strip or ignore** these so you do n
 | `analytics.dashboard.success.response.totalEvaluations` | Depends on how many evaluations exist |
 | `analytics.dashboard.success.response.evaluationsCompleted` | Month-bound counts |
 | `analytics.dashboard.success.response.averageScore` | Derived from DB state |
+| `analytics.team.success.response.teamEvaluations` | In-memory `storedEvaluations` filtered by `managerId`; usually `[]` unless another code path mutates the array |
 | Any list **length** or **order** where the API does not guarantee sort order | Compare presence of key fields instead |
 
 ## Do not ignore (parity signals)
