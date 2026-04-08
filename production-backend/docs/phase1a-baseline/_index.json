@@ -1,0 +1,50 @@
+[
+  {
+    "name": "auth.login.success",
+    "route": "/auth/login",
+    "method": "POST",
+    "status": 200
+  },
+  {
+    "name": "auth.login.fail",
+    "route": "/auth/login",
+    "method": "POST",
+    "status": 401
+  },
+  {
+    "name": "evaluations.create.success",
+    "route": "/evaluations",
+    "method": "POST",
+    "status": 201
+  },
+  {
+    "name": "evaluations.create.validation_fail",
+    "route": "/evaluations",
+    "method": "POST",
+    "status": 400
+  },
+  {
+    "name": "evaluations.my.success",
+    "route": "/evaluations/my",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "name": "analytics.dashboard.success",
+    "route": "/analytics/dashboard",
+    "method": "GET",
+    "status": 200
+  },
+  {
+    "name": "evaluations.my.unauthorized_no_token",
+    "route": "/evaluations/my",
+    "method": "GET",
+    "status": 401
+  },
+  {
+    "name": "evaluations.create.forbidden_salesperson",
+    "route": "/evaluations",
+    "method": "POST",
+    "status": 403
+  }
+]

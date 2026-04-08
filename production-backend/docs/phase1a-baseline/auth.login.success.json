@@ -1,0 +1,22 @@
+{
+  "name": "auth.login.success",
+  "method": "POST",
+  "route": "/auth/login",
+  "request": {
+    "email": "lead@phase1a.local",
+    "password": "password"
+  },
+  "status": 200,
+  "response": {
+    "token": "<REDACTED_JWT_ACCESS>",
+    "refreshToken": "<REDACTED_JWT_REFRESH>",
+    "user": {
+      "id": "phase1a0000-0000-4000-8000-000000000001",
+      "email": "lead@phase1a.local",
+      "displayName": "Phase1A Sales Lead",
+      "role": "SALES_LEAD",
+      "isActive": true,
+      "companyId": "phase1a_company"
+    }
+  }
+}

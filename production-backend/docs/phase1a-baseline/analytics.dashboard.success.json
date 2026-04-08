@@ -1,0 +1,15 @@
+{
+  "name": "analytics.dashboard.success",
+  "method": "GET",
+  "route": "/analytics/dashboard",
+  "request": null,
+  "status": 200,
+  "response": {
+    "totalRegions": 0,
+    "totalTeamMembers": 0,
+    "averagePerformance": 75,
+    "totalEvaluations": 2,
+    "evaluationsCompleted": 2,
+    "averageScore": "3.0"
+  }
+}

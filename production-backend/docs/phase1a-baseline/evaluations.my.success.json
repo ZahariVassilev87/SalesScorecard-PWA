@@ -1,0 +1,103 @@
+{
+  "name": "evaluations.my.success",
+  "method": "GET",
+  "route": "/evaluations/my",
+  "request": null,
+  "status": 200,
+  "response": [
+    {
+      "id": "eval_1775645717045_dzfhoro76",
+      "salespersonId": "phase1a0000-0000-4000-8000-000000000002",
+      "salesperson": {
+        "id": "phase1a0000-0000-4000-8000-000000000002",
+        "displayName": "Phase1A Salesperson",
+        "firstName": "Phase1A",
+        "lastName": "Salesperson",
+        "email": "salesperson@phase1a.local",
+        "role": "SALESPERSON",
+        "isActive": true,
+        "companyId": "phase1a_company"
+      },
+      "managerId": "phase1a0000-0000-4000-8000-000000000001",
+      "manager": {
+        "id": "phase1a0000-0000-4000-8000-000000000001",
+        "displayName": "Phase1A Sales Lead",
+        "email": "lead@phase1a.local",
+        "role": "SALES_LEAD",
+        "isActive": true,
+        "companyId": "phase1a_company"
+      },
+      "visitDate": "2026-04-08T07:55:17.041Z",
+      "customerName": "Phase1A OK 1775645717042",
+      "location": "Sofia",
+      "overallComment": "baseline success",
+      "overallScore": 3,
+      "version": 1,
+      "createdAt": "2026-04-08T07:55:17.045Z",
+      "updatedAt": "2026-04-08T07:55:17.045Z",
+      "companyId": "phase1a_company",
+      "items": [
+        {
+          "id": "item_eval_1775645717045_dzfhoro76_0",
+          "behaviorItemId": "phase1a0000-0000-4000-8000-000000000011",
+          "behaviorItem": {
+            "id": "phase1a0000-0000-4000-8000-000000000011",
+            "name": "Phase1A behavior item",
+            "category": {
+              "name": "Phase1A Discovery (SALESPERSON)"
+            }
+          },
+          "rating": 3,
+          "comment": "ok"
+        }
+      ]
+    },
+    {
+      "id": "eval_1775645687574_g8meyiz66",
+      "salespersonId": "phase1a0000-0000-4000-8000-000000000002",
+      "salesperson": {
+        "id": "phase1a0000-0000-4000-8000-000000000002",
+        "displayName": "Phase1A Salesperson",
+        "firstName": "Phase1A",
+        "lastName": "Salesperson",
+        "email": "salesperson@phase1a.local",
+        "role": "SALESPERSON",
+        "isActive": true,
+        "companyId": "phase1a_company"
+      },
+      "managerId": "phase1a0000-0000-4000-8000-000000000001",
+      "manager": {
+        "id": "phase1a0000-0000-4000-8000-000000000001",
+        "displayName": "Phase1A Sales Lead",
+        "email": "lead@phase1a.local",
+        "role": "SALES_LEAD",
+        "isActive": true,
+        "companyId": "phase1a_company"
+      },
+      "visitDate": "2026-04-08T07:54:47.567Z",
+      "customerName": "Phase1A OK 1775645687568",
+      "location": "Sofia",
+      "overallComment": "baseline success",
+      "overallScore": 3,
+      "version": 1,
+      "createdAt": "2026-04-08T07:54:47.564Z",
+      "updatedAt": "2026-04-08T07:54:47.564Z",
+      "companyId": "phase1a_company",
+      "items": [
+        {
+          "id": "item_eval_1775645687574_g8meyiz66_0",
+          "behaviorItemId": "phase1a0000-0000-4000-8000-000000000011",
+          "behaviorItem": {
+            "id": "phase1a0000-0000-4000-8000-000000000011",
+            "name": "Phase1A behavior item",
+            "category": {
+              "name": "Phase1A Discovery (SALESPERSON)"
+            }
+          },
+          "rating": 3,
+          "comment": "ok"
+        }
+      ]
+    }
+  ]
+}

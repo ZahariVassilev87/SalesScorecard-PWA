@@ -1,0 +1,26 @@
+{
+  "name": "evaluations.create.validation_fail",
+  "method": "POST",
+  "route": "/evaluations",
+  "request": {
+    "salespersonId": "phase1a0000-0000-4000-8000-000000000002",
+    "visitDate": "2026-04-08T10:55:17.041Z",
+    "customerName": "Phase1A BAD 1775645717049",
+    "customerType": "LOW_SHARE",
+    "location": "Sofia",
+    "overallComment": "baseline success",
+    "items": [
+      {
+        "behaviorItemId": "phase1a0000-0000-4000-8000-000000000011",
+        "rating": 0,
+        "comment": "invalid"
+      }
+    ]
+  },
+  "status": 400,
+  "response": {
+    "message": "All evaluation items must have a valid score between 1 and 4. Item phase1a0000-0000-4000-8000-000000000011 has invalid score: undefined",
+    "error": "INVALID_SCORE",
+    "itemId": "phase1a0000-0000-4000-8000-000000000011"
+  }
+}

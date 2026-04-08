@@ -1,0 +1,26 @@
+{
+  "name": "evaluations.create.forbidden_salesperson",
+  "method": "POST",
+  "route": "/evaluations",
+  "request": {
+    "salespersonId": "phase1a0000-0000-4000-8000-000000000002",
+    "visitDate": "2026-04-08T10:55:17.041Z",
+    "customerName": "Phase1A OK 1775645717042",
+    "customerType": "LOW_SHARE",
+    "location": "Sofia",
+    "overallComment": "baseline success",
+    "items": [
+      {
+        "behaviorItemId": "phase1a0000-0000-4000-8000-000000000011",
+        "rating": 3,
+        "comment": "ok"
+      }
+    ]
+  },
+  "note": "SALESPERSON role cannot create evaluations",
+  "status": 403,
+  "response": {
+    "message": "Insufficient permissions to create evaluations",
+    "statusCode": 403
+  }
+}

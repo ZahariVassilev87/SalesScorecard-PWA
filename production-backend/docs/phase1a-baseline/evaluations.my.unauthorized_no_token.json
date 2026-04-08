@@ -1,0 +1,13 @@
+{
+  "name": "evaluations.my.unauthorized_no_token",
+  "method": "GET",
+  "route": "/evaluations/my",
+  "request": null,
+  "note": "No Authorization header",
+  "status": 401,
+  "response": {
+    "message": "No token provided",
+    "error": "Unauthorized",
+    "statusCode": 401
+  }
+}
