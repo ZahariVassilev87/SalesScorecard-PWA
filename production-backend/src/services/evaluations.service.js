@@ -1,43 +1,13 @@
 /**
- * Phase 1B — evaluations handlers (moved from server.js; behavior unchanged).
+ * Phase 1B — evaluations handlers (orchestration).
+ * Phase 2A — delegates validation, scoring, duplicate prevention, and read DTO mapping to src/evaluation/*.
  *
- * GET /evaluations/my parity (vs pre-Phase-1B server.js): same role branches
- * (REGIONAL_MANAGER | REGIONAL_SALES_MANAGER team/member expansion; SUPER_ADMIN | ADMIN
- * company-scoped admin query; else manager/salesperson visibility + optional company filter),
- * same SQL blocks, same response mapping and behavior-item fallbacks, same scope via
- * resolveCompanyContext (companyId / includeAllCompanies).
+ * GET /evaluations/my parity: same role branches, SQL, scope via resolveCompanyContext.
  */
-function calculateOverallScore(items, scoringProfile = { mode: 'legacy_average', settings: {} }, featureFlags = { enableCompanyCustomization: false, useLegacyEvaluationFlow: true }) {
-  if (!items || items.length === 0) return null; // Return null instead of 0 for invalid data
-  const validItems = items.filter(item => {
-    const score = item.rating || item.score;
-    return score && score >= 1 && score <= 4;
-  });
-  if (validItems.length === 0) return null; // No valid items
-
-  const canUseCustomScoring =
-    featureFlags?.enableCompanyCustomization === true &&
-    featureFlags?.useLegacyEvaluationFlow === false &&
-    scoringProfile?.mode === 'weighted_average';
-
-  if (canUseCustomScoring) {
-    const weightsByBehaviorItemId = scoringProfile?.settings?.weightsByBehaviorItemId || {};
-    const weighted = validItems.reduce((acc, item) => {
-      const score = item.rating || item.score;
-      const weight = Number(weightsByBehaviorItemId[item.behaviorItemId] ?? 1);
-      return {
-        totalWeight: acc.totalWeight + (Number.isFinite(weight) && weight > 0 ? weight : 1),
-        weightedScore: acc.weightedScore + score * (Number.isFinite(weight) && weight > 0 ? weight : 1)
-      };
-    }, { totalWeight: 0, weightedScore: 0 });
-    if (weighted.totalWeight > 0) {
-      return Math.round((weighted.weightedScore / weighted.totalWeight) * 100) / 100;
-    }
-  }
-
-  const totalScore = validItems.reduce((sum, item) => sum + (item.rating || item.score), 0);
-  return Math.round((totalScore / validItems.length) * 100) / 100;
-}
+const { validateEvaluationItemsForCreate } = require('../evaluation/validation');
+const { calculateOverallScore, getInvalidOverallScoreResponse } = require('../evaluation/scoring');
+const { tryDuplicateEvaluationResponse } = require('../evaluation/duplicatePrevention');
+const { mapMyEvaluationDto } = require('../evaluation/mappers');
 
 function createEvaluationsHandlers(deps) {
   const {
@@ -81,78 +51,34 @@ function createEvaluationsHandlers(deps) {
           });
         }
       
-        // Check for duplicate evaluation (same manager, salesperson, visitDate, and customerName)
-        const duplicateCheck = await pool.query(`
-          SELECT id, "createdAt"
-          FROM evaluations
-          WHERE "managerId" = $1
-            AND "salespersonId" = $2
-            AND DATE("visitDate") = DATE($3)
-            AND COALESCE("customerName", '') = COALESCE($4, '')
-            AND "companyId" = $5
-          ORDER BY "createdAt" DESC
-          LIMIT 1
-        `, [
-          req.user.id,
-          req.body.salespersonId,
-          req.body.visitDate,
-          req.body.customerName || null,
+        const duplicateEarly = await tryDuplicateEvaluationResponse(pool, {
+          managerId: req.user.id,
+          salespersonId: req.body.salespersonId,
+          visitDate: req.body.visitDate,
+          customerName: req.body.customerName || null,
           companyId
-        ]);
-        
-        if (duplicateCheck.rows.length > 0) {
-          const duplicate = duplicateCheck.rows[0];
-          const timeDiff = Date.now() - new Date(duplicate.createdAt).getTime();
-          // If duplicate was created within last 5 seconds, it's likely a double-submit
-          if (timeDiff < 5000) {
-            console.log(`⚠️ Duplicate evaluation detected (created ${timeDiff}ms ago), returning existing evaluation`);
-            return res.status(200).json({
-              message: 'Evaluation already exists',
-              id: duplicate.id,
-              duplicate: true
-            });
-          }
+        });
+        if (duplicateEarly) {
+          return res.status(duplicateEarly.status).json(duplicateEarly.body);
         }
       
-      // Validate that all items have valid scores (1-4) BEFORE creating evaluation
-        if (!req.body.items || req.body.items.length === 0) {
-          return res.status(400).json({ 
-            message: 'Evaluation must contain at least one item with a valid score (1-4)', 
-            error: 'INVALID_EVALUATION_DATA' 
-          });
-        }
-        
-        // Validate all items have valid scores before proceeding
-        for (let i = 0; i < req.body.items.length; i++) {
-          const item = req.body.items[i];
-          const score = item.rating || item.score;
-          
-          // Validate score is between 1 and 4
-          if (!score || score < 1 || score > 4) {
-            console.error(`❌ Invalid score for item ${item.behaviorItemId}: ${score}`);
-            return res.status(400).json({ 
-              message: `All evaluation items must have a valid score between 1 and 4. Item ${item.behaviorItemId} has invalid score: ${score}`, 
-              error: 'INVALID_SCORE',
-              itemId: item.behaviorItemId,
-              score: score
-            });
+        const itemValidation = validateEvaluationItemsForCreate(req.body);
+        if (!itemValidation.ok) {
+          if (itemValidation.response.error === 'INVALID_SCORE') {
+            console.error(`❌ Invalid score for item ${itemValidation.response.itemId}: ${itemValidation.response.score}`);
           }
+          return res.status(400).json(itemValidation.response);
         }
       
       const evaluationId = `eval_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        // Calculate overallScore AFTER validation (so we know all items are valid)
         const featureFlags = await getCompanyFeatureFlags(companyId);
         const scoringProfile = await getCompanyScoringProfile(companyId);
         const overallScore = calculateOverallScore(req.body.items, scoringProfile, featureFlags);
         
-        // Ensure overallScore is valid (between 1 and 4)
-        if (!overallScore || overallScore < 1 || overallScore > 4) {
+        const invalidOverall = getInvalidOverallScoreResponse(overallScore);
+        if (invalidOverall) {
           console.error(`❌ Calculated overallScore is invalid: ${overallScore}`);
-          return res.status(400).json({ 
-            message: 'Failed to calculate overall score. Please ensure all items have valid scores between 1 and 4.', 
-            error: 'INVALID_OVERALL_SCORE',
-            calculatedScore: overallScore
-          });
+          return res.status(400).json(invalidOverall);
         }
         
         // Insert into evaluations table
@@ -318,7 +244,6 @@ function createEvaluationsHandlers(deps) {
           `, evalParams);
         }
         
-        // Get evaluation items for each evaluation
         const evaluations = [];
         for (const evalRow of evaluationsResult.rows) {
           const itemsResult = await pool.query(`
@@ -333,106 +258,7 @@ function createEvaluationsHandlers(deps) {
             ORDER BY ei."createdAt"
           `, [evalRow.id]);
           
-          evaluations.push({
-            id: evalRow.id,
-            salespersonId: evalRow.salespersonId,
-            salesperson: {
-              id: evalRow.salespersonId,
-              displayName: evalRow.salesperson_name,
-              firstName: evalRow.salesperson_name?.split(' ')[0] || '',
-              lastName: evalRow.salesperson_name?.split(' ').slice(1).join(' ') || '',
-              email: evalRow.salesperson_email,
-              role: evalRow.salesperson_role || 'SALESPERSON',
-              isActive: typeof evalRow.salesperson_is_active === 'boolean' ? evalRow.salesperson_is_active : true,
-              companyId: evalRow.salesperson_company_id || null
-            },
-            managerId: evalRow.managerId,
-            manager: {
-              id: evalRow.managerId,
-              displayName: evalRow.manager_name,
-              email: evalRow.manager_email,
-              role: evalRow.manager_role || (evalRow.managerId === req.user.id ? req.user.role : 'SALES_LEAD'),
-              isActive: typeof evalRow.manager_is_active === 'boolean' ? evalRow.manager_is_active : true,
-              companyId: evalRow.manager_company_id || null
-            },
-            visitDate: evalRow.visitDate,
-            customerName: evalRow.customerName,
-            location: evalRow.location,
-            overallComment: evalRow.overallComment,
-            overallScore: evalRow.overallScore,
-            version: evalRow.version,
-            createdAt: evalRow.createdAt,
-            updatedAt: evalRow.updatedAt,
-            companyId: evalRow.companyId,
-            items: itemsResult.rows.map(item => {
-              // Handle both old format (custom IDs) and new format (database IDs)
-              let behaviorItemName = item.behavior_item_name;
-              let categoryName = item.category_name;
-              
-              // If no database match found, try to extract from comment metadata
-              if (!behaviorItemName && item.comment) {
-                try {
-                  const metadata = JSON.parse(item.comment);
-                  if (metadata.itemName) behaviorItemName = metadata.itemName;
-                  if (metadata.categoryName) categoryName = metadata.categoryName;
-                } catch (e) {
-                  // Comment is not JSON, continue to check mappings
-                }
-              }
-              
-              // Fallback mapping for evaluation IDs (check if name is still null or is just the ID)
-              if (!behaviorItemName || behaviorItemName === item.behaviorItemId || !categoryName) {
-                const oldIdMappings = {
-                  // New Regional Manager to Sales Lead Coaching Evaluation items
-                  'coaching_communication': { name: 'Effective Communication', category: 'Coaching Skills' },
-                  'coaching_development': { name: 'Team Development', category: 'Leadership' },
-                  'coaching_performance': { name: 'Performance Management', category: 'Management' },
-                  'coaching_strategy': { name: 'Strategic Planning', category: 'Strategy' },
-                  
-                  // New Sales Lead to Salesperson Evaluation items (Low Share)
-                  'sales_prospecting': { name: 'Prospecting Skills', category: 'Sales Process' },
-                  'sales_presentation': { name: 'Presentation Skills', category: 'Sales Process' },
-                  'sales_negotiation': { name: 'Negotiation Skills', category: 'Sales Process' },
-                  'sales_relationship': { name: 'Relationship Building', category: 'Customer Management' },
-                  'sales_productivity': { name: 'Productivity & Organization', category: 'Performance' },
-                  'sales_adaptability': { name: 'Adaptability & Learning', category: 'Growth' },
-                  
-                  // Coaching evaluation form mappings
-                  'obs1': { name: 'Let salesperson lead the conversation', category: 'Observation & Intervention During Client Meeting' },
-                  'obs2': { name: 'Provided support when needed', category: 'Observation & Intervention During Client Meeting' },
-                  'obs3': { name: 'Stepped in with added value at right time', category: 'Observation & Intervention During Client Meeting' },
-                  'obs4': { name: 'Actively listened to client and salesperson', category: 'Observation & Intervention During Client Meeting' },
-                  'env1': { name: 'Ensured calm and safe atmosphere', category: 'Creating Coaching Environment' },
-                  'env2': { name: 'Asked salesperson for self-assessment / feelings', category: 'Creating Coaching Environment' },
-                  'env3': { name: 'Listened attentively without interrupting', category: 'Creating Coaching Environment' },
-                  'fb1': { name: 'Started with positive practices', category: 'Quality of Analysis & Feedback' },
-                  'fb2': { name: 'Gave concrete examples from client meeting', category: 'Quality of Analysis & Feedback' },
-                  'fb3': { name: 'Identified areas for improvement with examples', category: 'Quality of Analysis & Feedback' },
-                  'act1': { name: 'Set clear tasks for a specific period', category: 'Translating Into Action' },
-                  'act2': { name: 'Reached agreement on evaluation and next steps', category: 'Translating Into Action' },
-                  'act3': { name: 'Encouraged salesperson to set a personal goal/commitment', category: 'Translating Into Action' }
-                };
-                
-                const mapping = oldIdMappings[item.behaviorItemId];
-                if (mapping) {
-                  if (!behaviorItemName) behaviorItemName = mapping.name;
-                  if (!categoryName) categoryName = mapping.category;
-                }
-              }
-              
-              return {
-                id: item.id,
-                behaviorItemId: item.behaviorItemId,
-                behaviorItem: {
-                  id: item.behaviorItemId,
-                  name: behaviorItemName || item.behaviorItemId,
-                  category: { name: categoryName || 'Unknown Category' }
-                },
-                rating: item.rating,
-                comment: item.comment
-              };
-            })
-          });
+          evaluations.push(mapMyEvaluationDto(evalRow, itemsResult.rows, req.user));
         }
         
         console.log(`✅ Found ${evaluations.length} evaluations for user ${req.user.email}`);
