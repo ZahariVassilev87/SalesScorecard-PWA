@@ -16,11 +16,12 @@ backups
 # Local/dev docs and reports
 *.md
 
-# Admin source/build caches are not needed by backend runtime
+# Admin: only exclude deps and local build output — src/ and public/ are required for the admin-builder stage
 admin-panel/node_modules
 admin-panel/build
-admin-panel/src
-admin-panel/public
+
+# Do not copy a host-built bundle into the image; Dockerfile stage `admin-builder` is canonical
+public/react-admin
 
 # Legacy backup dirs
 SalesScorecard-Backup-*

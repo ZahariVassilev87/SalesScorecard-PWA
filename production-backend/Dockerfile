@@ -1,30 +1,40 @@
-# Use Node.js 18 Alpine as base image
+# -----------------------------------------------------------------------------
+# Stage 1: React admin SPA (homepage /public-admin/react-admin in package.json)
+# This runs on every `docker build` so the admin UI is never forgotten.
+# -----------------------------------------------------------------------------
+FROM node:18-alpine AS admin-builder
+
+WORKDIR /admin
+COPY admin-panel/package*.json ./
+RUN npm ci
+
+COPY admin-panel/ ./
+ENV CI=false
+ENV NODE_ENV=production
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 2: API server + admin static files from stage 1
+# -----------------------------------------------------------------------------
 FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Create non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install --omit=dev
 
-# Copy application code with correct ownership
+# Fresh admin bundle (host copy of public/react-admin is excluded via .dockerignore)
+COPY --from=admin-builder /admin/build ./public/react-admin
+
 COPY --chown=nodejs:nodejs . .
 
-# Switch to non-root user
 USER nodejs
 
-# Expose port
 EXPOSE 3000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Start the application
 CMD ["npm", "start"]

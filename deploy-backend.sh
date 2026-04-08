@@ -30,7 +30,7 @@ fi
 
 echo -e "${BLUE}✅ AWS CLI configured${NC}"
 
-# Step 1: Build Docker image
+# Step 1: Build Docker image (Dockerfile is multi-stage: builds admin-panel SPA, then API — no separate admin step)
 echo -e "${BLUE}📦 Building Docker image...${NC}"
 cd production-backend
 docker build -t sales-scorecard-api:latest .
