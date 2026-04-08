@@ -24,6 +24,12 @@ const {
   buildMetadataPreviewForUsers,
   buildCurrentVersionSummary,
 } = require('./src/services/evaluationMetadataConfig.service');
+const {
+  getCurrentPublishedEvaluationStructure,
+  publishEvaluationStructure,
+  buildStructureSummaryRow,
+  buildStructurePreviewPayload,
+} = require('./src/services/evaluationStructureConfig.service');
 
 const app = express();
 // Default 3001 so the root PWA can use 3000 in dev (see DEV-ENVIRONMENT.md, docker-compose.dev.yml).
@@ -201,6 +207,52 @@ async function runMigrations() {
               ALTER TABLE evaluations ADD COLUMN "configVersionId" TEXT
                 REFERENCES company_evaluation_config_versions(id) ON DELETE SET NULL;
             END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'evaluations' AND column_name = 'evaluationStructureVersionId'
+            ) THEN
+              ALTER TABLE evaluations ADD COLUMN "evaluationStructureVersionId" TEXT;
+            END IF;
+          END $$;
+        `);
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS company_evaluation_structure_versions (
+            id TEXT PRIMARY KEY,
+            "companyId" TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            "evaluationStructure" JSONB NOT NULL DEFAULT '{"sections":[]}'::jsonb,
+            "publishedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "publishedBy" TEXT,
+            CONSTRAINT cesv_version_check CHECK (version >= 1),
+            CONSTRAINT cesv_unique_company_version UNIQUE ("companyId", version)
+          )
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_cesv_company ON company_evaluation_structure_versions ("companyId")
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS company_evaluation_structure_current (
+            "companyId" TEXT PRIMARY KEY,
+            "currentPublishedVersionId" TEXT NOT NULL,
+            CONSTRAINT cesc_fk_version FOREIGN KEY ("currentPublishedVersionId")
+              REFERENCES company_evaluation_structure_versions(id) ON DELETE RESTRICT
+          )
+        `);
+        await pool.query(`
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'evaluations' AND column_name = 'evaluationStructureVersionId'
+            ) AND NOT EXISTS (
+              SELECT 1 FROM pg_constraint WHERE conname = 'evaluations_evaluation_structure_version_fk'
+            ) THEN
+              ALTER TABLE evaluations
+                ADD CONSTRAINT evaluations_evaluation_structure_version_fk
+                FOREIGN KEY ("evaluationStructureVersionId")
+                REFERENCES company_evaluation_structure_versions(id) ON DELETE SET NULL;
+            END IF;
           END $$;
         `);
         
@@ -211,8 +263,7 @@ async function runMigrations() {
   }
 }
 
-// Run migrations on startup
-runMigrations();
+// Migrations run in startServer() before app.listen (see end of file).
 
 // Temporary endpoint to manually run migrations
 app.post('/admin/run-migrations', authenticateToken, async (req, res) => {
@@ -1946,6 +1997,46 @@ app.get('/scoring/categories', authenticateToken, async (req, res) => {
   }
 });
 
+/** Milestone 3 — active evaluation structure for PWA (legacy when none or legacy flow). */
+app.get('/scoring/evaluation-structure', authenticateToken, async (req, res) => {
+  try {
+    const { companyId } = resolveCompanyContext(req);
+    const customerType = req.query.customerType || req.query.customer_type || null;
+    const featureFlags = await getCompanyFeatureFlags(companyId);
+    if (featureFlags.useLegacyEvaluationFlow !== false) {
+      return res.json({
+        legacy: true,
+        useLegacyEvaluationFlow: true,
+        customerType: customerType || null,
+      });
+    }
+    const cfg = await getCurrentPublishedEvaluationStructure(pool, companyId);
+    if (!cfg) {
+      return res.json({
+        legacy: true,
+        customerType: customerType || null,
+      });
+    }
+    return res.json({
+      legacy: false,
+      customerType: customerType || null,
+      structureVersionId: cfg.versionId,
+      version: cfg.version,
+      evaluationStructure: cfg.evaluationStructure,
+      publishedAt: cfg.publishedAt,
+      publishedBy: cfg.publishedBy,
+      publishedByEmail: cfg.publishedByEmail || null,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching evaluation structure:', error);
+    res.status(500).json({
+      message: 'Internal server error',
+      error: 'DatabaseError',
+      statusCode: 500,
+    });
+  }
+});
+
 /** PWA: company-scoped score range (1–4 vs 0–4 with 0 = N/A). */
 app.get('/scoring/rating-scale', authenticateToken, async (req, res) => {
   try {
@@ -2466,52 +2557,6 @@ if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()) {
   console.log('🎤 POST /dev/ai/transcribe — Whisper (evaluation comment dictation; client caps text at 2000 chars/field)');
 }
 
-// Start server
-app.listen(PORT, async () => {
-  console.log(`🚀 Production backend server running on port ${PORT}`);
-  console.log('📋 Available endpoints:');
-  console.log('  POST /auth/login - Login with email/password');
-  console.log('  POST /auth/refresh - Refresh access token');
-  console.log('  POST /auth/logout - Logout and invalidate refresh token');
-  console.log('  POST /evaluations - Create evaluation (requires auth)');
-  console.log('  GET /evaluations/my - Get my evaluations (requires auth)');
-  console.log('  GET /organizations/teams - Get teams (requires auth)');
-  console.log('  GET /organizations/salespeople - Get salespeople (requires auth)');
-  console.log('  GET /public-admin/teams - Get all teams (requires auth)');
-  console.log('  GET /public-admin/users - Get all users (requires auth)');
-  console.log('  POST /public-admin/users - Create user (requires auth)');
-  console.log('  PUT /public-admin/users/:id - Update user (requires auth)');
-  console.log('  POST /public-admin/users/:id/deactivate - Deactivate user (requires auth)');
-  console.log('  DELETE /public-admin/users/:id - Delete user (requires auth)');
-  console.log('  GET /users - Get all users (requires auth)');
-  console.log('  GET /scoring/categories - Get scoring categories (requires auth)');
-  console.log('  GET /scoring/rating-scale - Get company rating scale (1–4 vs 0–4 N/A) (requires auth)');
-  console.log('  GET /analytics/dashboard - Get dashboard analytics (requires auth)');
-  console.log('  GET /analytics/team - Get team analytics (requires auth)');
-  console.log('  GET /analytics/director-dashboard - Get Sales Director dashboard analytics (requires auth)');
-  console.log('  GET /public-admin/companies - Get companies (requires auth)');
-  console.log('  GET /public-admin/companies/:companyId/evaluation-metadata-config - Published metadata schema (requires auth)');
-  console.log('  GET /public-admin/companies/:companyId/evaluation-metadata-schema/preview - User-facing metadata preview (read-only, requires auth)');
-  console.log('  POST /public-admin/companies/:companyId/evaluation-metadata-schema/publish - Publish metadata schema (requires auth)');
-  console.log('  GET /public-admin/regions - Get all regions (requires auth)');
-  console.log('  POST /public-admin/regions - Create new region (requires ADMIN)');
-  console.log('  PUT /public-admin/regions/:id - Update region name (requires ADMIN)');
-  console.log('  DELETE /public-admin/regions/:id - Delete region (requires ADMIN)');
-  console.log('  GET /health - Health check');
-  console.log('  GET /public-admin/react-admin - React Admin panel');
-  console.log('🔑 Using real database authentication');
-  console.log(`  DATABASE_URL: ${databaseUrl ? databaseUrl.replace(/:[^:@]+@/, ':****@') : '(missing)'}`);
-  console.log('  All endpoints now return real data from your database');
-  try {
-    await pool.query('SELECT 1');
-    console.log('✅ Database connection: OK');
-  } catch (dbErr) {
-    console.error('❌ Database connection FAILED — /auth/login and data routes will return 500 until PostgreSQL is up.');
-    console.error('   Fix: start Postgres (e.g. docker compose -f docker-compose.dev.yml up -d), then node seed-dev-data.js from repo root.');
-    console.error('   Error:', dbErr.message || dbErr);
-  }
-});
-
 registerDirectorDashboardRoute(app, {
   pool,
   authenticateToken,
@@ -3013,6 +3058,148 @@ app.post('/public-admin/companies/:companyId/evaluation-metadata-schema/publish'
     }
     console.error('Error publishing evaluation metadata schema:', error);
     res.status(500).json({ error: 'Failed to publish evaluation metadata schema', details: error.message });
+  }
+});
+
+/** Milestone 3 — current published evaluation structure (read-only for admin). */
+app.get('/public-admin/companies/:companyId/evaluation-structure-config', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can view evaluation structure configuration' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+  try {
+    const flags = await getCompanyFeatureFlags(companyId);
+    const cfg = await getCurrentPublishedEvaluationStructure(pool, companyId);
+    if (flags.useLegacyEvaluationFlow !== false || !cfg) {
+      return res.json({
+        companyId,
+        legacy: true,
+        currentPublishedVersionId: null,
+        version: null,
+        publishedAt: null,
+        publishedBy: null,
+        publishedByEmail: null,
+        evaluationStructure: null,
+        currentVersionSummary: null,
+        evaluationStructurePreview: null,
+      });
+    }
+    const rowForSummary = {
+      versionId: cfg.versionId,
+      version: cfg.version,
+      evaluationStructure: cfg.evaluationStructure,
+      publishedAt: cfg.publishedAt,
+      publishedBy: cfg.publishedBy,
+      publishedByEmail: cfg.publishedByEmail,
+    };
+    return res.json({
+      companyId,
+      legacy: false,
+      currentPublishedVersionId: cfg.versionId,
+      version: cfg.version,
+      publishedAt: cfg.publishedAt,
+      publishedBy: cfg.publishedBy,
+      publishedByEmail: cfg.publishedByEmail || null,
+      evaluationStructure: cfg.evaluationStructure,
+      currentVersionSummary: buildStructureSummaryRow(rowForSummary),
+      evaluationStructurePreview: buildStructurePreviewPayload(cfg.evaluationStructure),
+    });
+  } catch (error) {
+    console.error('Error getting evaluation structure config:', error);
+    res.status(500).json({ error: 'Failed to load evaluation structure configuration' });
+  }
+});
+
+app.get('/public-admin/companies/:companyId/evaluation-structure/preview', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can preview evaluation structure' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+  try {
+    const flags = await getCompanyFeatureFlags(companyId);
+    const cfg = await getCurrentPublishedEvaluationStructure(pool, companyId);
+    if (flags.useLegacyEvaluationFlow !== false || !cfg) {
+      return res.json({
+        companyId,
+        legacy: true,
+        preview: null,
+        currentVersionSummary: null,
+      });
+    }
+    const rowForSummary = {
+      versionId: cfg.versionId,
+      version: cfg.version,
+      evaluationStructure: cfg.evaluationStructure,
+      publishedAt: cfg.publishedAt,
+      publishedBy: cfg.publishedBy,
+      publishedByEmail: cfg.publishedByEmail,
+    };
+    return res.json({
+      companyId,
+      legacy: false,
+      preview: buildStructurePreviewPayload(cfg.evaluationStructure),
+      currentVersionSummary: buildStructureSummaryRow(rowForSummary),
+    });
+  } catch (error) {
+    console.error('Error previewing evaluation structure:', error);
+    res.status(500).json({ error: 'Failed to load evaluation structure preview' });
+  }
+});
+
+app.post('/public-admin/companies/:companyId/evaluation-structure/publish', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can publish evaluation structure' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+  const evaluationStructure = req.body?.evaluationStructure;
+  if (!evaluationStructure || typeof evaluationStructure !== 'object' || Array.isArray(evaluationStructure)) {
+    return res.status(400).json({ error: 'Body must include evaluationStructure object.' });
+  }
+  const confirmReplace = req.body?.confirmReplace === true;
+  try {
+    const result = await publishEvaluationStructure(
+      pool,
+      companyId,
+      evaluationStructure,
+      req.user?.id || null,
+      { confirmReplace }
+    );
+    return res.status(201).json({
+      message: 'Evaluation structure published.',
+      companyId,
+      currentPublishedVersionId: result.versionId,
+      version: result.version,
+      publishedAt: result.publishedAt,
+      publishedBy: result.publishedBy,
+      replacedVersion: result.replacedVersion,
+      replacedVersionId: result.replacedVersionId,
+    });
+  } catch (error) {
+    if (error.statusCode === 400) {
+      return res.status(400).json({
+        error: error.message,
+        code: error.code || 'INVALID_EVALUATION_STRUCTURE',
+        validationErrors: error.validationErrors || undefined,
+      });
+    }
+    if (error.statusCode === 409) {
+      return res.status(409).json({
+        error: error.message,
+        code: error.code || 'STRUCTURE_REPLACE_CONFIRMATION_REQUIRED',
+        details: error.details,
+      });
+    }
+    console.error('Error publishing evaluation structure:', error);
+    res.status(500).json({ error: 'Failed to publish evaluation structure', details: error.message });
   }
 });
 
@@ -3969,5 +4156,62 @@ app.delete('/public-admin/teams/:id', authenticateToken, async (req, res) => {
 app.use('/public-admin', express.static('public'));
 
 app.use(forwardErrorToExpressDefault);
+
+async function startServer() {
+  await runMigrations();
+  app.listen(PORT, async () => {
+    console.log(`🚀 Production backend server running on port ${PORT}`);
+    console.log('📋 Available endpoints:');
+    console.log('  POST /auth/login - Login with email/password');
+    console.log('  POST /auth/refresh - Refresh access token');
+    console.log('  POST /auth/logout - Logout and invalidate refresh token');
+    console.log('  POST /evaluations - Create evaluation (requires auth)');
+    console.log('  GET /evaluations/my - Get my evaluations (requires auth)');
+    console.log('  GET /organizations/teams - Get teams (requires auth)');
+    console.log('  GET /organizations/salespeople - Get salespeople (requires auth)');
+    console.log('  GET /public-admin/teams - Get all teams (requires auth)');
+    console.log('  GET /public-admin/users - Get all users (requires auth)');
+    console.log('  POST /public-admin/users - Create user (requires auth)');
+    console.log('  PUT /public-admin/users/:id - Update user (requires auth)');
+    console.log('  POST /public-admin/users/:id/deactivate - Deactivate user (requires auth)');
+    console.log('  DELETE /public-admin/users/:id - Delete user (requires auth)');
+    console.log('  GET /users - Get all users (requires auth)');
+    console.log('  GET /scoring/categories - Get scoring categories (requires auth)');
+    console.log('  GET /scoring/evaluation-structure - Active evaluation structure or legacy (requires auth)');
+    console.log('  GET /scoring/rating-scale - Get company rating scale (1–4 vs 0–4 N/A) (requires auth)');
+    console.log('  GET /analytics/dashboard - Get dashboard analytics (requires auth)');
+    console.log('  GET /analytics/team - Get team analytics (requires auth)');
+    console.log('  GET /analytics/director-dashboard - Get Sales Director dashboard analytics (requires auth)');
+    console.log('  GET /public-admin/companies - Get companies (requires auth)');
+    console.log('  GET /public-admin/companies/:companyId/evaluation-metadata-config - Published metadata schema (requires auth)');
+    console.log('  GET /public-admin/companies/:companyId/evaluation-metadata-schema/preview - User-facing metadata preview (read-only, requires auth)');
+    console.log('  POST /public-admin/companies/:companyId/evaluation-metadata-schema/publish - Publish metadata schema (requires auth)');
+    console.log('  GET /public-admin/companies/:companyId/evaluation-structure-config - Published evaluation structure (requires auth)');
+    console.log('  GET /public-admin/companies/:companyId/evaluation-structure/preview - Evaluation structure preview (read-only, requires auth)');
+    console.log('  POST /public-admin/companies/:companyId/evaluation-structure/publish - Publish evaluation structure (requires auth)');
+    console.log('  GET /public-admin/regions - Get all regions (requires auth)');
+    console.log('  POST /public-admin/regions - Create new region (requires ADMIN)');
+    console.log('  PUT /public-admin/regions/:id - Update region name (requires ADMIN)');
+    console.log('  DELETE /public-admin/regions/:id - Delete region (requires ADMIN)');
+    console.log('  GET /health - Health check');
+    console.log('  GET /public-admin/react-admin - React Admin panel');
+    console.log('🔑 Using real database authentication');
+    console.log(`  DATABASE_URL: ${databaseUrl ? databaseUrl.replace(/:[^:@]+@/, ':****@') : '(missing)'}`);
+    console.log('  All endpoints now return real data from your database');
+    try {
+      await pool.query('SELECT 1');
+      console.log('✅ Database connection: OK');
+    } catch (dbErr) {
+      console.error('❌ Database connection FAILED — /auth/login and data routes will return 500 until PostgreSQL is up.');
+      console.error('   Fix: start Postgres (e.g. docker compose -f docker-compose.dev.yml up -d), then node seed-dev-data.js from repo root.');
+      console.error('   Error:', dbErr.message || dbErr);
+    }
+  });
+}
+
+startServer().catch((err) => {
+  console.error('❌ Failed to start server:', err);
+  process.exit(1);
+});
 
 module.exports = app;

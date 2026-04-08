@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { apiService, User } from '../services/api';
+import {
+  apiService,
+  User,
+  BehaviorCategory,
+  EvaluationStructureDocument,
+  EvaluationStructureResponse,
+} from '../services/api';
 import { useTranslation } from 'react-i18next';
 import { validateInput } from '../utils/sanitize';
 import { offlineService } from '../utils/offlineService';
@@ -8,6 +14,70 @@ import { offlineService } from '../utils/offlineService';
 interface EvaluationFormProps {
   onSuccess: () => void;
   onCancel: () => void;
+}
+
+/** Milestone 3 — structure order first, then append category items not listed (labels from live categories). */
+function mergeCategoriesWithStructure(
+  categories: BehaviorCategory[],
+  evaluationStructure: EvaluationStructureDocument
+): any[] {
+  const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#6366F1'];
+  const itemById = new Map<string, any>();
+  categories.forEach((cat) => {
+    (cat.items || []).forEach((item: any) => {
+      itemById.set(item.id, { ...item });
+    });
+  });
+
+  const placed = new Set<string>();
+  const result: any[] = [];
+  const sections = [...(evaluationStructure.sections || [])].sort((a, b) => a.order - b.order);
+
+  let colorIdx = 0;
+  for (const sec of sections) {
+    const crits = [...(sec.criteria || [])].sort((a, b) => a.order - b.order);
+    const items: any[] = [];
+    for (const c of crits) {
+      const row = itemById.get(c.behaviorItemId);
+      if (row) {
+        items.push(row);
+        placed.add(c.behaviorItemId);
+      }
+    }
+    if (items.length > 0) {
+      result.push({
+        id: sec.id,
+        name: sec.title,
+        order: sec.order,
+        weight: categories[0]?.weight,
+        color: colors[colorIdx % colors.length],
+        items,
+      });
+      colorIdx += 1;
+    }
+  }
+
+  const appended: any[] = [];
+  categories.forEach((cat) => {
+    (cat.items || []).forEach((item: any) => {
+      if (!placed.has(item.id)) {
+        appended.push({ ...item });
+        placed.add(item.id);
+      }
+    });
+  });
+
+  if (appended.length > 0) {
+    result.push({
+      id: '__structure_additional__',
+      name: 'Additional criteria',
+      order: 9999,
+      color: colors[colorIdx % colors.length],
+      items: appended,
+    });
+  }
+
+  return result;
 }
 
 const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) => {
@@ -40,6 +110,22 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   
   // Evaluation categories from backend
   const [categories, setCategories] = useState<any[]>([]);
+  /** Milestone 3 — published structure when API returns non-legacy and categories are non-empty */
+  const [structureDoc, setStructureDoc] = useState<EvaluationStructureDocument | null>(null);
+  const [activeStructureVersionId, setActiveStructureVersionId] = useState<string | null>(null);
+  const [structureLayoutActive, setStructureLayoutActive] = useState(false);
+
+  const applyStructureState = (cats: any[], structRes: EvaluationStructureResponse) => {
+    if (cats.length === 0 || structRes.legacy) {
+      setStructureDoc(null);
+      setActiveStructureVersionId(null);
+      setStructureLayoutActive(false);
+      return;
+    }
+    setStructureDoc(structRes.evaluationStructure);
+    setActiveStructureVersionId(structRes.structureVersionId);
+    setStructureLayoutActive(true);
+  };
 
   // Auto-save functionality - temporarily disabled for debugging
   // const { restoreData, clearSavedData } = useAutoSave({
@@ -115,7 +201,9 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         // Load evaluation categories from backend (role-based)
         // Note: customerType will be loaded separately when user selects it
         const behaviorCategories = await apiService.getBehaviorCategories();
+        const structRes = await apiService.getEvaluationStructure();
         setCategories(behaviorCategories);
+        applyStructureState(behaviorCategories, structRes);
       } catch (err) {
         console.error('Failed to load evaluation data:', err);
         setError(t('evaluation.error'));
@@ -581,6 +669,10 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const getEvaluationCategories = () => {
     // Return categories from backend (role-based forms)
     if (categories.length > 0) {
+      if (structureLayoutActive && structureDoc) {
+        console.log('📋 Using merged evaluation structure layout');
+        return mergeCategoriesWithStructure(categories as BehaviorCategory[], structureDoc);
+      }
       console.log('📋 Using backend categories:', categories.length);
       // Add colors to categories for UI
       const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#6366F1'];
@@ -807,7 +899,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     setSuccessMessage('');
 
     // Prepare evaluation data (moved outside try block for catch block access)
-    let evaluationData: any = null;
+    let evaluationData: Parameters<typeof apiService.createEvaluation>[0] | null = null;
 
     try {
       // Use the correct categories based on user role and selected user
@@ -820,15 +912,18 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         }))
       );
 
-      const evaluationData = {
+      evaluationData = {
         salespersonId: selectedUser,
         visitDate,
         customerName: customerName || undefined,
         customerType: customerType || undefined,
         location: location || undefined,
         overallComment: overallComment || undefined,
-        items: evaluationItems
+        items: evaluationItems,
       };
+      if (structureLayoutActive && activeStructureVersionId) {
+        evaluationData.evaluationStructureVersionId = activeStructureVersionId;
+      }
 
       try {
         // Try online submission first
@@ -1014,9 +1109,11 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                     console.log('🔍 [PWA] Loading categories for customerType:', newCustomerType);
                     setIsLoading(true);
                     const behaviorCategories = await apiService.getBehaviorCategories(newCustomerType);
+                    const structRes = await apiService.getEvaluationStructure(newCustomerType);
                     console.log('🔍 [PWA] Received categories:', behaviorCategories.length, 'categories');
                     console.log('🔍 [PWA] First category:', behaviorCategories[0]?.name);
                     setCategories(behaviorCategories);
+                    applyStructureState(behaviorCategories, structRes);
                     // Reset scores and comments when categories change
                     setScores({});
                     setComments({});
@@ -1033,8 +1130,10 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                     console.log('🔍 [PWA] Loading default categories');
                     setIsLoading(true);
                     const behaviorCategories = await apiService.getBehaviorCategories();
+                    const structRes = await apiService.getEvaluationStructure();
                     console.log('🔍 [PWA] Received default categories:', behaviorCategories.length);
                     setCategories(behaviorCategories);
+                    applyStructureState(behaviorCategories, structRes);
                     // Reset scores and comments when categories change
                     setScores({});
                     setComments({});

@@ -8,6 +8,7 @@ const { validateEvaluationItemsForCreate } = require('../evaluation/validation')
 const { calculateOverallScore, getInvalidOverallScoreResponse } = require('../evaluation/scoring');
 const { tryDuplicateEvaluationResponse } = require('../evaluation/duplicatePrevention');
 const { mapMyEvaluationDto } = require('../evaluation/mappers');
+const { evaluationStructureVersionExistsForCompany } = require('./evaluationStructureConfig.service');
 
 function createEvaluationsHandlers(deps) {
   const {
@@ -80,14 +81,37 @@ function createEvaluationsHandlers(deps) {
           console.error(`❌ Calculated overallScore is invalid: ${overallScore}`);
           return res.status(400).json(invalidOverall);
         }
+
+        let evaluationStructureVersionId = null;
+        const rawStructVer = req.body.evaluationStructureVersionId;
+        if (rawStructVer !== undefined && rawStructVer !== null) {
+          if (typeof rawStructVer !== 'string' || !rawStructVer.trim()) {
+            return res.status(400).json({
+              message: 'evaluationStructureVersionId must be a non-empty string when provided.',
+              error: 'INVALID_EVALUATION_STRUCTURE_VERSION_ID',
+            });
+          }
+          const okVer = await evaluationStructureVersionExistsForCompany(
+            pool,
+            rawStructVer.trim(),
+            companyId
+          );
+          if (!okVer) {
+            return res.status(400).json({
+              message: 'Invalid evaluationStructureVersionId for this company.',
+              error: 'INVALID_EVALUATION_STRUCTURE_VERSION_ID',
+            });
+          }
+          evaluationStructureVersionId = rawStructVer.trim();
+        }
         
         // Insert into evaluations table
         await pool.query(`
           INSERT INTO evaluations (
             id, "salespersonId", "managerId", "visitDate", 
             "customerName", "customerType", location, "overallComment", "overallScore",
-            version, "companyId", "createdAt", "updatedAt"
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+            version, "companyId", "evaluationStructureVersionId", "createdAt", "updatedAt"
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
         `, [
           evaluationId,
           req.body.salespersonId,
@@ -99,7 +123,8 @@ function createEvaluationsHandlers(deps) {
           req.body.overallComment || null,
           overallScore,
           1,
-          companyId
+          companyId,
+          evaluationStructureVersionId
         ]);
         
         // Insert evaluation items (already validated above)

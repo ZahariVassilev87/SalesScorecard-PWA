@@ -75,6 +75,37 @@ export interface BehaviorItem {
   category?: BehaviorCategory;
 }
 
+/** Milestone 3 — GET /scoring/evaluation-structure */
+export type EvaluationStructureResponse =
+  | {
+      legacy: true;
+      useLegacyEvaluationFlow?: boolean;
+      customerType?: string | null;
+    }
+  | {
+      legacy: false;
+      customerType?: string | null;
+      structureVersionId: string;
+      version: number;
+      evaluationStructure: EvaluationStructureDocument;
+      publishedAt: string;
+      publishedBy: string | null;
+      publishedByEmail?: string | null;
+    };
+
+export interface EvaluationStructureDocument {
+  sections: Array<{
+    id: string;
+    order: number;
+    title: string;
+    criteria: Array<{
+      id: string;
+      order: number;
+      behaviorItemId: string;
+    }>;
+  }>;
+}
+
 export interface EvaluationItem {
   id: string;
   evaluationId: string;
@@ -681,6 +712,15 @@ class ApiService {
     }
   }
 
+  /** Milestone 3 — active evaluation structure or legacy marker (aligned with categories customerType). */
+  async getEvaluationStructure(customerType?: string): Promise<EvaluationStructureResponse> {
+    const q =
+      customerType !== undefined && customerType !== null && String(customerType).trim() !== ''
+        ? `?customerType=${encodeURIComponent(String(customerType))}`
+        : '';
+    return this.request<EvaluationStructureResponse>(`/scoring/evaluation-structure${q}`);
+  }
+
   async getEvaluations(): Promise<Evaluation[]> {
     try {
       return await this.request<Evaluation[]>('/evaluations');
@@ -708,6 +748,8 @@ class ApiService {
     customerType?: string;
     location?: string;
     overallComment?: string;
+    /** Milestone 3 — set when form used a published non-legacy structure */
+    evaluationStructureVersionId?: string;
     items: Array<{
       behaviorItemId: string;
       rating: number; // Backend expects 'rating' not 'score'
