@@ -94,7 +94,8 @@ dist
 
 # Gatsby files
 .cache/
-public
+# CRA/PWA build at repo root only (do not ignore production-backend/public/react-admin)
+/public
 
 # Storybook build outputs
 .out
