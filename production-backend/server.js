@@ -18,6 +18,12 @@ const {
   createAnalyticsRouter,
   registerDirectorDashboardRoute,
 } = require('./src/routes/analytics.routes');
+const {
+  getCurrentPublishedMetadataConfig,
+  publishEvaluationMetadataSchema,
+  buildMetadataPreviewForUsers,
+  buildCurrentVersionSummary,
+} = require('./src/services/evaluationMetadataConfig.service');
 
 const app = express();
 // Default 3001 so the root PWA can use 3000 in dev (see DEV-ENVIRONMENT.md, docker-compose.dev.yml).
@@ -153,6 +159,49 @@ async function runMigrations() {
                  NOW(), NOW()
           FROM companies c
           ON CONFLICT ("companyId") DO NOTHING
+        `);
+
+        // Milestone 1 — versioned per-company evaluation metadata (optional fields)
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS company_evaluation_config_versions (
+            id TEXT PRIMARY KEY,
+            "companyId" TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            "metadataSchema" JSONB NOT NULL DEFAULT '{"fields":[]}'::jsonb,
+            "publishedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            "publishedBy" TEXT,
+            CONSTRAINT cecv_version_check CHECK (version >= 1),
+            CONSTRAINT cecv_unique_company_version UNIQUE ("companyId", version)
+          )
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_cecv_company ON company_evaluation_config_versions ("companyId")
+        `);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS company_evaluation_config_current (
+            "companyId" TEXT PRIMARY KEY,
+            "currentPublishedVersionId" TEXT NOT NULL,
+            CONSTRAINT cecc_fk_version FOREIGN KEY ("currentPublishedVersionId")
+              REFERENCES company_evaluation_config_versions(id) ON DELETE RESTRICT
+          )
+        `);
+        await pool.query(`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'evaluations' AND column_name = 'metadata'
+            ) THEN
+              ALTER TABLE evaluations ADD COLUMN metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+            END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'evaluations' AND column_name = 'configVersionId'
+            ) THEN
+              ALTER TABLE evaluations ADD COLUMN "configVersionId" TEXT
+                REFERENCES company_evaluation_config_versions(id) ON DELETE SET NULL;
+            END IF;
+          END $$;
         `);
         
         console.log('✅ Database migrations completed successfully');
@@ -496,6 +545,7 @@ app.get('/', (req, res) => {
       'GET /public-admin/users',
       'GET /users',
       'GET /scoring/categories',
+      'GET /scoring/rating-scale',
       'GET /analytics/dashboard',
       'GET /analytics/team',
       'GET /analytics/director-dashboard',
@@ -503,6 +553,9 @@ app.get('/', (req, res) => {
       'POST /public-admin/regions',
       'PUT /public-admin/regions/:id',
       'DELETE /public-admin/regions/:id',
+      'GET /public-admin/companies/:companyId/evaluation-metadata-config',
+      'GET /public-admin/companies/:companyId/evaluation-metadata-schema/preview',
+      'POST /public-admin/companies/:companyId/evaluation-metadata-schema/publish',
       'GET /health'
     ]
   });
@@ -1752,6 +1805,7 @@ app.get('/users', authenticateToken, (req, res) => {
 // Scoring categories
 app.get('/scoring/categories', authenticateToken, async (req, res) => {
   const customerType = req.query.customerType || req.query.customer_type || null;
+  const includeMeta = req.query.meta === '1' || req.query.includeMeta === 'true';
   const { companyId } = resolveCompanyContext(req);
   console.log('🔍 [CATEGORIES] Request from:', req.user.email, 'role:', req.user.role);
   console.log('🔍 [CATEGORIES] Query params:', req.query);
@@ -1841,6 +1895,14 @@ app.get('/scoring/categories', authenticateToken, async (req, res) => {
     
     if (categoriesResult.rows.length === 0) {
       console.log('⚠️ No categories found, returning empty array');
+      if (includeMeta) {
+        const scoringProfileEmpty = await getCompanyScoringProfile(companyId);
+        const ratingScaleEmpty =
+          scoringProfileEmpty?.settings?.ratingScale === 'zero_to_four_na'
+            ? 'zero_to_four_na'
+            : 'legacy_1_4';
+        return res.json({ categories: [], ratingScale: ratingScaleEmpty });
+      }
       return res.json([]);
     }
     
@@ -1866,6 +1928,12 @@ app.get('/scoring/categories', authenticateToken, async (req, res) => {
     }
     
     console.log(`✅ Returning ${categories.length} categories with ${categories.reduce((sum, c) => sum + c.items.length, 0)} items`);
+    if (includeMeta) {
+      const scoringProfile = await getCompanyScoringProfile(companyId);
+      const ratingScale =
+        scoringProfile?.settings?.ratingScale === 'zero_to_four_na' ? 'zero_to_four_na' : 'legacy_1_4';
+      return res.json({ categories, ratingScale });
+    }
     res.json(categories);
     
   } catch (error) {
@@ -1874,6 +1942,24 @@ app.get('/scoring/categories', authenticateToken, async (req, res) => {
       message: 'Internal server error', 
       error: 'DatabaseError', 
       statusCode: 500 
+    });
+  }
+});
+
+/** PWA: company-scoped score range (1–4 vs 0–4 with 0 = N/A). */
+app.get('/scoring/rating-scale', authenticateToken, async (req, res) => {
+  try {
+    const { companyId } = resolveCompanyContext(req);
+    const scoringProfile = await getCompanyScoringProfile(companyId);
+    const raw = scoringProfile?.settings?.ratingScale;
+    const ratingScale = raw === 'zero_to_four_na' ? 'zero_to_four_na' : 'legacy_1_4';
+    res.json({ ratingScale });
+  } catch (error) {
+    console.error('❌ Error fetching rating scale:', error);
+    res.status(500).json({
+      message: 'Internal server error',
+      error: 'DatabaseError',
+      statusCode: 500,
     });
   }
 });
@@ -1918,6 +2004,7 @@ app.get('/public-admin/evaluations', authenticateToken, async (req, res) => {
         e.id, e."salespersonId", e."managerId", e."visitDate",
         e."customerName", e.location, e."overallComment", e."overallScore",
         e.version, e."createdAt", e."updatedAt",
+        e.metadata, e."configVersionId",
         sp."displayName" as salesperson_name, sp.email as salesperson_email, sp.role as salesperson_role,
         mg."displayName" as manager_name, mg.email as manager_email, mg.role as manager_role
       FROM evaluations e
@@ -1965,6 +2052,9 @@ app.get('/public-admin/evaluations', authenticateToken, async (req, res) => {
         version: evalRow.version,
         createdAt: evalRow.createdAt,
         updatedAt: evalRow.updatedAt,
+        configVersionId: evalRow.configVersionId ?? null,
+        metadata:
+          evalRow.metadata && typeof evalRow.metadata === 'object' ? evalRow.metadata : {},
         items: itemsResult.rows
       });
     }
@@ -2072,6 +2162,59 @@ function devAiGate(req, res, next) {
 }
 
 /**
+ * Whisper transcription for PWA evaluation comment dictation.
+ * Registered always (not behind AI_DEV_ENABLED) so production works with OPENAI_API_KEY only.
+ * PWA limits pasted/dictated text per field to 2000 chars client-side (MAX_DICTATION_COMMENT_CHARS).
+ */
+app.post('/dev/ai/transcribe', devAiGate, bodyParser.json({ limit: '100mb' }), async (req, res) => {
+  const apiKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim();
+  if (!apiKey) {
+    return res.status(503).json({ error: 'OPENAI_API_KEY is not set' });
+  }
+  const audioBase64 = typeof req.body?.audioBase64 === 'string' ? req.body.audioBase64.trim() : '';
+  const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType.trim() : 'audio/webm';
+  const language = typeof req.body?.language === 'string' && req.body.language.trim() ? req.body.language.trim() : 'bg';
+  const model = typeof req.body?.model === 'string' && req.body.model.trim() ? req.body.model.trim() : 'whisper-1';
+  if (!audioBase64) {
+    return res.status(400).json({ error: 'body.audioBase64 is required' });
+  }
+
+  try {
+    const b64 = audioBase64.includes(',') ? audioBase64.split(',').pop() : audioBase64;
+    const bytes = Buffer.from(b64 || '', 'base64');
+    if (!bytes || bytes.length < 256) {
+      return res.status(400).json({ error: 'Audio payload is too small' });
+    }
+    const ext =
+      mimeType.includes('mp4') ? 'm4a' :
+      mimeType.includes('wav') ? 'wav' :
+      mimeType.includes('ogg') ? 'ogg' :
+      mimeType.includes('mpeg') ? 'mp3' : 'webm';
+
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type: mimeType }), `speech.${ext}`);
+    form.append('model', model);
+    form.append('language', language);
+
+    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: form
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      return res.status(r.status >= 400 && r.status < 600 ? r.status : 502).json(data);
+    }
+    return res.json({ text: typeof data?.text === 'string' ? data.text : '', openai: data });
+  } catch (error) {
+    console.error('Transcribe error:', error);
+    return res.status(500).json({ error: 'Transcribe failed', details: error.message });
+  }
+});
+
+/**
  * Product context for Dev AI (chat / command / analyze-debrief). Keeps the model aligned with what the PWA is.
  * Optional: append AI_DEV_EXTRA_CONTEXT (plain text) for company- or env-specific notes.
  */
@@ -2146,55 +2289,6 @@ if (process.env.AI_DEV_ENABLED === 'true') {
     } catch (error) {
       console.error('Dev AI chat error:', error);
       return res.status(500).json({ error: 'Dev AI request failed', details: error.message });
-    }
-  });
-
-  /** Audio transcription (Bulgarian-ready) for mobile dictation in evaluation comments. */
-  app.post('/dev/ai/transcribe', devAiGate, bodyParser.json({ limit: '100mb' }), async (req, res) => {
-    const apiKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim();
-    if (!apiKey) {
-      return res.status(503).json({ error: 'OPENAI_API_KEY is not set' });
-    }
-    const audioBase64 = typeof req.body?.audioBase64 === 'string' ? req.body.audioBase64.trim() : '';
-    const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType.trim() : 'audio/webm';
-    const language = typeof req.body?.language === 'string' && req.body.language.trim() ? req.body.language.trim() : 'bg';
-    const model = typeof req.body?.model === 'string' && req.body.model.trim() ? req.body.model.trim() : 'whisper-1';
-    if (!audioBase64) {
-      return res.status(400).json({ error: 'body.audioBase64 is required' });
-    }
-
-    try {
-      const b64 = audioBase64.includes(',') ? audioBase64.split(',').pop() : audioBase64;
-      const bytes = Buffer.from(b64 || '', 'base64');
-      if (!bytes || bytes.length < 256) {
-        return res.status(400).json({ error: 'Audio payload is too small' });
-      }
-      const ext =
-        mimeType.includes('mp4') ? 'm4a' :
-        mimeType.includes('wav') ? 'wav' :
-        mimeType.includes('ogg') ? 'ogg' :
-        mimeType.includes('mpeg') ? 'mp3' : 'webm';
-
-      const form = new FormData();
-      form.append('file', new Blob([bytes], { type: mimeType }), `speech.${ext}`);
-      form.append('model', model);
-      form.append('language', language);
-
-      const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: form
-      });
-      const data = await r.json();
-      if (!r.ok) {
-        return res.status(r.status >= 400 && r.status < 600 ? r.status : 502).json(data);
-      }
-      return res.json({ text: typeof data?.text === 'string' ? data.text : '', openai: data });
-    } catch (error) {
-      console.error('Dev AI transcribe error:', error);
-      return res.status(500).json({ error: 'Dev AI transcribe failed', details: error.message });
     }
   });
 
@@ -2364,8 +2458,12 @@ Base scores ONLY on evidence in each item's answer. Do not invent observed behav
   });
 
   console.log(
-    '🤖 Dev AI routes: GET /dev/ai/status, POST /dev/ai/chat, POST /dev/ai/transcribe, POST /dev/ai/command, POST /dev/ai/analyze-debrief'
+    '🤖 Dev AI routes: GET /dev/ai/status, POST /dev/ai/chat, POST /dev/ai/command, POST /dev/ai/analyze-debrief'
   );
+}
+
+if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()) {
+  console.log('🎤 POST /dev/ai/transcribe — Whisper (evaluation comment dictation; client caps text at 2000 chars/field)');
 }
 
 // Start server
@@ -2387,10 +2485,14 @@ app.listen(PORT, async () => {
   console.log('  DELETE /public-admin/users/:id - Delete user (requires auth)');
   console.log('  GET /users - Get all users (requires auth)');
   console.log('  GET /scoring/categories - Get scoring categories (requires auth)');
+  console.log('  GET /scoring/rating-scale - Get company rating scale (1–4 vs 0–4 N/A) (requires auth)');
   console.log('  GET /analytics/dashboard - Get dashboard analytics (requires auth)');
   console.log('  GET /analytics/team - Get team analytics (requires auth)');
   console.log('  GET /analytics/director-dashboard - Get Sales Director dashboard analytics (requires auth)');
   console.log('  GET /public-admin/companies - Get companies (requires auth)');
+  console.log('  GET /public-admin/companies/:companyId/evaluation-metadata-config - Published metadata schema (requires auth)');
+  console.log('  GET /public-admin/companies/:companyId/evaluation-metadata-schema/preview - User-facing metadata preview (read-only, requires auth)');
+  console.log('  POST /public-admin/companies/:companyId/evaluation-metadata-schema/publish - Publish metadata schema (requires auth)');
   console.log('  GET /public-admin/regions - Get all regions (requires auth)');
   console.log('  POST /public-admin/regions - Create new region (requires ADMIN)');
   console.log('  PUT /public-admin/regions/:id - Update region name (requires ADMIN)');
@@ -2730,20 +2832,187 @@ app.get('/public-admin/companies/:companyId/config', authenticateToken, async (r
     return res.status(400).json({ error: 'Company ID is required.' });
   }
   try {
-    const [flags, scoringProfile, hierarchyTemplate] = await Promise.all([
+    const [flags, scoringProfile, hierarchyTemplate, metaCfg] = await Promise.all([
       getCompanyFeatureFlags(companyId),
       getCompanyScoringProfile(companyId),
-      getCompanyHierarchyTemplate(companyId)
+      getCompanyHierarchyTemplate(companyId),
+      getCurrentPublishedMetadataConfig(pool, companyId)
     ]);
+    const evaluationMetadataActive =
+      metaCfg == null
+        ? {
+            legacy: true,
+            hasPublishedSchema: false,
+            currentVersionSummary: null,
+            evaluationMetadataPreview: null,
+          }
+        : {
+            legacy: false,
+            hasPublishedSchema: true,
+            currentVersionSummary: buildCurrentVersionSummary({
+              versionId: metaCfg.versionId,
+              version: metaCfg.version,
+              metadataSchema: metaCfg.metadataSchema,
+              publishedAt: metaCfg.publishedAt,
+              publishedBy: metaCfg.publishedBy,
+              publishedByEmail: metaCfg.publishedByEmail,
+            }),
+            evaluationMetadataPreview: buildMetadataPreviewForUsers(metaCfg.metadataSchema),
+          };
     res.json({
       companyId,
       featureFlags: flags,
       scoringProfile,
-      hierarchyTemplate
+      hierarchyTemplate,
+      evaluationMetadataActive,
     });
   } catch (error) {
     console.error('Error getting company config:', error);
     res.status(500).json({ error: 'Failed to load company configuration' });
+  }
+});
+
+/** Milestone 1 — current published evaluation metadata schema (optional fields per company). */
+app.get('/public-admin/companies/:companyId/evaluation-metadata-config', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can view evaluation metadata configuration' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+  try {
+    const cfg = await getCurrentPublishedMetadataConfig(pool, companyId);
+    if (!cfg) {
+      return res.json({
+        companyId,
+        legacy: true,
+        currentPublishedVersionId: null,
+        version: null,
+        publishedAt: null,
+        publishedBy: null,
+        publishedByEmail: null,
+        metadataSchema: null,
+        currentVersionSummary: null,
+        evaluationMetadataPreview: null,
+      });
+    }
+    const rowForSummary = {
+      versionId: cfg.versionId,
+      version: cfg.version,
+      metadataSchema: cfg.metadataSchema,
+      publishedAt: cfg.publishedAt,
+      publishedBy: cfg.publishedBy,
+      publishedByEmail: cfg.publishedByEmail,
+    };
+    return res.json({
+      companyId,
+      legacy: false,
+      currentPublishedVersionId: cfg.versionId,
+      version: cfg.version,
+      publishedAt: cfg.publishedAt,
+      publishedBy: cfg.publishedBy,
+      publishedByEmail: cfg.publishedByEmail || null,
+      metadataSchema: cfg.metadataSchema,
+      currentVersionSummary: buildCurrentVersionSummary(rowForSummary),
+      evaluationMetadataPreview: buildMetadataPreviewForUsers(cfg.metadataSchema),
+    });
+  } catch (error) {
+    console.error('Error getting evaluation metadata config:', error);
+    res.status(500).json({ error: 'Failed to load evaluation metadata configuration' });
+  }
+});
+
+/**
+ * Read-only preview: how evaluation metadata fields appear to end users (ordered, visible fields only).
+ */
+app.get('/public-admin/companies/:companyId/evaluation-metadata-schema/preview', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can preview evaluation metadata schema' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+  try {
+    const cfg = await getCurrentPublishedMetadataConfig(pool, companyId);
+    if (!cfg) {
+      return res.json({
+        companyId,
+        legacy: true,
+        preview: null,
+        currentVersionSummary: null,
+      });
+    }
+    const rowForSummary = {
+      versionId: cfg.versionId,
+      version: cfg.version,
+      metadataSchema: cfg.metadataSchema,
+      publishedAt: cfg.publishedAt,
+      publishedBy: cfg.publishedBy,
+      publishedByEmail: cfg.publishedByEmail,
+    };
+    return res.json({
+      companyId,
+      legacy: false,
+      preview: buildMetadataPreviewForUsers(cfg.metadataSchema),
+      currentVersionSummary: buildCurrentVersionSummary(rowForSummary),
+    });
+  } catch (error) {
+    console.error('Error previewing evaluation metadata schema:', error);
+    res.status(500).json({ error: 'Failed to load evaluation metadata preview' });
+  }
+});
+
+/** Milestone 1 — publish a new metadata schema version (creates version row + sets current). */
+app.post('/public-admin/companies/:companyId/evaluation-metadata-schema/publish', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can publish evaluation metadata schema' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) {
+    return res.status(400).json({ error: 'Company ID is required.' });
+  }
+  const metadataSchema = req.body?.metadataSchema;
+  if (!metadataSchema || typeof metadataSchema !== 'object' || Array.isArray(metadataSchema)) {
+    return res.status(400).json({ error: 'Body must include metadataSchema object.' });
+  }
+  const confirmReplace = req.body?.confirmReplace === true;
+  try {
+    const result = await publishEvaluationMetadataSchema(
+      pool,
+      companyId,
+      metadataSchema,
+      req.user?.id || null,
+      { confirmReplace }
+    );
+    return res.status(201).json({
+      message: 'Evaluation metadata schema published.',
+      companyId,
+      currentPublishedVersionId: result.versionId,
+      version: result.version,
+      publishedAt: result.publishedAt,
+      publishedBy: result.publishedBy,
+      replacedVersion: result.replacedVersion,
+      replacedVersionId: result.replacedVersionId,
+    });
+  } catch (error) {
+    if (error.statusCode === 400) {
+      return res.status(400).json({
+        error: error.message,
+        code: error.code || 'INVALID_METADATA_SCHEMA',
+        validationErrors: error.validationErrors || undefined,
+      });
+    }
+    if (error.statusCode === 409) {
+      return res.status(409).json({
+        error: error.message,
+        code: error.code || 'METADATA_REPLACE_CONFIRMATION_REQUIRED',
+        details: error.details,
+      });
+    }
+    console.error('Error publishing evaluation metadata schema:', error);
+    res.status(500).json({ error: 'Failed to publish evaluation metadata schema', details: error.message });
   }
 });
 
