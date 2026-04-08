@@ -464,7 +464,11 @@ function isLocalDevOrigin(origin) {
   }
 }
 
-const effectiveAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : defaultAllowedOrigins;
+// Keep production-safe defaults even when ALLOWED_ORIGINS is provided.
+// Env entries extend the allowlist instead of replacing critical web origins.
+const effectiveAllowedOrigins = Array.from(
+  new Set([...defaultAllowedOrigins, ...allowedOrigins])
+);
 
 // CORS supports strict override via ALLOWED_ORIGINS and safe defaults otherwise.
 app.use(cors({
