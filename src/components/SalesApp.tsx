@@ -15,10 +15,6 @@ import LanguageSwitcher from './LanguageSwitcher';
 import { offlineService } from '../utils/offlineService';
 import { notificationService } from '../utils/notificationService';
 import { apiService, Company } from '../services/api';
-import { canUseVoiceDebriefPilot } from '../config/voiceDebriefPilot';
-import VoiceDebriefPilot from './VoiceDebriefPilot';
-import { isDevAiPanelEnabled } from '../config/devAiPanel';
-import DevAiPlayground from './DevAiPlayground';
 
 const SalesApp: React.FC = () => {
   const { user, logout } = useAuth();
@@ -26,6 +22,9 @@ const SalesApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState(() => {
     // Try to get the last selected tab from localStorage
     const savedTab = localStorage.getItem('lastActiveTab');
+    if (savedTab === 'voice-debrief-pilot' || savedTab === 'dev-ai-playground') {
+      return 'dashboard';
+    }
     return savedTab || 'dashboard';
   });
   const hasInitialized = useRef(false);
@@ -254,32 +253,6 @@ const SalesApp: React.FC = () => {
               <span>🏢</span>
               <span>{t('navigation.dashboard')}</span>
             </button>
-            {canUseVoiceDebriefPilot(user?.role || '') && (
-              <button
-                className={activeTab === 'voice-debrief-pilot' ? 'nav-button active' : 'nav-button'}
-                onClick={() => {
-                  handleTabChange('voice-debrief-pilot');
-                  closeMobileMenu();
-                }}
-                title="Pilot: voice debrief (separate from standard evaluations)"
-              >
-                <span>🎙️</span>
-                <span>Voice debrief</span>
-              </button>
-            )}
-            {isDevAiPanelEnabled() && (
-              <button
-                className={activeTab === 'dev-ai-playground' ? 'nav-button active' : 'nav-button'}
-                onClick={() => {
-                  handleTabChange('dev-ai-playground');
-                  closeMobileMenu();
-                }}
-                title="Dev only: test OpenAI via backend"
-              >
-                <span>🤖</span>
-                <span>Dev AI</span>
-              </button>
-            )}
             {canExport(user?.role || '') && (
               <button
                 className={activeTab === 'export' ? 'nav-button active' : 'nav-button'}
@@ -309,33 +282,6 @@ const SalesApp: React.FC = () => {
               </button>
             )}
 
-            {canUseVoiceDebriefPilot(user?.role || '') && (
-              <button
-                className={activeTab === 'voice-debrief-pilot' ? 'nav-button active' : 'nav-button'}
-                onClick={() => {
-                  handleTabChange('voice-debrief-pilot');
-                  closeMobileMenu();
-                }}
-                title="Pilot: voice debrief (separate from standard evaluations)"
-              >
-                <span>🎙️</span>
-                <span>Voice debrief</span>
-              </button>
-            )}
-            {isDevAiPanelEnabled() && (
-              <button
-                className={activeTab === 'dev-ai-playground' ? 'nav-button active' : 'nav-button'}
-                onClick={() => {
-                  handleTabChange('dev-ai-playground');
-                  closeMobileMenu();
-                }}
-                title="Dev only: test OpenAI via backend"
-              >
-                <span>🤖</span>
-                <span>Dev AI</span>
-              </button>
-            )}
-            
             <button
               className={activeTab === 'history' ? 'nav-button active' : 'nav-button'}
               onClick={() => {
@@ -442,12 +388,6 @@ const SalesApp: React.FC = () => {
         {activeTab === 'analytics' && <AnalyticsView />}
         {activeTab === 'export' && <ExportView />}
         {activeTab === 'teams' && <TeamManagementView />}
-        {activeTab === 'voice-debrief-pilot' && canUseVoiceDebriefPilot(user?.role || '') && (
-          <VoiceDebriefPilot onClose={() => handleTabChange('dashboard')} />
-        )}
-        {activeTab === 'dev-ai-playground' && isDevAiPanelEnabled() && (
-          <DevAiPlayground onNavigate={handleTabChange} />
-        )}
       </main>
     </div>
   );
