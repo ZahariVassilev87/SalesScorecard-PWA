@@ -30,6 +30,12 @@ const {
   buildStructureSummaryRow,
   buildStructurePreviewPayload,
   getEvaluationStructureVersionForCompany,
+  getEvaluationStructureDraft,
+  upsertEvaluationStructureDraft,
+  listEvaluationStructureVersions,
+  cloneStructureToDraft,
+  rollbackVersionToDraft,
+  batchCloneToDraft,
 } = require('./src/services/evaluationStructureConfig.service');
 const { buildResultView } = require('./src/evaluation/mappers');
 
@@ -257,6 +263,15 @@ async function runMigrations() {
             END IF;
           END $$;
         `);
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS company_evaluation_structure_drafts (
+            "companyId" TEXT PRIMARY KEY,
+            "evaluationStructure" JSONB NOT NULL DEFAULT '{"sections":[]}'::jsonb,
+            "updatedBy" TEXT,
+            "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
         
         console.log('✅ Database migrations completed successfully');
   } catch (error) {
@@ -301,6 +316,15 @@ function getTargetRolesForEvaluator(hierarchyTemplate, evaluatorRole) {
     : getDefaultHierarchyTemplate();
   const row = template.rules.find(rule => rule.evaluatorRole === evaluatorRole);
   return Array.isArray(row?.targetRoles) ? row.targetRoles : [];
+}
+
+function canAdminAccessCompany(req, companyId) {
+  const cid = String(companyId || '').trim();
+  if (!cid) return false;
+  if (req.user?.role === 'SUPER_ADMIN') return true;
+  if (req.user?.role !== 'ADMIN') return false;
+  const ctx = resolveCompanyContext(req);
+  return !ctx.includeAllCompanies && String(ctx.companyId || '').trim() === cid;
 }
 
 async function getCompanyFeatureFlags(companyId) {
@@ -3221,6 +3245,188 @@ app.post('/public-admin/companies/:companyId/evaluation-structure/publish', auth
   }
 });
 
+/** Milestone 3D — published structure history list. */
+app.get('/public-admin/companies/:companyId/evaluation-structure/history', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can view evaluation structure history' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) return res.status(400).json({ error: 'Company ID is required.' });
+  try {
+    const limit = Number(req.query.limit || 20);
+    const offset = Number(req.query.offset || 0);
+    const page = await listEvaluationStructureVersions(pool, companyId, { limit, offset });
+    return res.json({
+      companyId,
+      items: page.items,
+      page: {
+        limit: page.limit,
+        offset: page.offset,
+        hasMore: page.hasMore,
+      },
+    });
+  } catch (error) {
+    console.error('Error loading evaluation structure history:', error);
+    res.status(500).json({ error: 'Failed to load evaluation structure history' });
+  }
+});
+
+/** Milestone 3D — mutable single draft per company. */
+app.get('/public-admin/companies/:companyId/evaluation-structure/draft', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can view evaluation structure draft' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) return res.status(400).json({ error: 'Company ID is required.' });
+  try {
+    const draft = await getEvaluationStructureDraft(pool, companyId);
+    if (!draft) {
+      return res.json({ companyId, hasDraft: false, draft: null, updatedAt: null, updatedBy: null, updatedByEmail: null });
+    }
+    return res.json({
+      companyId,
+      hasDraft: true,
+      draft: draft.evaluationStructure,
+      updatedAt: draft.updatedAt,
+      updatedBy: draft.updatedBy,
+      updatedByEmail: draft.updatedByEmail,
+    });
+  } catch (error) {
+    console.error('Error loading evaluation structure draft:', error);
+    res.status(500).json({ error: 'Failed to load evaluation structure draft' });
+  }
+});
+
+app.put('/public-admin/companies/:companyId/evaluation-structure/draft', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can update evaluation structure draft' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  if (!companyId) return res.status(400).json({ error: 'Company ID is required.' });
+  const evaluationStructure = req.body?.evaluationStructure;
+  try {
+    const draft = await upsertEvaluationStructureDraft(pool, companyId, evaluationStructure, req.user?.id || null);
+    return res.json({
+      companyId,
+      hasDraft: true,
+      updatedAt: draft.updatedAt,
+      updatedBy: draft.updatedBy,
+      updatedByEmail: draft.updatedByEmail,
+    });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status === 400) return res.status(400).json({ error: error.message });
+    console.error('Error saving evaluation structure draft:', error);
+    res.status(500).json({ error: 'Failed to save evaluation structure draft' });
+  }
+});
+
+app.post('/public-admin/companies/:companyId/evaluation-structure/clone-from', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can clone evaluation structure drafts' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  const sourceCompanyId = String(req.body?.sourceCompanyId || '').trim();
+  if (!companyId || !sourceCompanyId) {
+    return res.status(400).json({ error: 'companyId and sourceCompanyId are required.' });
+  }
+  if (!canAdminAccessCompany(req, sourceCompanyId)) {
+    return res.status(403).json({ error: 'Access denied for source company', code: 'UNAUTHORIZED_SOURCE' });
+  }
+  if (!canAdminAccessCompany(req, companyId)) {
+    return res.status(403).json({ error: 'Access denied for target company', code: 'UNAUTHORIZED_TARGET' });
+  }
+  try {
+    const result = await cloneStructureToDraft(pool, sourceCompanyId, companyId, req.user?.id || null);
+    return res.json({
+      companyId,
+      sourceCompanyId,
+      draftUpdated: true,
+      draftUpdatedAt: result.draft?.updatedAt || null,
+      sourceVersionId: result.sourceVersionId,
+      sourceVersion: result.sourceVersion,
+    });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status === 404) return res.status(404).json({ error: error.message, code: error.code || 'SOURCE_STRUCTURE_NOT_FOUND' });
+    console.error('Error cloning structure to draft:', error);
+    res.status(500).json({ error: 'Failed to clone structure to draft' });
+  }
+});
+
+app.post('/public-admin/companies/:companyId/evaluation-structure/rollback-to-draft', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can rollback evaluation structure to draft' });
+  }
+  const companyId = (req.params.companyId || '').trim();
+  const sourceVersionId = String(req.body?.sourceVersionId || '').trim();
+  if (!companyId || !sourceVersionId) {
+    return res.status(400).json({ error: 'companyId and sourceVersionId are required.' });
+  }
+  if (!canAdminAccessCompany(req, companyId)) {
+    return res.status(403).json({ error: 'Access denied for target company', code: 'UNAUTHORIZED_TARGET' });
+  }
+  try {
+    const result = await rollbackVersionToDraft(pool, companyId, sourceVersionId, req.user?.id || null);
+    return res.json({
+      companyId,
+      sourceVersionId: result.sourceVersionId,
+      sourceVersion: result.sourceVersion,
+      draftUpdated: true,
+      draftUpdatedAt: result.draft?.updatedAt || null,
+    });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status === 404) return res.status(404).json({ error: error.message, code: error.code || 'STRUCTURE_VERSION_NOT_FOUND' });
+    console.error('Error rolling back structure to draft:', error);
+    res.status(500).json({ error: 'Failed to rollback structure to draft' });
+  }
+});
+
+app.post('/public-admin/evaluation-structure/batch-clone-to-draft', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Only administrators can batch clone evaluation structures' });
+  }
+  const sourceCompanyId = String(req.body?.sourceCompanyId || '').trim();
+  const targetCompanyIds = Array.isArray(req.body?.targetCompanyIds) ? req.body.targetCompanyIds : [];
+  if (!sourceCompanyId || targetCompanyIds.length === 0) {
+    return res.status(400).json({ error: 'sourceCompanyId and targetCompanyIds[] are required.' });
+  }
+  if (!canAdminAccessCompany(req, sourceCompanyId)) {
+    return res.status(403).json({ error: 'Access denied for source company', code: 'UNAUTHORIZED_SOURCE' });
+  }
+  try {
+    const normalizedTargets = Array.from(
+      new Set(targetCompanyIds.map((x) => String(x || '').trim()).filter(Boolean))
+    );
+    const authorized = [];
+    const unauthorizedResults = [];
+    for (const cid of normalizedTargets) {
+      if (canAdminAccessCompany(req, cid)) {
+        authorized.push(cid);
+      } else {
+        unauthorizedResults.push({ companyId: cid, status: 'failed', reason: 'UNAUTHORIZED_TARGET' });
+      }
+    }
+    const result = await batchCloneToDraft(pool, sourceCompanyId, authorized, req.user?.id || null);
+    const results = [...result.results, ...unauthorizedResults];
+    const success = results.filter((r) => r.status === 'success').length;
+    const failed = results.length - success;
+    return res.json({
+      sourceCompanyId,
+      results,
+      summary: {
+        total: results.length,
+        success,
+        failed,
+      },
+    });
+  } catch (error) {
+    console.error('Error batch cloning structures to drafts:', error);
+    res.status(500).json({ error: 'Failed to batch clone structures to drafts' });
+  }
+});
+
 app.put('/public-admin/companies/:companyId/config', authenticateToken, async (req, res) => {
   if (req.user?.role !== 'SUPER_ADMIN' && req.user?.role !== 'ADMIN') {
     return res.status(403).json({ error: 'Only administrators can update company configuration' });
@@ -4207,6 +4413,12 @@ async function startServer() {
     console.log('  GET /public-admin/companies/:companyId/evaluation-structure-config - Published evaluation structure (requires auth)');
     console.log('  GET /public-admin/companies/:companyId/evaluation-structure/preview - Evaluation structure preview (read-only, requires auth)');
     console.log('  POST /public-admin/companies/:companyId/evaluation-structure/publish - Publish evaluation structure (requires auth)');
+    console.log('  GET /public-admin/companies/:companyId/evaluation-structure/history - Evaluation structure version history (requires auth)');
+    console.log('  GET /public-admin/companies/:companyId/evaluation-structure/draft - Evaluation structure draft (requires auth)');
+    console.log('  PUT /public-admin/companies/:companyId/evaluation-structure/draft - Save evaluation structure draft (requires auth)');
+    console.log('  POST /public-admin/companies/:companyId/evaluation-structure/clone-from - Clone published structure to draft (requires auth)');
+    console.log('  POST /public-admin/companies/:companyId/evaluation-structure/rollback-to-draft - Copy historical version to draft (requires auth)');
+    console.log('  POST /public-admin/evaluation-structure/batch-clone-to-draft - Batch clone published structure to drafts (requires auth)');
     console.log('  GET /public-admin/regions - Get all regions (requires auth)');
     console.log('  POST /public-admin/regions - Create new region (requires ADMIN)');
     console.log('  PUT /public-admin/regions/:id - Update region name (requires ADMIN)');

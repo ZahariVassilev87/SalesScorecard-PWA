@@ -104,6 +104,145 @@ async function evaluationStructureVersionExistsForCompany(pool, versionId, compa
   return rows.length > 0;
 }
 
+async function getEvaluationStructureDraft(pool, companyId) {
+  const cid = typeof companyId === 'string' ? companyId.trim() : '';
+  if (!cid) return null;
+  const { rows } = await pool.query(
+    `
+    SELECT d."companyId", d."evaluationStructure", d."updatedAt", d."updatedBy", u.email AS "updatedByEmail"
+    FROM company_evaluation_structure_drafts d
+    LEFT JOIN users u ON u.id = d."updatedBy"
+    WHERE d."companyId" = $1
+    `,
+    [cid]
+  );
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    companyId: r.companyId,
+    evaluationStructure: r.evaluationStructure,
+    updatedAt: r.updatedAt,
+    updatedBy: r.updatedBy || null,
+    updatedByEmail: r.updatedByEmail || null,
+  };
+}
+
+async function upsertEvaluationStructureDraft(pool, companyId, evaluationStructure, actorUserId) {
+  const cid = typeof companyId === 'string' ? companyId.trim() : '';
+  if (!cid) {
+    const err = new Error('Company ID is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!evaluationStructure || typeof evaluationStructure !== 'object' || Array.isArray(evaluationStructure)) {
+    const err = new Error('evaluationStructure object is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+  await pool.query(
+    `
+    INSERT INTO company_evaluation_structure_drafts ("companyId", "evaluationStructure", "updatedBy", "updatedAt")
+    VALUES ($1, $2::jsonb, $3, NOW())
+    ON CONFLICT ("companyId")
+    DO UPDATE SET
+      "evaluationStructure" = EXCLUDED."evaluationStructure",
+      "updatedBy" = EXCLUDED."updatedBy",
+      "updatedAt" = NOW()
+    `,
+    [cid, JSON.stringify(evaluationStructure), actorUserId || null]
+  );
+  return getEvaluationStructureDraft(pool, cid);
+}
+
+async function listEvaluationStructureVersions(pool, companyId, options = {}) {
+  const cid = typeof companyId === 'string' ? companyId.trim() : '';
+  if (!cid) return { items: [], limit: 20, offset: 0, hasMore: false };
+  const limit = Number.isFinite(Number(options.limit)) ? Math.max(1, Math.min(100, Number(options.limit))) : 20;
+  const offset = Number.isFinite(Number(options.offset)) ? Math.max(0, Number(options.offset)) : 0;
+  const { rows } = await pool.query(
+    `
+    SELECT v.id AS "versionId", v.version, v."evaluationStructure", v."publishedAt", v."publishedBy",
+           u.email AS "publishedByEmail"
+    FROM company_evaluation_structure_versions v
+    LEFT JOIN users u ON u.id = v."publishedBy"
+    WHERE v."companyId" = $1
+    ORDER BY v.version DESC
+    LIMIT $2 OFFSET $3
+    `,
+    [cid, limit + 1, offset]
+  );
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    items: pageRows.map(buildStructureSummaryRow),
+    limit,
+    offset,
+    hasMore,
+  };
+}
+
+async function cloneStructureToDraft(pool, sourceCompanyId, targetCompanyId, actorUserId) {
+  const sourceCfg = await getCurrentPublishedEvaluationStructure(pool, sourceCompanyId);
+  if (!sourceCfg) {
+    const err = new Error('Source company has no published evaluation structure.');
+    err.statusCode = 404;
+    err.code = 'SOURCE_STRUCTURE_NOT_FOUND';
+    throw err;
+  }
+  const draft = await upsertEvaluationStructureDraft(
+    pool,
+    targetCompanyId,
+    sourceCfg.evaluationStructure,
+    actorUserId || null
+  );
+  return {
+    sourceVersionId: sourceCfg.versionId,
+    sourceVersion: sourceCfg.version,
+    draft,
+  };
+}
+
+async function rollbackVersionToDraft(pool, companyId, sourceVersionId, actorUserId) {
+  const row = await getEvaluationStructureVersionForCompany(pool, sourceVersionId, companyId);
+  if (!row) {
+    const err = new Error('Requested structure version was not found for this company.');
+    err.statusCode = 404;
+    err.code = 'STRUCTURE_VERSION_NOT_FOUND';
+    throw err;
+  }
+  const draft = await upsertEvaluationStructureDraft(pool, companyId, row.evaluationStructure, actorUserId || null);
+  return {
+    sourceVersionId: row.versionId,
+    sourceVersion: row.version,
+    draft,
+  };
+}
+
+async function batchCloneToDraft(pool, sourceCompanyId, targetCompanyIds, actorUserId) {
+  const uniqueTargets = Array.from(
+    new Set((Array.isArray(targetCompanyIds) ? targetCompanyIds : []).map((x) => String(x || '').trim()).filter(Boolean))
+  );
+  const results = [];
+  for (const companyId of uniqueTargets) {
+    try {
+      await cloneStructureToDraft(pool, sourceCompanyId, companyId, actorUserId || null);
+      results.push({ companyId, status: 'success' });
+    } catch (error) {
+      results.push({
+        companyId,
+        status: 'failed',
+        reason: error.code || error.message || 'UNKNOWN_ERROR',
+      });
+    }
+  }
+  const success = results.filter((r) => r.status === 'success').length;
+  const failed = results.length - success;
+  return {
+    results,
+    summary: { total: results.length, success, failed },
+  };
+}
+
 /**
  * Publish a new evaluation structure version and set as current.
  * @param {{ confirmReplace?: boolean }} [options]
@@ -223,6 +362,12 @@ module.exports = {
   publishEvaluationStructure,
   evaluationStructureVersionExistsForCompany,
   getEvaluationStructureVersionForCompany,
+  getEvaluationStructureDraft,
+  upsertEvaluationStructureDraft,
+  listEvaluationStructureVersions,
+  cloneStructureToDraft,
+  rollbackVersionToDraft,
+  batchCloneToDraft,
   buildStructureSummaryRow,
   buildStructurePreviewPayload,
 };

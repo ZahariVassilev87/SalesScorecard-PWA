@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import EvaluationStructureM3 from './EvaluationStructureM3';
 
 // Types
 interface User {
@@ -646,6 +647,117 @@ class ApiService {
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Failed to update company form template: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async getEvaluationStructureConfig(companyId: string): Promise<any> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure-config`, {
+      headers: this.getHeaders()
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load evaluation structure config: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async getEvaluationStructureHistory(companyId: string, limit = 20, offset = 0): Promise<any> {
+    const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const response = await fetch(
+      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/history?${q}`,
+      { headers: this.getHeaders() }
+    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load evaluation structure history: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async getEvaluationStructureDraft(companyId: string): Promise<any> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/draft`, {
+      headers: this.getHeaders()
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load evaluation structure draft: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async saveEvaluationStructureDraft(companyId: string, evaluationStructure: any): Promise<any> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/draft`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ evaluationStructure })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to save evaluation structure draft: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async cloneEvaluationStructureToDraft(companyId: string, sourceCompanyId: string): Promise<any> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/clone-from`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ sourceCompanyId })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to clone evaluation structure to draft: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async rollbackEvaluationStructureToDraft(companyId: string, sourceVersionId: string): Promise<any> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/rollback-to-draft`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ sourceVersionId })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to rollback evaluation structure to draft: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async batchCloneEvaluationStructureToDraft(sourceCompanyId: string, targetCompanyIds: string[]): Promise<any> {
+    const response = await fetch(`${API_BASE}/public-admin/evaluation-structure/batch-clone-to-draft`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ sourceCompanyId, targetCompanyIds })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to batch clone evaluation structures: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async getEvaluationStructurePreview(companyId: string): Promise<any> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/preview`, {
+      headers: this.getHeaders()
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load evaluation structure preview: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async publishEvaluationStructure(companyId: string, evaluationStructure: any, confirmReplace?: boolean): Promise<any> {
+    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/publish`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ evaluationStructure, confirmReplace: confirmReplace === true })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to publish evaluation structure: ${response.status} ${errorText}`);
     }
     return response.json();
   }
@@ -2466,7 +2578,8 @@ const AdminPanel: React.FC = () => {
     regions: 'Regions',
     teams: 'Team management',
     users: 'User management',
-    configuration: 'Company configuration'
+    configuration: 'Company configuration',
+    'evaluation-structure': 'Evaluation structure (M3)'
   };
 
   return (
@@ -2522,6 +2635,16 @@ const AdminPanel: React.FC = () => {
               }}
             >
               Company configuration
+            </button>
+            <button
+              type="button"
+              className={activeTab === 'evaluation-structure' ? 'nav-button active' : 'nav-button'}
+              onClick={() => {
+                setActiveTab('evaluation-structure');
+                closeMobileMenu();
+              }}
+            >
+              Evaluation structure (M3)
             </button>
           </nav>
         </aside>
@@ -2662,6 +2785,9 @@ const AdminPanel: React.FC = () => {
               <UserManagement openCreateSignal={openCreateSignal} selectedCompanyId={selectedCompanyId} />
             )}
             {activeTab === 'configuration' && <CompanyConfiguration selectedCompanyId={selectedCompanyId} />}
+            {activeTab === 'evaluation-structure' && (
+              <EvaluationStructureM3 selectedCompanyId={selectedCompanyId} api={apiService as any} />
+            )}
           </main>
         </div>
       </div>
