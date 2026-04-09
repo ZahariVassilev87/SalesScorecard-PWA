@@ -67,6 +67,32 @@ async function getCurrentPublishedEvaluationStructure(pool, companyId) {
  * @param {string} companyId
  * @returns {Promise<boolean>}
  */
+async function getEvaluationStructureVersionForCompany(pool, versionId, companyId) {
+  const vid = typeof versionId === 'string' ? versionId.trim() : '';
+  const cid = typeof companyId === 'string' ? companyId.trim() : '';
+  if (!vid || !cid) return null;
+  const { rows } = await pool.query(
+    `
+    SELECT v.id AS "versionId", v.version, v."evaluationStructure", v."publishedAt", v."publishedBy",
+           u.email AS "publishedByEmail"
+    FROM company_evaluation_structure_versions v
+    LEFT JOIN users u ON u.id = v."publishedBy"
+    WHERE v.id = $1 AND v."companyId" = $2
+    `,
+    [vid, cid]
+  );
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    versionId: r.versionId,
+    version: r.version,
+    evaluationStructure: r.evaluationStructure,
+    publishedAt: r.publishedAt,
+    publishedBy: r.publishedBy,
+    publishedByEmail: r.publishedByEmail,
+  };
+}
+
 async function evaluationStructureVersionExistsForCompany(pool, versionId, companyId) {
   const vid = typeof versionId === 'string' ? versionId.trim() : '';
   const cid = typeof companyId === 'string' ? companyId.trim() : '';
@@ -196,6 +222,7 @@ module.exports = {
   getCurrentPublishedEvaluationStructure,
   publishEvaluationStructure,
   evaluationStructureVersionExistsForCompany,
+  getEvaluationStructureVersionForCompany,
   buildStructureSummaryRow,
   buildStructurePreviewPayload,
 };

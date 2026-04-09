@@ -7,8 +7,11 @@
 const { validateEvaluationItemsForCreate } = require('../evaluation/validation');
 const { calculateOverallScore, getInvalidOverallScoreResponse } = require('../evaluation/scoring');
 const { tryDuplicateEvaluationResponse } = require('../evaluation/duplicatePrevention');
-const { mapMyEvaluationDto } = require('../evaluation/mappers');
-const { evaluationStructureVersionExistsForCompany } = require('./evaluationStructureConfig.service');
+const { mapMyEvaluationDto, buildResultView } = require('../evaluation/mappers');
+const {
+  evaluationStructureVersionExistsForCompany,
+  getEvaluationStructureVersionForCompany,
+} = require('./evaluationStructureConfig.service');
 
 function createEvaluationsHandlers(deps) {
   const {
@@ -225,7 +228,7 @@ function createEvaluationsHandlers(deps) {
             SELECT
               e.id, e."salespersonId", e."managerId", e."visitDate",
               e."customerName", e.location, e."overallComment", e."overallScore",
-              e.version, e."createdAt", e."updatedAt", e."companyId",
+              e.version, e."createdAt", e."updatedAt", e."companyId", e."evaluationStructureVersionId",
               sp."displayName" as salesperson_name, sp.email as salesperson_email,
               sp.role as salesperson_role, sp."companyId" as salesperson_company_id, sp."isActive" as salesperson_is_active,
               mg."displayName" as manager_name, mg.email as manager_email,
@@ -252,7 +255,7 @@ function createEvaluationsHandlers(deps) {
             SELECT 
               e.id, e."salespersonId", e."managerId", e."visitDate",
               e."customerName", e.location, e."overallComment", e."overallScore",
-              e.version, e."createdAt", e."updatedAt", e."companyId",
+              e.version, e."createdAt", e."updatedAt", e."companyId", e."evaluationStructureVersionId",
               sp."displayName" as salesperson_name, sp.email as salesperson_email,
               sp.role as salesperson_role, sp."companyId" as salesperson_company_id, sp."isActive" as salesperson_is_active,
               mg."displayName" as manager_name, mg.email as manager_email,
@@ -283,7 +286,26 @@ function createEvaluationsHandlers(deps) {
             ORDER BY ei."createdAt"
           `, [evalRow.id]);
           
-          evaluations.push(mapMyEvaluationDto(evalRow, itemsResult.rows, req.user));
+          const pinnedVersionId = evalRow.evaluationStructureVersionId || null;
+          let pinnedStructureRow = null;
+          if (pinnedVersionId) {
+            pinnedStructureRow = await getEvaluationStructureVersionForCompany(
+              pool,
+              pinnedVersionId,
+              evalRow.companyId || companyId
+            );
+          }
+
+          evaluations.push(
+            mapMyEvaluationDto(evalRow, itemsResult.rows, req.user, {
+              pinnedStructureRow,
+              resultView: buildResultView({
+                evalRow,
+                itemRows: itemsResult.rows,
+                pinnedStructureRow,
+              }),
+            })
+          );
         }
         
         console.log(`✅ Found ${evaluations.length} evaluations for user ${req.user.email}`);

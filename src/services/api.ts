@@ -115,6 +115,30 @@ export interface EvaluationItem {
   behaviorItem: BehaviorItem;
 }
 
+export interface EvaluationResultView {
+  legacy: boolean;
+  structureVersionId: string | null;
+  structureMissing?: boolean;
+  sections?: Array<{
+    id: string;
+    title: string;
+    score: number | null;
+    criteria: Array<{
+      id: string;
+      behaviorItemId: string;
+      label: string;
+      rating: number | null;
+      comment?: string;
+    }>;
+  }>;
+  unmappedItems?: Array<{
+    behaviorItemId: string;
+    label: string;
+    rating: number;
+    comment?: string;
+  }>;
+}
+
 export interface Evaluation {
   id: string;
   salespersonId: string;
@@ -145,6 +169,8 @@ export interface Evaluation {
   };
   manager: User;
   items: EvaluationItem[];
+  evaluationStructureVersionId?: string | null;
+  resultView?: EvaluationResultView;
 }
 
 class ApiService {

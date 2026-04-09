@@ -29,7 +29,9 @@ const {
   publishEvaluationStructure,
   buildStructureSummaryRow,
   buildStructurePreviewPayload,
+  getEvaluationStructureVersionForCompany,
 } = require('./src/services/evaluationStructureConfig.service');
+const { buildResultView } = require('./src/evaluation/mappers');
 
 const app = express();
 // Default 3001 so the root PWA can use 3000 in dev (see DEV-ENVIRONMENT.md, docker-compose.dev.yml).
@@ -2094,7 +2096,7 @@ app.get('/public-admin/evaluations', authenticateToken, async (req, res) => {
       SELECT 
         e.id, e."salespersonId", e."managerId", e."visitDate",
         e."customerName", e.location, e."overallComment", e."overallScore",
-        e.version, e."createdAt", e."updatedAt",
+        e.version, e."createdAt", e."updatedAt", e."companyId", e."evaluationStructureVersionId",
         e.metadata, e."configVersionId",
         sp."displayName" as salesperson_name, sp.email as salesperson_email, sp.role as salesperson_role,
         mg."displayName" as manager_name, mg.email as manager_email, mg.role as manager_role
@@ -2119,6 +2121,16 @@ app.get('/public-admin/evaluations', authenticateToken, async (req, res) => {
         ORDER BY ei."createdAt"
       `, [evalRow.id]);
       
+      const pinnedVersionId = evalRow.evaluationStructureVersionId || null;
+      let pinnedStructureRow = null;
+      if (pinnedVersionId) {
+        pinnedStructureRow = await getEvaluationStructureVersionForCompany(
+          pool,
+          pinnedVersionId,
+          evalRow.companyId || null
+        );
+      }
+
       evaluations.push({
         id: evalRow.id,
         salespersonId: evalRow.salespersonId,
@@ -2146,6 +2158,12 @@ app.get('/public-admin/evaluations', authenticateToken, async (req, res) => {
         configVersionId: evalRow.configVersionId ?? null,
         metadata:
           evalRow.metadata && typeof evalRow.metadata === 'object' ? evalRow.metadata : {},
+        evaluationStructureVersionId: pinnedVersionId,
+        resultView: buildResultView({
+          evalRow,
+          itemRows: itemsResult.rows,
+          pinnedStructureRow,
+        }),
         items: itemsResult.rows
       });
     }

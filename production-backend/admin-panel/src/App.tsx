@@ -2058,6 +2058,7 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
   }
 
   const visibleFormCategories = formCategories.filter((c) => categoryMatchesPwaView(c.name, pwaFormView));
+  const evaluationStructureActive: any = null;
 
   return (
     <div className="team-members company-config-wizard">
@@ -2105,6 +2106,35 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
             <span className="config-sub"> (recommended; turn off only if support asks)</span>
           </span>
         </label>
+      </div>
+
+      <div className="form-section company-config-card">
+        <h4>Evaluation structure (Milestone 3)</h4>
+        <p className="config-hint">
+          Read-only summary of the published sections/criteria layout for the PWA. Editing and publishing use the API (
+          <code>POST /public-admin/companies/:id/evaluation-structure/publish</code>).
+        </p>
+        {!evaluationStructureActive || evaluationStructureActive.legacy || !evaluationStructureActive.hasPublishedStructure ? (
+          <p className="config-hint">No active custom structure, or legacy evaluation flow is on — the PWA uses the standard category layout.</p>
+        ) : (
+          <>
+            <p>
+              <strong>Version {evaluationStructureActive.currentVersionSummary?.version}</strong>
+              {' — '}
+              {evaluationStructureActive.currentVersionSummary?.sectionCount ?? 0} sections,{' '}
+              {evaluationStructureActive.currentVersionSummary?.criterionCount ?? 0} criteria
+              {evaluationStructureActive.currentVersionSummary?.publishedAt
+                ? ` — published ${new Date(evaluationStructureActive.currentVersionSummary.publishedAt).toLocaleString()}`
+                : ''}
+            </p>
+            <details>
+              <summary>Preview (ordered criteria)</summary>
+              <pre className="metadata-preview-json" style={{ marginTop: '0.5rem', maxHeight: '240px', overflow: 'auto' }}>
+                {JSON.stringify(evaluationStructureActive.evaluationStructurePreview, null, 2)}
+              </pre>
+            </details>
+          </>
+        )}
       </div>
 
       <div className="form-section company-config-card">

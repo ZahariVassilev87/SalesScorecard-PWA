@@ -458,6 +458,67 @@ const EvaluationHistory: React.FC = () => {
     }
   };
 
+  const renderStructureResultView = (evaluation: Evaluation) => {
+    const rv = evaluation.resultView;
+    if (!rv || rv.legacy || !Array.isArray(rv.sections) || rv.sections.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="detailed-scores">
+        {rv.sections.map((section) => (
+          <div key={section.id || section.title} className="category-detail">
+            <div className="category-header">
+              <h5>
+                {section.title}
+                {typeof section.score === 'number' ? ` (${((section.score / 4) * 100).toFixed(0)}%)` : ' (N/A)'}
+              </h5>
+            </div>
+            <div className="category-items">
+              {(section.criteria || []).map((crit) => (
+                <div key={crit.id || crit.behaviorItemId} className="item-detail">
+                  <div className="item-name">{crit.label || crit.behaviorItemId}</div>
+                  <div className="item-score">
+                    <span className="score">{typeof crit.rating === 'number' ? `${crit.rating}/4` : 'N/A'}</span>
+                  </div>
+                  <div className="item-comment">
+                    <div className="comment-label">{t('history.example')}</div>
+                    <div className="comment-text">
+                      {getDisplayCommentText(crit.comment) || <em>{t('history.noExampleProvided')}</em>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {Array.isArray(rv.unmappedItems) && rv.unmappedItems.length > 0 ? (
+          <div className="category-detail">
+            <div className="category-header">
+              <h5>Unmapped items</h5>
+            </div>
+            <div className="category-items">
+              {rv.unmappedItems.map((item, index) => (
+                <div key={`${item.behaviorItemId}-${index}`} className="item-detail">
+                  <div className="item-name">{item.label || item.behaviorItemId}</div>
+                  <div className="item-score">
+                    <span className="score">{typeof item.rating === 'number' ? `${item.rating}/4` : 'N/A'}</span>
+                  </div>
+                  <div className="item-comment">
+                    <div className="comment-label">{t('history.example')}</div>
+                    <div className="comment-text">
+                      {getDisplayCommentText(item.comment) || <em>{t('history.noExampleProvided')}</em>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="evaluation-history">
@@ -637,6 +698,7 @@ const EvaluationHistory: React.FC = () => {
                 </div>
               )}
 
+              {renderStructureResultView(selectedEvaluation) || (
               <div className="detailed-scores">
                 {getCategoriesFromEvaluation(selectedEvaluation).map(categoryName => {
                   const categoryItems = selectedEvaluation.items.filter(item => {
@@ -708,6 +770,7 @@ const EvaluationHistory: React.FC = () => {
                   );
                 })}
               </div>
+              )}
 
               {selectedEvaluation.overallComment && (
                 <div className="overall-comment-detail">

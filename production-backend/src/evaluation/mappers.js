@@ -66,12 +66,109 @@ function mapItemRowToMyEvaluationItem(item) {
   };
 }
 
+function getFallbackLabelForBehaviorItem(item) {
+  if (item.behavior_item_name && String(item.behavior_item_name).trim()) {
+    return String(item.behavior_item_name).trim();
+  }
+  const mapping = OLD_ID_MAPPINGS[item.behaviorItemId];
+  if (mapping?.name) return mapping.name;
+  return item.behaviorItemId;
+}
+
+function buildResultView({ evalRow, itemRows, pinnedStructureRow }) {
+  const pinnedId = evalRow.evaluationStructureVersionId || null;
+  if (!pinnedId) {
+    return {
+      legacy: true,
+      structureVersionId: null,
+    };
+  }
+
+  if (!pinnedStructureRow || !pinnedStructureRow.evaluationStructure) {
+    return {
+      legacy: true,
+      structureVersionId: pinnedId,
+      structureMissing: true,
+      unmappedItems: (itemRows || []).map((item) => ({
+        behaviorItemId: item.behaviorItemId,
+        label: getFallbackLabelForBehaviorItem(item),
+        rating: item.rating,
+        comment: item.comment || '',
+      })),
+    };
+  }
+
+  const structure = pinnedStructureRow.evaluationStructure;
+  const sections = Array.isArray(structure?.sections) ? [...structure.sections] : [];
+  sections.sort((a, b) => Number(a?.order ?? 0) - Number(b?.order ?? 0));
+
+  const itemsByBehaviorId = new Map();
+  for (const item of itemRows || []) {
+    const key = item.behaviorItemId;
+    if (!itemsByBehaviorId.has(key)) itemsByBehaviorId.set(key, []);
+    itemsByBehaviorId.get(key).push(item);
+  }
+
+  const usedItemIds = new Set();
+  const renderedSections = sections.map((sec) => {
+    const crits = Array.isArray(sec?.criteria) ? [...sec.criteria] : [];
+    crits.sort((a, b) => Number(a?.order ?? 0) - Number(b?.order ?? 0));
+
+    const criteria = crits.map((c) => {
+      const behaviorItemId = String(c?.behaviorItemId || '');
+      const candidates = itemsByBehaviorId.get(behaviorItemId) || [];
+      const match = candidates.find((r) => !usedItemIds.has(r.id)) || null;
+      if (match) usedItemIds.add(match.id);
+
+      const fallbackLabel = match ? getFallbackLabelForBehaviorItem(match) : behaviorItemId;
+      const label = typeof c?.label === 'string' && c.label.trim() ? c.label.trim() : fallbackLabel;
+
+      return {
+        id: c?.id || null,
+        behaviorItemId,
+        label,
+        rating: match ? match.rating : null,
+        comment: match ? (match.comment || '') : '',
+      };
+    });
+
+    const rated = criteria.filter((c) => typeof c.rating === 'number');
+    const score = rated.length > 0 ? rated.reduce((sum, c) => sum + c.rating, 0) / rated.length : null;
+
+    return {
+      id: sec?.id || null,
+      title: sec?.title || 'Untitled Section',
+      score,
+      criteria,
+    };
+  });
+
+  const unmappedItems = (itemRows || [])
+    .filter((item) => !usedItemIds.has(item.id))
+    .map((item) => ({
+      behaviorItemId: item.behaviorItemId,
+      label: getFallbackLabelForBehaviorItem(item),
+      rating: item.rating,
+      comment: item.comment || '',
+    }));
+
+  const result = {
+    legacy: false,
+    structureVersionId: pinnedId,
+    sections: renderedSections,
+  };
+  if (unmappedItems.length > 0) {
+    result.unmappedItems = unmappedItems;
+  }
+  return result;
+}
+
 /**
  * @param evalRow — row from evaluations list query (with joined salesperson/manager aliases)
  * @param itemRows — rows from evaluation_items query for this evaluation
  * @param user — req.user (for manager role fallback when manager is current user)
  */
-function mapMyEvaluationDto(evalRow, itemRows, user) {
+function mapMyEvaluationDto(evalRow, itemRows, user, options = {}) {
   return {
     id: evalRow.id,
     salespersonId: evalRow.salespersonId,
@@ -103,8 +200,16 @@ function mapMyEvaluationDto(evalRow, itemRows, user) {
     createdAt: evalRow.createdAt,
     updatedAt: evalRow.updatedAt,
     companyId: evalRow.companyId,
+    evaluationStructureVersionId: evalRow.evaluationStructureVersionId || null,
+    resultView:
+      options.resultView ||
+      buildResultView({
+        evalRow,
+        itemRows,
+        pinnedStructureRow: options.pinnedStructureRow || null,
+      }),
     items: itemRows.map(mapItemRowToMyEvaluationItem)
   };
 }
 
-module.exports = { mapMyEvaluationDto };
+module.exports = { mapMyEvaluationDto, buildResultView };
