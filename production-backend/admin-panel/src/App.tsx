@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './App.css';
 import EvaluationStructureM3 from './EvaluationStructureM3';
+import {
+  isSalespersonHighShareCategoryName,
+  matchesSalesLeadEvaluationCategory,
+} from './evaluationCategoryMatching';
 
 // Types
 interface User {
@@ -209,18 +213,12 @@ const PROD_COACHING_SALES_LEAD_PRESET: CompanyFormTemplatePayload['categories'] 
 /** Mirrors /scoring/categories filtering by category name (Metro-style tokens). View-only in admin. */
 type FormTemplatePwaView = 'all' | 'sp_standard' | 'sp_high_share' | 'sales_lead';
 
-/** Same naming convention as server.js /scoring/categories (HIGH_SHARE vs standard salesperson rows). */
-function isSalespersonHighShareCategoryName(categoryName: string): boolean {
-  const u = (categoryName || '').toUpperCase();
-  return u.includes('HIGH_SHARE') || u.includes('HIGH SHARE');
-}
-
 function categoryMatchesPwaView(categoryName: string, view: FormTemplatePwaView): boolean {
   if (view === 'all') return true;
   const n = categoryName || '';
   const u = n.toUpperCase();
   if (view === 'sales_lead') {
-    return u.includes('SALES_LEAD') || u.includes('COACHING SKILLS');
+    return matchesSalesLeadEvaluationCategory(n);
   }
   if (!u.includes('SALESPERSON')) {
     return false;
@@ -2640,28 +2638,22 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
         'HANDLING OBJECTIONS',
         'COMMERCIAL PROPOSAL',
       ];
-      const salesLeadTokens = [
-        'BEHAVIOR DURING CLIENT MEETING',
-        'QUALITY OF ANALYSIS',
-        'TRANSLATING INTO ACTION',
-      ];
-
-      const tokens = mode === 'salesperson' ? salespersonTokens : salesLeadTokens;
-      let filtered = sourceCategories.filter((c) => {
-        const n = String(c?.name || '').toUpperCase();
-        return tokens.some((t) => n.includes(t));
-      });
-
-      // "Salesperson standard" must not pull the parallel HIGH_SHARE rows (same cluster tokens in the name).
+      let filtered: CompanyFormTemplatePayload['categories'];
       if (mode === 'salesperson') {
+        filtered = sourceCategories.filter((c) => {
+          const n = String(c?.name || '').toUpperCase();
+          return salespersonTokens.some((t) => n.includes(t));
+        });
         filtered = filtered.filter((c) => !isSalespersonHighShareCategoryName(String(c?.name || '')));
+      } else {
+        filtered = sourceCategories.filter((c) => matchesSalesLeadEvaluationCategory(String(c?.name || '')));
       }
 
       if (filtered.length === 0) {
         throw new Error(
           mode === 'salesperson'
             ? 'Metro baseline does not contain the expected salesperson categories (non-high-share).'
-            : 'Metro baseline does not contain the expected sales lead categories.'
+            : 'Metro baseline does not contain the expected sales lead / coaching categories (check English or Bulgarian coaching cluster titles, SALES_LEAD, or Coaching Skills).'
         );
       }
 
@@ -2979,7 +2971,7 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
               <option value="all">All categories (full template in database)</option>
               <option value="sp_standard">Salesperson — low-mid / regular</option>
               <option value="sp_high_share">Salesperson — high-share</option>
-              <option value="sales_lead">Sales lead / coaching (~SALES_LEAD in name)</option>
+              <option value="sales_lead">Sales lead / RM coaching (pillars or SALES_LEAD / Coaching Skills)</option>
             </select>
           </div>
         ) : null}
@@ -2990,8 +2982,9 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
         ) : null}
         {formCategories.length > 0 && visibleFormCategories.length === 0 ? (
           <p className="config-empty">
-            No categories match this preview. Try <strong>All categories</strong>, or check that names include the expected tokens
-            (e.g. <code>(SALESPERSON)</code>).
+            No categories match this preview. Try <strong>All categories</strong>. Sales lead uses coaching cluster titles
+            (e.g. Behavior During Client Meeting, Quality of Analysis, Translating Into Action), <code>SALES_LEAD</code>,{' '}
+            <code>Coaching Skills</code>, or Bulgarian equivalents — not <code>(SALESPERSON)</code> alone.
           </p>
         ) : null}
         {visibleFormCategories.map((cat) => (

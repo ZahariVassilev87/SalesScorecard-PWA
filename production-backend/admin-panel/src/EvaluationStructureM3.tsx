@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { categoryMatchesStructureSectionSource } from './evaluationCategoryMatching';
 
 type Company = { id: string; name: string; isActive?: boolean };
 type SectionSourceView = 'all' | 'salesperson' | 'sales_lead';
@@ -173,34 +174,6 @@ const EvaluationStructureM3: React.FC<Props> = ({ selectedCompanyId, api }) => {
     };
   };
 
-  const categoryMatchesCase = (categoryName: string, view: SectionSourceView): boolean => {
-    if (view === 'all') return true;
-    const n = (categoryName || '').toUpperCase();
-    const salespersonCore = [
-      'PREPARATION BEFORE THE MEETING',
-      'PROBLEM DEFINITION',
-      'HANDLING OBJECTIONS',
-      'COMMERCIAL PROPOSAL',
-    ];
-    const salesLeadCore = [
-      'BEHAVIOR DURING CLIENT MEETING',
-      'QUALITY OF ANALYSIS',
-      'TRANSLATING INTO ACTION',
-    ];
-
-    if (view === 'salesperson') {
-      return salespersonCore.some((token) => n.includes(token));
-    }
-    if (view === 'sales_lead') {
-      // Published/template often uses one parent: "Coaching Skills (SALES_LEAD)" with items inside.
-      if (n.includes('COACHING SKILLS') || n.includes('SALES_LEAD')) {
-        return true;
-      }
-      return salesLeadCore.some((token) => n.includes(token));
-    }
-    return true;
-  };
-
   const handleLoadAllClustersFromFormTemplate = async () => {
     setSaving(true);
     setError('');
@@ -231,7 +204,7 @@ const EvaluationStructureM3: React.FC<Props> = ({ selectedCompanyId, api }) => {
 
       let templateCategories = await loadTemplateCategories(selectedCompanyId);
       let categories = templateCategories.filter((cat: any) =>
-        categoryMatchesCase(String(cat?.name || ''), sectionSourceView)
+        categoryMatchesStructureSectionSource(String(cat?.name || ''), sectionSourceView)
       );
 
       // If this company has no form rows yet, use clone source company template (e.g. Metro).
@@ -242,7 +215,7 @@ const EvaluationStructureM3: React.FC<Props> = ({ selectedCompanyId, api }) => {
       ) {
         templateCategories = await loadTemplateCategories(sourceCompanyId);
         categories = templateCategories.filter((cat: any) =>
-          categoryMatchesCase(String(cat?.name || ''), sectionSourceView)
+          categoryMatchesStructureSectionSource(String(cat?.name || ''), sectionSourceView)
         );
       }
 
@@ -251,7 +224,7 @@ const EvaluationStructureM3: React.FC<Props> = ({ selectedCompanyId, api }) => {
       if (categories.length === 0) {
         const draftSections = Array.isArray(currentDraft?.sections) ? currentDraft.sections : [];
         const fallbackSections = draftSections.filter((sec: any) =>
-          categoryMatchesCase(String(sec?.title || ''), sectionSourceView)
+          categoryMatchesStructureSectionSource(String(sec?.title || ''), sectionSourceView)
         );
         if (fallbackSections.length > 0) {
           setDraftText(safePretty({ ...currentDraft, sections: fallbackSections }));

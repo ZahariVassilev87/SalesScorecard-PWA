@@ -1983,6 +1983,32 @@ app.get('/scoring/categories', authenticateToken, async (req, res) => {
         )
       `;
       queryParams = [targetRole];
+    } else if (targetRole === 'SALES_LEAD') {
+      // RM/RSM coaching: names often use pillar titles without the literal "SALES_LEAD" substring.
+      // Keep in sync with admin-panel/src/evaluationCategoryMatching.ts (matchesSalesLeadEvaluationCategory).
+      categoriesQuery = `
+        SELECT bc.id, bc.name, bc."order", bc.weight
+        FROM behavior_categories bc
+        WHERE (
+          bc.name ILIKE '%SALES_LEAD%'
+          OR bc.name ILIKE '%SALES LEAD%'
+          OR bc.name ILIKE '%SALES-LEAD%'
+          OR bc.name ILIKE '%COACHING SKILLS%'
+          OR bc.name ILIKE '%COACHING SKILL%'
+          OR bc.name ILIKE '%BEHAVIOR DURING CLIENT MEETING%'
+          OR bc.name ILIKE '%QUALITY OF ANALYSIS%'
+          OR bc.name ILIKE '%TRANSLATING INTO ACTION%'
+          OR bc.name ILIKE '%PRE-MEETING COACHING%'
+          OR bc.name ILIKE '%PRE MEETING COACHING%'
+          OR bc.name ILIKE '%ПОВЕДЕНИЕ ПО ВРЕМЕ%'
+          OR bc.name ILIKE '%ПРЕВРЪЩАНЕ В ДЕЙСТВИЕ%'
+          OR bc.name ILIKE '%АНАЛИЗ И ОБРАТНА%'
+          OR bc.name ILIKE '%ПРЕДВАРИТЕЛЕН КОУЧИНГ%'
+        )
+        AND bc.name NOT ILIKE '%HIGH_SHARE%'
+        AND bc.name NOT ILIKE '%High Share%'
+      `;
+      queryParams = [];
     } else {
       // Standard form - exclude high-share categories
       categoriesQuery = `
