@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './App.css';
 import EvaluationStructureM3 from './EvaluationStructureM3';
 
@@ -126,46 +126,46 @@ type FormCategoryEditor = {
 const PROD_SALESPERSON_STANDARD_PRESET: CompanyFormTemplatePayload['categories'] = [
   {
     id: crypto.randomUUID(),
-    name: 'Discovery (SALESPERSON)',
+    name: 'Preparation Before the Meeting (SALESPERSON)',
     order: 1,
     weight: 0.25,
     items: [
-      { id: crypto.randomUUID(), name: 'Asks open-ended questions', order: 1, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Uncovers customer pain points', order: 2, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Identifies decision makers', order: 3, weight: 1, isActive: true }
+      { id: crypto.randomUUID(), name: 'Preparation item 1', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Preparation item 2', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Preparation item 3', order: 3, weight: 1, isActive: true }
     ]
   },
   {
     id: crypto.randomUUID(),
-    name: 'Solution Positioning (SALESPERSON)',
+    name: 'Problem Definition (SALESPERSON)',
     order: 2,
     weight: 0.25,
     items: [
-      { id: crypto.randomUUID(), name: 'Tailors solution to customer context', order: 1, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Articulates clear value proposition', order: 2, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Demonstrates product knowledge', order: 3, weight: 1, isActive: true }
+      { id: crypto.randomUUID(), name: 'Problem definition item 1', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Problem definition item 2', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Problem definition item 3', order: 3, weight: 1, isActive: true }
     ]
   },
   {
     id: crypto.randomUUID(),
-    name: 'Closing & Next Steps (SALESPERSON)',
+    name: 'Handling Objections (SALESPERSON)',
     order: 3,
     weight: 0.25,
     items: [
-      { id: crypto.randomUUID(), name: 'Makes clear asks', order: 1, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Identifies next steps', order: 2, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Sets mutual commitments', order: 3, weight: 1, isActive: true }
+      { id: crypto.randomUUID(), name: 'Objection handling item 1', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Objection handling item 2', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Objection handling item 3', order: 3, weight: 1, isActive: true }
     ]
   },
   {
     id: crypto.randomUUID(),
-    name: 'Professionalism (SALESPERSON)',
+    name: 'Commercial Proposal (SALESPERSON)',
     order: 4,
     weight: 0.25,
     items: [
-      { id: crypto.randomUUID(), name: 'Arrives prepared', order: 1, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Manages time effectively', order: 2, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Maintains professional demeanor', order: 3, weight: 1, isActive: true }
+      { id: crypto.randomUUID(), name: 'Commercial proposal item 1', order: 1, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Commercial proposal item 2', order: 2, weight: 1, isActive: true },
+      { id: crypto.randomUUID(), name: 'Commercial proposal item 3', order: 3, weight: 1, isActive: true }
     ]
   }
 ];
@@ -173,20 +173,9 @@ const PROD_SALESPERSON_STANDARD_PRESET: CompanyFormTemplatePayload['categories']
 const PROD_COACHING_SALES_LEAD_PRESET: CompanyFormTemplatePayload['categories'] = [
   {
     id: crypto.randomUUID(),
-    name: 'PRE-MEETING COACHING',
-    order: 1,
-    weight: 3 / 12,
-    items: [
-      { id: crypto.randomUUID(), name: 'Clarified the objective for the client meeting', order: 1, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Reviewed salesperson preparation (menu, max potential, basket size)', order: 2, weight: 1, isActive: true },
-      { id: crypto.randomUUID(), name: 'Ensured the salesperson has a clear strategy for what to do in the meeting', order: 3, weight: 1, isActive: true }
-    ]
-  },
-  {
-    id: crypto.randomUUID(),
     name: 'BEHAVIOR DURING CLIENT MEETING',
-    order: 2,
-    weight: 2 / 12,
+    order: 1,
+    weight: 1 / 3,
     items: [
       { id: crypto.randomUUID(), name: 'Allowed the salesperson to lead the conversation', order: 1, weight: 1, isActive: true },
       { id: crypto.randomUUID(), name: 'Intervened only when necessary (business-critical situations)', order: 2, weight: 1, isActive: true }
@@ -195,8 +184,8 @@ const PROD_COACHING_SALES_LEAD_PRESET: CompanyFormTemplatePayload['categories'] 
   {
     id: crypto.randomUUID(),
     name: 'Quality of Analysis & Feedback',
-    order: 3,
-    weight: 4 / 12,
+    order: 2,
+    weight: 1 / 3,
     items: [
       { id: crypto.randomUUID(), name: 'Asked for the salesperson’s self-assessment first', order: 1, weight: 1, isActive: true },
       { id: crypto.randomUUID(), name: 'Gave positive feedback using Behavior - Impact - Result', order: 2, weight: 1, isActive: true },
@@ -207,8 +196,8 @@ const PROD_COACHING_SALES_LEAD_PRESET: CompanyFormTemplatePayload['categories'] 
   {
     id: crypto.randomUUID(),
     name: 'Translating Into Action',
-    order: 4,
-    weight: 3 / 12,
+    order: 3,
+    weight: 1 / 3,
     items: [
       { id: crypto.randomUUID(), name: 'Set a clear goal for executing specific behavior for the next visit (FOCUS)', order: 1, weight: 1, isActive: true },
       { id: crypto.randomUUID(), name: 'Ensured agreement and understanding from the salesperson', order: 2, weight: 1, isActive: true },
@@ -228,10 +217,12 @@ function categoryMatchesPwaView(categoryName: string, view: FormTemplatePwaView)
     return u.includes('SALES_LEAD');
   }
   if (view === 'sp_high_share') {
-    return u.includes('SALESPERSON') && (u.includes('HIGH_SHARE') || n.includes('High Share'));
+    // Product rule: high-share and low-mid share use the same category set.
+    return u.includes('SALESPERSON');
   }
   if (view === 'sp_standard') {
-    return u.includes('SALESPERSON') && !u.includes('HIGH_SHARE') && !n.includes('High Share');
+    // Product rule: high-share and low-mid share use the same category set.
+    return u.includes('SALESPERSON');
   }
   return true;
 }
@@ -515,6 +506,22 @@ class ApiService {
     return response.json();
   }
 
+
+  async createRegion(region: { id: string; name: string }): Promise<Region> {
+    const response = await fetch(this.withCompany('/public-admin/regions'), {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(region)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to create region: ${response.status} ${errorText}`);
+    }
+
+    return response.json();
+  }
+
   async assignUserToTeam(userId: string, teamId: string): Promise<any> {
     const response = await fetch(this.withCompany('/public-admin/assign-user-to-team'), {
       method: 'POST',
@@ -652,9 +659,10 @@ class ApiService {
   }
 
   async getEvaluationStructureConfig(companyId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure-config`, {
-      headers: this.getHeaders()
-    });
+    const response = await fetch(
+      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure-config`,
+      { headers: this.getHeaders() }
+    );
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Failed to load evaluation structure config: ${response.status} ${errorText}`);
@@ -662,10 +670,21 @@ class ApiService {
     return response.json();
   }
 
-  async getEvaluationStructureHistory(companyId: string, limit = 20, offset = 0): Promise<any> {
-    const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  async getEvaluationStructurePreview(companyId: string): Promise<any> {
     const response = await fetch(
-      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/history?${q}`,
+      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/preview`,
+      { headers: this.getHeaders() }
+    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load evaluation structure preview: ${response.status} ${errorText}`);
+    }
+    return response.json();
+  }
+
+  async getEvaluationStructureHistory(companyId: string, limit = 20, offset = 0): Promise<any> {
+    const response = await fetch(
+      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/history?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}`,
       { headers: this.getHeaders() }
     );
     if (!response.ok) {
@@ -676,9 +695,10 @@ class ApiService {
   }
 
   async getEvaluationStructureDraft(companyId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/draft`, {
-      headers: this.getHeaders()
-    });
+    const response = await fetch(
+      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/draft`,
+      { headers: this.getHeaders() }
+    );
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Failed to load evaluation structure draft: ${response.status} ${errorText}`);
@@ -687,11 +707,14 @@ class ApiService {
   }
 
   async saveEvaluationStructureDraft(companyId: string, evaluationStructure: any): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/draft`, {
-      method: 'PUT',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ evaluationStructure })
-    });
+    const response = await fetch(
+      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/draft`,
+      {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ evaluationStructure }),
+      }
+    );
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Failed to save evaluation structure draft: ${response.status} ${errorText}`);
@@ -700,27 +723,33 @@ class ApiService {
   }
 
   async cloneEvaluationStructureToDraft(companyId: string, sourceCompanyId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/clone-from`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ sourceCompanyId })
-    });
+    const response = await fetch(
+      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/clone-from`,
+      {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ sourceCompanyId }),
+      }
+    );
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Failed to clone evaluation structure to draft: ${response.status} ${errorText}`);
+      throw new Error(`Failed to clone structure to draft: ${response.status} ${errorText}`);
     }
     return response.json();
   }
 
   async rollbackEvaluationStructureToDraft(companyId: string, sourceVersionId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/rollback-to-draft`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ sourceVersionId })
-    });
+    const response = await fetch(
+      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/rollback-to-draft`,
+      {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ sourceVersionId }),
+      }
+    );
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Failed to rollback evaluation structure to draft: ${response.status} ${errorText}`);
+      throw new Error(`Failed to rollback structure to draft: ${response.status} ${errorText}`);
     }
     return response.json();
   }
@@ -729,37 +758,80 @@ class ApiService {
     const response = await fetch(`${API_BASE}/public-admin/evaluation-structure/batch-clone-to-draft`, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({ sourceCompanyId, targetCompanyIds })
+      body: JSON.stringify({ sourceCompanyId, targetCompanyIds }),
     });
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Failed to batch clone evaluation structures: ${response.status} ${errorText}`);
+      throw new Error(`Failed to batch clone structure to drafts: ${response.status} ${errorText}`);
     }
     return response.json();
   }
 
-  async getEvaluationStructurePreview(companyId: string): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/preview`, {
-      headers: this.getHeaders()
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to load evaluation structure preview: ${response.status} ${errorText}`);
+  async publishEvaluationStructure(
+    companyId: string,
+    evaluationStructure: object,
+    confirmReplace = false
+  ): Promise<any> {
+    const response = await fetch(
+      `${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/publish`,
+      {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ evaluationStructure, confirmReplace }),
+      }
+    );
+    const textBody = await response.text();
+    let body: any = null;
+    try {
+      body = textBody ? JSON.parse(textBody) : null;
+    } catch {
+      body = { error: textBody || 'Unknown error' };
     }
-    return response.json();
+    if (!response.ok) {
+      throw new Error(`Failed to publish evaluation structure: ${response.status} ${textBody || 'Unknown error'}`);
+    }
+    return body;
   }
 
-  async publishEvaluationStructure(companyId: string, evaluationStructure: any, confirmReplace?: boolean): Promise<any> {
-    const response = await fetch(`${API_BASE}/public-admin/companies/${encodeURIComponent(companyId)}/evaluation-structure/publish`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ evaluationStructure, confirmReplace: confirmReplace === true })
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to publish evaluation structure: ${response.status} ${errorText}`);
+  async getBehaviorItemsForStructureEditor(companyId: string): Promise<Array<{ id: string; label: string }>> {
+    const map = new Map<string, string>();
+    const addFromCategoriesPayload = (payload: any) => {
+      const cats = Array.isArray(payload?.categories) ? payload.categories : Array.isArray(payload) ? payload : [];
+      for (const c of cats) {
+        const items = Array.isArray(c.items) ? c.items : [];
+        for (const it of items) {
+          if (it?.id) {
+            map.set(String(it.id), `${c.name || 'Category'} — ${it.name || it.id}`);
+          }
+        }
+      }
+    };
+    const fetchMeta = async (suffix: string) => {
+      const response = await fetch(this.withCompany(`/scoring/categories?meta=1${suffix}`), {
+        headers: this.getHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        addFromCategoriesPayload(data);
+      }
+    };
+    await fetchMeta('');
+    await fetchMeta('&customerType=high-share');
+    try {
+      const tmpl = await this.getCompanyFormTemplate(companyId);
+      for (const c of tmpl.categories || []) {
+        for (const it of c.items || []) {
+          if (it.id && !map.has(it.id)) {
+            map.set(String(it.id), `${c.name || 'Category'} — ${it.name || it.id}`);
+          }
+        }
+      }
+    } catch {
+      /* supplement */
     }
-    return response.json();
+    return Array.from(map.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }
 }
 
@@ -828,9 +900,339 @@ const LoginForm: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) 
   );
 };
 
-const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: string }> = ({
+type AdminSearchHit =
+  | { kind: 'user'; id: string; title: string; subtitle: string }
+  | { kind: 'team'; id: string; title: string; subtitle: string }
+  | { kind: 'region'; id: string; title: string; subtitle: string }
+  | { kind: 'company'; id: string; title: string; subtitle: string };
+
+const AdminGlobalSearch: React.FC<{
+  selectedCompanyId: string;
+  onSelectHit: (hit: AdminSearchHit) => void;
+}> = ({ selectedCompanyId, onSelectHit }) => {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const [activeHitIndex, setActiveHitIndex] = useState(0);
+  const [index, setIndex] = useState<{
+    users: User[];
+    teams: Team[];
+    regions: Region[];
+    companies: Company[];
+  } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const hitRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const loadIndex = async () => {
+    try {
+      const [users, teams, regions, companies] = await Promise.all([
+        apiService.getUsers(),
+        apiService.getTeams(),
+        apiService.getRegions(),
+        apiService.getCompanies().catch(() => [] as Company[])
+      ]);
+      setIndex({ users, teams, regions, companies: Array.isArray(companies) ? companies : [] });
+    } catch {
+      setIndex({ users: [], teams: [], regions: [], companies: [] });
+    }
+  };
+
+  useEffect(() => {
+    loadIndex();
+  }, [selectedCompanyId]);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        wrapRef.current?.querySelector('input')?.focus();
+        setOpen(true);
+      }
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const hits = useMemo(() => {
+    if (!index || !q.trim()) return [] as AdminSearchHit[];
+    const s = q.trim().toLowerCase();
+    const out: AdminSearchHit[] = [];
+    const push = (h: AdminSearchHit) => {
+      if (out.length >= 24) return;
+      out.push(h);
+    };
+    index.users.forEach((u) => {
+      const t = `${u.displayName} ${u.email} ${u.role}`.toLowerCase();
+      if (t.includes(s)) push({ kind: 'user', id: u.id, title: u.displayName, subtitle: u.email });
+    });
+    index.teams.forEach((t) => {
+      const x = `${t.name} ${t.region?.name || ''}`.toLowerCase();
+      if (x.includes(s)) push({ kind: 'team', id: t.id, title: t.name, subtitle: t.region?.name || 'Team' });
+    });
+    index.regions.forEach((r) => {
+      if (`${r.name} ${r.id}`.toLowerCase().includes(s)) {
+        push({ kind: 'region', id: r.id, title: r.name, subtitle: 'Region' });
+      }
+    });
+    index.companies.forEach((c) => {
+      if (`${c.name} ${c.id}`.toLowerCase().includes(s)) {
+        push({ kind: 'company', id: c.id, title: c.name, subtitle: 'Company' });
+      }
+    });
+    return out;
+  }, [index, q]);
+
+  useEffect(() => {
+    setActiveHitIndex(0);
+  }, [hits.length, q]);
+
+  useEffect(() => {
+    const el = hitRefs.current[activeHitIndex];
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeHitIndex]);
+
+  const applyHit = (hit: AdminSearchHit) => {
+    onSelectHit(hit);
+    setOpen(false);
+    setQ('');
+    setActiveHitIndex(0);
+  };
+
+  return (
+    <div className="admin-global-search" ref={wrapRef}>
+      <input
+        type="search"
+        className="admin-global-search-input"
+        placeholder="Search users, teams, regions, companies…"
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (!open || !q.trim()) return;
+          if (hits.length === 0) {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setOpen(false);
+            }
+            return;
+          }
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveHitIndex((i) => Math.min(i + 1, hits.length - 1));
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveHitIndex((i) => Math.max(i - 1, 0));
+            return;
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const hit = hits[activeHitIndex];
+            if (hit) applyHit(hit);
+            return;
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            setOpen(false);
+          }
+        }}
+        aria-label="Search"
+        aria-autocomplete="list"
+        aria-controls="admin-global-search-listbox"
+        aria-activedescendant={
+          open && q.trim() && hits.length > 0 ? `admin-search-hit-${activeHitIndex}` : undefined
+        }
+        autoComplete="off"
+        id="admin-global-search-input"
+      />
+      <span className="admin-global-search-hint" title="Shortcut">
+        ⌘K
+      </span>
+      {open && q.trim() && hits.length > 0 ? (
+        <div
+          className="admin-global-search-results"
+          id="admin-global-search-listbox"
+          role="listbox"
+          aria-label="Search results"
+        >
+          {hits.map((h, idx) => (
+            <button
+              key={`${h.kind}-${h.id}`}
+              ref={(el) => {
+                hitRefs.current[idx] = el;
+              }}
+              id={`admin-search-hit-${idx}`}
+              type="button"
+              className={`admin-global-search-hit ${idx === activeHitIndex ? 'admin-global-search-hit--active' : ''}`}
+              role="option"
+              aria-selected={idx === activeHitIndex}
+              onMouseEnter={() => setActiveHitIndex(idx)}
+              onClick={() => applyHit(h)}
+            >
+              <span className="admin-global-search-hit-kind">{h.kind}</span>
+              <span className="admin-global-search-hit-text">
+                <span className="admin-global-search-hit-title">{h.title}</span>
+                <span className="admin-global-search-hit-sub">{h.subtitle}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {open && q.trim() && hits.length === 0 && index ? (
+        <div className="admin-global-search-empty" role="status">
+          No matches
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const AdminOverview: React.FC<{
+  selectedCompanyId: string;
+  companies: Company[];
+  adminRole: string | null;
+  onGo: (tab: 'regions' | 'teams' | 'users' | 'configuration' | 'evaluation-structure') => void;
+  onSeed: () => void;
+}> = ({ selectedCompanyId, companies, adminRole, onGo, onSeed }) => {
+  const [stats, setStats] = useState<{ users: number; teams: number; regions: number; companies: number } | null>(
+    null
+  );
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [users, teams, regions, comps] = await Promise.all([
+          apiService.getUsers(),
+          apiService.getTeams(),
+          apiService.getRegions(),
+          apiService.getCompanies().catch(() => [] as Company[])
+        ]);
+        if (!cancelled) {
+          setStats({
+            users: users.length,
+            teams: teams.length,
+            regions: regions.length,
+            companies: Array.isArray(comps) ? comps.length : 0
+          });
+        }
+      } catch {
+        if (!cancelled) setStats({ users: 0, teams: 0, regions: 0, companies: 0 });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCompanyId]);
+
+  const companyLabel =
+    selectedCompanyId === 'all'
+      ? 'All companies'
+      : companies.find((c) => c.id === selectedCompanyId)?.name ?? selectedCompanyId;
+
+  return (
+    <div className="admin-overview">
+      <div className="admin-overview-hero">
+        <p className="admin-overview-kicker">Current scope</p>
+        <h2 className="admin-overview-title">{companyLabel}</h2>
+        <p className="admin-overview-lede">
+          Jump to a section below or use the search bar ({' '}
+          <kbd className="admin-kbd">⌘</kbd>
+          <kbd className="admin-kbd">K</kbd>) to open users, teams, or regions in one step.
+        </p>
+      </div>
+
+      {loading || !stats ? (
+        <div className="admin-overview-loading">Loading summary…</div>
+      ) : (
+        <div className="admin-overview-stats">
+          <button type="button" className="admin-stat-card" onClick={() => onGo('users')}>
+            <span className="admin-stat-value">{stats.users}</span>
+            <span className="admin-stat-label">Users</span>
+          </button>
+          <button type="button" className="admin-stat-card" onClick={() => onGo('teams')}>
+            <span className="admin-stat-value">{stats.teams}</span>
+            <span className="admin-stat-label">Teams</span>
+          </button>
+          <button type="button" className="admin-stat-card" onClick={() => onGo('regions')}>
+            <span className="admin-stat-value">{stats.regions}</span>
+            <span className="admin-stat-label">Regions</span>
+          </button>
+          {adminRole === 'SUPER_ADMIN' ? (
+            <div className="admin-stat-card admin-stat-card--static">
+              <span className="admin-stat-value">{stats.companies}</span>
+              <span className="admin-stat-label">Companies (tenant)</span>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <div className="admin-overview-actions">
+        <button type="button" className="admin-quick-link" onClick={() => onGo('users')}>
+          Manage users
+        </button>
+        <button type="button" className="admin-quick-link" onClick={() => onGo('teams')}>
+          Manage teams
+        </button>
+        <button type="button" className="admin-quick-link" onClick={() => onGo('regions')}>
+          Manage regions
+        </button>
+        <button type="button" className="admin-quick-link admin-quick-link--primary" onClick={() => onGo('configuration')}>
+          Company configuration
+        </button>
+      </div>
+
+      {selectedCompanyId !== 'all' && adminRole === 'SUPER_ADMIN' ? (
+        <div className="admin-overview-panel">
+          <div>
+            <h3 className="admin-overview-panel-title">Templates</h3>
+            <p className="admin-overview-panel-text">
+              Seed default evaluation categories and items for <strong>{companyLabel}</strong> when the database is empty or you need a reset.
+            </p>
+          </div>
+          <button type="button" className="action-button action-button--ghost" onClick={onSeed}>
+            Seed templates
+          </button>
+        </div>
+      ) : selectedCompanyId === 'all' ? (
+        <div className="admin-overview-hint">
+          Select a <strong>company</strong> in the header to edit company-specific configuration.
+        </div>
+      ) : (
+        <div className="admin-overview-hint">
+          Company admins can edit configuration below. <strong>Seed templates</strong> is available to super administrators.
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TeamMembers: React.FC<{
+  openCreateSignal?: number;
+  selectedCompanyId: string;
+  highlightTeamId?: string | null;
+}> = ({
   openCreateSignal = 0,
-  selectedCompanyId
+  selectedCompanyId,
+  highlightTeamId = null
 }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -1037,6 +1439,19 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
     }
   }, [openCreateSignal]);
 
+  useEffect(() => {
+    if (!highlightTeamId || teams.length === 0) return undefined;
+    const t = window.setTimeout(() => {
+      const el = document.querySelector(`[data-admin-team-id="${highlightTeamId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('admin-flash-highlight');
+        window.setTimeout(() => el.classList.remove('admin-flash-highlight'), 2200);
+      }
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [highlightTeamId, teams]);
+
   if (loading) {
     return <div className="loading">Loading team data...</div>;
   }
@@ -1048,56 +1463,62 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
   return (
     <div className="team-members">
       <div className="section-header">
-        <h3>🏢 Team Management</h3>
+        <h3>Team Management</h3>
         <div className="header-actions">
           <div className="view-mode-toggle">
-            <button 
-              onClick={() => setViewMode('list')} 
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
               className={`view-toggle ${viewMode === 'list' ? 'active' : ''}`}
             >
-              📋 List View
+              List
             </button>
-            <button 
-              onClick={() => setViewMode('hierarchy')} 
+            <button
+              type="button"
+              onClick={() => setViewMode('hierarchy')}
               className={`view-toggle ${viewMode === 'hierarchy' ? 'active' : ''}`}
             >
-              🏗️ Hierarchy View
+              Hierarchy
             </button>
           </div>
-          <button onClick={() => setShowCreateForm(true)} className="action-button success">
-            ➕ Create Team
+          <button type="button" onClick={() => setShowCreateForm(true)} className="action-button action-button--primary">
+            Create Team
           </button>
-          <button onClick={loadTeams} className="refresh-button">
-            🔄 Refresh
+          <button type="button" onClick={loadTeams} className="action-button action-button--ghost">
+            Refresh
           </button>
         </div>
       </div>
 
       {/* Sub-tabs for team filtering */}
       <div className="sub-tabs">
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeSubTab === 'all' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('all')}
         >
-          📊 All Teams ({teams.length})
+          All Teams ({teams.length})
         </button>
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeSubTab === 'sales-director' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('sales-director')}
         >
-          👔 Sales Director Teams ({teams.filter(t => t.manager?.role === 'SALES_DIRECTOR').length})
+          Sales Director ({teams.filter((t) => t.manager?.role === 'SALES_DIRECTOR').length})
         </button>
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeSubTab === 'regional-manager' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('regional-manager')}
         >
-          🏢 Regional Manager Teams ({teams.filter(t => t.manager?.role === 'REGIONAL_SALES_MANAGER').length})
+          Regional Manager ({teams.filter((t) => t.manager?.role === 'REGIONAL_SALES_MANAGER').length})
         </button>
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeSubTab === 'sales-lead' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('sales-lead')}
         >
-          👥 Sales Lead Teams ({teams.filter(t => t.manager?.role === 'SALES_LEAD').length})
+          Sales Lead ({teams.filter((t) => t.manager?.role === 'SALES_LEAD').length})
         </button>
       </div>
 
@@ -1143,10 +1564,10 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
             </select>
           </div>
           <div className="form-actions">
-            <button onClick={handleCreateTeam} className="action-button success">
+            <button type="button" onClick={handleCreateTeam} className="action-button action-button--primary">
               Create Team
             </button>
-            <button onClick={() => setShowCreateForm(false)} className="action-button">
+            <button type="button" onClick={() => setShowCreateForm(false)} className="action-button action-button--ghost">
               Cancel
             </button>
           </div>
@@ -1161,7 +1582,7 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
           ) : (
             getFilteredTeams().map(team => (
               <div key={team.id} className="team-hierarchy">
-                <h4>🏢 {team.name}</h4>
+                <h4 className="team-hierarchy-title">{team.name}</h4>
                 {team.manager ? (
                   <div className="manager-card">
                     <div className="manager-info">
@@ -1211,7 +1632,7 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
           <p>No teams found in {getSubTabTitle().toLowerCase()}. Create your first team to get started.</p>
         ) : (
           getFilteredTeams().map(team => (
-            <div key={team.id} className="team-section">
+            <div key={team.id} className="team-section" data-admin-team-id={team.id}>
             <div className="team-header">
               {editingTeam?.id === team.id ? (
                 <div className="edit-form">
@@ -1232,34 +1653,55 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
                       </option>
                     ))}
                   </select>
-                  <button onClick={handleEditTeam} className="action-button success">
+                  <button type="button" onClick={handleEditTeam} className="action-button action-button--primary">
                     Save
                   </button>
-                  <button onClick={cancelEdit} className="action-button">
+                  <button type="button" onClick={cancelEdit} className="action-button action-button--ghost">
                     Cancel
                   </button>
                 </div>
               ) : (
                 <div className="team-info">
-                  <h4>🏢 {team.name} ({team.region?.name || 'No region'})</h4>
+                  <h4 className="team-card-title">
+                    <span className="team-card-title-text">{team.name}</span>
+                    <span className="team-card-title-meta">
+                      {team.region?.name || 'No region'} · <code className="team-id-code">{team.id}</code>
+                    </span>
+                  </h4>
                   <p className="team-manager">
-                    👤 Manager: {team.manager ? `${team.manager.displayName} (${team.manager.role})` : 'No manager assigned'}
+                    Manager:{' '}
+                    {team.manager
+                      ? `${team.manager.displayName} (${team.manager.role})`
+                      : 'No manager assigned'}
                   </p>
                   <div className="team-actions">
-                    <button onClick={() => startEditTeam(team)} className="action-button">
-                      ✏️ Edit
-                    </button>
-                    <button onClick={() => setShowSetManagerForm(team.id)} className="action-button">
-                      👤 Set Manager
-                    </button>
-                    <button onClick={() => handleDeleteTeam(team)} className="action-button danger">
-                      🗑️ Delete
-                    </button>
-                    <button 
-                      onClick={() => setShowAddMemberForm(team.id)} 
-                      className="action-button success"
+                    <button
+                      type="button"
+                      onClick={() => startEditTeam(team)}
+                      className="action-button action-button--edit action-button--compact"
                     >
-                      ➕ Add Member
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSetManagerForm(team.id)}
+                      className="action-button action-button--neutral action-button--compact"
+                    >
+                      Set manager
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTeam(team)}
+                      className="action-button action-button--delete-subtle action-button--compact"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMemberForm(team.id)}
+                      className="action-button action-button--primary action-button--compact"
+                    >
+                      Add member
                     </button>
                   </div>
                 </div>
@@ -1280,10 +1722,10 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
                     </option>
                   ))}
                 </select>
-                <button onClick={() => handleAddMember(team.id)} className="action-button success">
+                <button type="button" onClick={() => handleAddMember(team.id)} className="action-button action-button--primary">
                   Add
                 </button>
-                <button onClick={() => setShowAddMemberForm(null)} className="action-button">
+                <button type="button" onClick={() => setShowAddMemberForm(null)} className="action-button action-button--ghost">
                   Cancel
                 </button>
               </div>
@@ -1303,10 +1745,10 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
                     </option>
                   ))}
                 </select>
-                <button onClick={() => handleSetTeamManager(team.id)} className="action-button success">
-                  Set Manager
+                <button type="button" onClick={() => handleSetTeamManager(team.id)} className="action-button action-button--primary">
+                  Set manager
                 </button>
-                <button onClick={() => setShowSetManagerForm(null)} className="action-button">
+                <button type="button" onClick={() => setShowSetManagerForm(null)} className="action-button action-button--ghost">
                   Cancel
                 </button>
               </div>
@@ -1320,7 +1762,7 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
                 {team.userTeams.map(userTeam => (
                   <li key={userTeam.user.id} className="team-member">
                     <span className="member-info">
-                      👤 {userTeam.user.displayName} ({userTeam.user.email}) - {userTeam.user.role}
+                      {userTeam.user.displayName} ({userTeam.user.email}) — {userTeam.user.role}
                     </span>
                     <button
                       onClick={() => handleRemoveUser(
@@ -1346,9 +1788,14 @@ const TeamMembers: React.FC<{ openCreateSignal?: number; selectedCompanyId: stri
   );
 };
 
-const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: string }> = ({
+const UserManagement: React.FC<{
+  openCreateSignal?: number;
+  selectedCompanyId: string;
+  highlightUserId?: string | null;
+}> = ({
   openCreateSignal = 0,
-  selectedCompanyId
+  selectedCompanyId,
+  highlightUserId = null
 }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1511,6 +1958,25 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
     }
   }, [openCreateSignal]);
 
+  useEffect(() => {
+    if (highlightUserId) {
+      setActiveUserSubTab('all');
+    }
+  }, [highlightUserId]);
+
+  useEffect(() => {
+    if (!highlightUserId || users.length === 0) return undefined;
+    const t = window.setTimeout(() => {
+      const el = document.querySelector(`[data-admin-user-id="${highlightUserId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('admin-flash-highlight');
+        window.setTimeout(() => el.classList.remove('admin-flash-highlight'), 2200);
+      }
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [highlightUserId, users]);
+
   if (loading) {
     return <div className="loading">Loading users...</div>;
   }
@@ -1522,54 +1988,60 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
   return (
     <div className="user-management">
       <div className="section-header">
-        <h3>👤 User Management</h3>
+        <h3>User Management</h3>
         <div className="header-actions">
-          <button onClick={() => setShowCreateForm(true)} className="action-button success">
-            ➕ Create User
+          <button type="button" onClick={() => setShowCreateForm(true)} className="action-button action-button--primary">
+            Create User
           </button>
-          <button onClick={loadUsers} className="refresh-button">
-            🔄 Refresh
+          <button type="button" onClick={loadUsers} className="action-button action-button--ghost">
+            Refresh
           </button>
         </div>
       </div>
 
       {/* Sub-tabs for user filtering */}
       <div className="sub-tabs">
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeUserSubTab === 'all' ? 'active' : ''}`}
           onClick={() => setActiveUserSubTab('all')}
         >
-          👥 All Users ({users.length})
+          All Users ({users.length})
         </button>
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeUserSubTab === 'admin' ? 'active' : ''}`}
           onClick={() => setActiveUserSubTab('admin')}
         >
-          👑 Admins ({users.filter(u => u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').length})
+          Admins ({users.filter((u) => u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').length})
         </button>
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeUserSubTab === 'sales-director' ? 'active' : ''}`}
           onClick={() => setActiveUserSubTab('sales-director')}
         >
-          👔 Sales Directors ({users.filter(u => u.role === 'SALES_DIRECTOR').length})
+          Sales Directors ({users.filter((u) => u.role === 'SALES_DIRECTOR').length})
         </button>
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeUserSubTab === 'regional-manager' ? 'active' : ''}`}
           onClick={() => setActiveUserSubTab('regional-manager')}
         >
-          🏢 Regional Managers ({users.filter(u => u.role === 'REGIONAL_SALES_MANAGER').length})
+          Regional Managers ({users.filter((u) => u.role === 'REGIONAL_SALES_MANAGER').length})
         </button>
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeUserSubTab === 'sales-lead' ? 'active' : ''}`}
           onClick={() => setActiveUserSubTab('sales-lead')}
         >
-          👥 Sales Leads ({users.filter(u => u.role === 'SALES_LEAD').length})
+          Sales Leads ({users.filter((u) => u.role === 'SALES_LEAD').length})
         </button>
-        <button 
+        <button
+          type="button"
           className={`sub-tab ${activeUserSubTab === 'salesperson' ? 'active' : ''}`}
           onClick={() => setActiveUserSubTab('salesperson')}
         >
-          💼 Salespeople ({users.filter(u => u.role === 'SALESPERSON').length})
+          Salespeople ({users.filter((u) => u.role === 'SALESPERSON').length})
         </button>
       </div>
 
@@ -1619,10 +2091,10 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
             </select>
           </div>
           <div className="form-actions">
-            <button onClick={handleCreateUser} className="action-button success">
+            <button type="button" onClick={handleCreateUser} className="action-button action-button--primary">
               Create User
             </button>
-            <button onClick={handleCancelCreate} className="action-button">
+            <button type="button" onClick={handleCancelCreate} className="action-button action-button--ghost">
               Cancel
             </button>
           </div>
@@ -1647,7 +2119,7 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
               </thead>
               <tbody>
                 {getFilteredUsers().map(user => (
-                  <tr key={user.id}>
+                  <tr key={user.id} data-admin-user-id={user.id}>
                     <td>
                       {editingUser?.id === user.id ? (
                         <input
@@ -1698,36 +2170,38 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
                     </td>
                     <td>
                       {editingUser?.id === user.id ? (
-                        <>
-                          <button className="action-button success" onClick={handleSaveEdit}>
+                        <div className="table-actions">
+                          <button type="button" className="action-button action-button--primary action-button--compact" onClick={handleSaveEdit}>
                             Save
                           </button>
-                          <button className="action-button" onClick={handleCancelEdit}>
+                          <button type="button" className="action-button action-button--ghost action-button--compact" onClick={handleCancelEdit}>
                             Cancel
                           </button>
-                        </>
+                        </div>
                       ) : (
-                        <>
-                          <button 
-                            className="action-button" 
+                        <div className="table-actions">
+                          <button
+                            type="button"
+                            className="action-button action-button--edit action-button--compact"
                             onClick={() => handleEditUser(user)}
                           >
                             Edit
                           </button>
-                          <button 
-                            className="action-button danger" 
+                          <button
+                            type="button"
+                            className="action-button action-button--neutral action-button--compact"
                             onClick={() => handleDeactivateUser(user)}
                           >
                             {user.isActive ? 'Deactivate' : 'Activate'}
                           </button>
-                          <button 
-                            className="action-button danger" 
+                          <button
+                            type="button"
+                            className="action-button action-button--delete-subtle action-button--compact"
                             onClick={() => handleDeleteUser(user)}
-                            style={{ backgroundColor: '#dc3545', marginLeft: '5px' }}
                           >
-                            🗑️ Delete
+                            Delete
                           </button>
-                        </>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -1739,7 +2213,7 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
           {/* Mobile Card View */}
           <div className="users-cards mobile-only">
             {getFilteredUsers().map(user => (
-              <div key={user.id} className="user-card">
+              <div key={user.id} className="user-card" data-admin-user-id={user.id}>
                 <div className="user-card-header">
                   <div className="user-info">
                     <h4>
@@ -1800,33 +2274,35 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
                 <div className="user-card-actions">
                   {editingUser?.id === user.id ? (
                     <>
-                      <button className="action-button success" onClick={handleSaveEdit}>
+                      <button type="button" className="action-button action-button--primary" onClick={handleSaveEdit}>
                         Save
                       </button>
-                      <button className="action-button" onClick={handleCancelEdit}>
+                      <button type="button" className="action-button action-button--ghost" onClick={handleCancelEdit}>
                         Cancel
                       </button>
                     </>
                   ) : (
                     <>
-                      <button 
-                        className="action-button" 
+                      <button
+                        type="button"
+                        className="action-button action-button--edit"
                         onClick={() => handleEditUser(user)}
                       >
                         Edit
                       </button>
-                      <button 
-                        className="action-button danger" 
+                      <button
+                        type="button"
+                        className="action-button action-button--neutral"
                         onClick={() => handleDeactivateUser(user)}
                       >
                         {user.isActive ? 'Deactivate' : 'Activate'}
                       </button>
-                      <button 
-                        className="action-button danger" 
+                      <button
+                        type="button"
+                        className="action-button action-button--delete-subtle"
                         onClick={() => handleDeleteUser(user)}
-                        style={{ backgroundColor: '#dc3545', marginLeft: '5px' }}
                       >
-                        🗑️ Delete
+                        Delete
                       </button>
                     </>
                   )}
@@ -1840,10 +2316,15 @@ const UserManagement: React.FC<{ openCreateSignal?: number; selectedCompanyId: s
   );
 };
 
-const RegionsManagement: React.FC<{ selectedCompanyId: string }> = ({ selectedCompanyId }) => {
+const RegionsManagement: React.FC<{
+  selectedCompanyId: string;
+  highlightRegionId?: string | null;
+}> = ({ selectedCompanyId, highlightRegionId = null }) => {
   const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [newRegion, setNewRegion] = useState({ id: '', name: '' });
 
   const loadRegions = async () => {
     setLoading(true);
@@ -1862,43 +2343,126 @@ const RegionsManagement: React.FC<{ selectedCompanyId: string }> = ({ selectedCo
     loadRegions();
   }, [selectedCompanyId]);
 
-  if (loading) {
-    return <div className="loading">Loading regions...</div>;
-  }
+  useEffect(() => {
+    if (!highlightRegionId || regions.length === 0) return undefined;
+    const t = window.setTimeout(() => {
+      const el = document.querySelector(`[data-admin-region-id="${highlightRegionId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('admin-flash-highlight');
+        window.setTimeout(() => el.classList.remove('admin-flash-highlight'), 2200);
+      }
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [highlightRegionId, regions]);
 
   if (error) {
-    return <div className="error-message">{error}</div>;
+    return (
+      <div className="user-management">
+        <div className="section-header">
+          <h3>Regions</h3>
+        </div>
+        <div className="error-message">{error}</div>
+      </div>
+    );
   }
+
+  const handleCreateRegion = async () => {
+    const id = newRegion.id.trim();
+    const name = newRegion.name.trim();
+    if (!id || !name) {
+      alert('Region ID and name are required');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      await apiService.createRegion({ id, name });
+      setNewRegion({ id: '', name: '' });
+      await loadRegions();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="user-management">
       <div className="section-header">
-        <h3>🗺️ Regions</h3>
+        <h3>Regions</h3>
         <div className="header-actions">
-          <button onClick={loadRegions} className="refresh-button">🔄 Refresh</button>
+          <input
+            type="text"
+            placeholder="Region ID"
+            value={newRegion.id}
+            onChange={(e) => setNewRegion((prev) => ({ ...prev, id: e.target.value }))}
+            style={{ minWidth: 140 }}
+          />
+          <input
+            type="text"
+            placeholder="Region name"
+            value={newRegion.name}
+            onChange={(e) => setNewRegion((prev) => ({ ...prev, name: e.target.value }))}
+            style={{ minWidth: 180 }}
+          />
+          <button type="button" onClick={handleCreateRegion} className="action-button action-button--primary" disabled={creating}>
+            {creating ? 'Creating…' : '+ Create Region'}
+          </button>
+          <button type="button" onClick={loadRegions} className="action-button action-button--ghost" disabled={loading}>
+            Refresh
+          </button>
         </div>
       </div>
-      {regions.length === 0 ? (
-        <p>No regions found.</p>
-      ) : (
-        <div className="users-table desktop-only">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {regions.map((region) => (
-                <tr key={region.id}>
-                  <td>{region.name}</td>
-                  <td>{region.id}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {loading ? (
+        <div className="admin-loading-surface" aria-busy="true" aria-label="Loading regions">
+          <div className="admin-skeleton admin-skeleton--title" />
+          <div className="admin-skeleton-rows">
+            <div className="admin-skeleton admin-skeleton--row" />
+            <div className="admin-skeleton admin-skeleton--row" />
+            <div className="admin-skeleton admin-skeleton--row" />
+          </div>
+          <span className="sr-only">Loading regions…</span>
         </div>
+      ) : regions.length === 0 ? (
+        <div className="admin-empty-state">
+          <p className="admin-empty-state-title">No regions yet</p>
+          <p className="admin-empty-state-text">Regions appear here once they are created for your organization.</p>
+        </div>
+      ) : (
+        <>
+          <div className="users-table desktop-only">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {regions.map((region) => (
+                  <tr key={region.id} data-admin-region-id={region.id}>
+                    <td>{region.name}</td>
+                    <td>
+                      <code className="admin-inline-code">{region.id}</code>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="regions-cards mobile-only">
+            {regions.map((region) => (
+              <div key={region.id} className="region-card" data-admin-region-id={region.id}>
+                <div className="region-card-name">{region.name}</div>
+                <div className="region-card-meta">
+                  <span className="region-card-label">ID</span>
+                  <code className="admin-inline-code">{region.id}</code>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -2050,6 +2614,54 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
     setError('');
   };
 
+  const loadMetroBaseline = async (mode: 'salesperson' | 'sales_lead') => {
+    if (!window.confirm('Load baseline from Metro template and replace current category list? You can still edit before saving.')) {
+      return;
+    }
+    try {
+      setLoading(true);
+      setError('');
+      setSuccess('');
+      const metroTemplate = await apiService.getCompanyFormTemplate('company_metro');
+      const sourceCategories: CompanyFormTemplatePayload['categories'] = Array.isArray(metroTemplate?.categories)
+        ? metroTemplate.categories
+        : [];
+
+      const salespersonTokens = [
+        'PREPARATION BEFORE THE MEETING',
+        'PROBLEM DEFINITION',
+        'HANDLING OBJECTIONS',
+        'COMMERCIAL PROPOSAL',
+      ];
+      const salesLeadTokens = [
+        'BEHAVIOR DURING CLIENT MEETING',
+        'QUALITY OF ANALYSIS',
+        'TRANSLATING INTO ACTION',
+      ];
+
+      const tokens = mode === 'salesperson' ? salespersonTokens : salesLeadTokens;
+      const filtered = sourceCategories.filter((c) => {
+        const n = String(c?.name || '').toUpperCase();
+        return tokens.some((t) => n.includes(t));
+      });
+
+      if (filtered.length === 0) {
+        throw new Error(
+          mode === 'salesperson'
+            ? 'Metro baseline does not contain the expected salesperson categories.'
+            : 'Metro baseline does not contain the expected sales lead categories.'
+        );
+      }
+
+      setFormCategories(normalizeFormCategoriesFromApi(filtered));
+      setSuccess(`Loaded ${filtered.length} categories from Metro baseline. Review and click Save configuration.`);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const removeCategory = (catKey: string) => {
     setFormCategories((prev) => prev.filter((c) => c.key !== catKey));
   };
@@ -2162,24 +2774,33 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
     return (
       <div className="team-members">
         <div className="section-header">
-          <h3>⚙️ Company Configuration</h3>
+          <h3>Company configuration</h3>
         </div>
-        <p>Please select a specific company from the header dropdown.</p>
+        <div className="admin-empty-state">
+          <p className="admin-empty-state-title">Choose a company</p>
+          <p className="admin-empty-state-text">Select a specific company in the header to load and edit its configuration.</p>
+        </div>
       </div>
     );
   }
 
   const visibleFormCategories = formCategories.filter((c) => categoryMatchesPwaView(c.name, pwaFormView));
-  const evaluationStructureActive: any = null;
 
   return (
-    <div className="team-members company-config-wizard">
+    <div className={`team-members company-config-wizard${loading ? ' company-config-wizard--loading' : ''}`}>
       <div className="section-header">
-        <h3>⚙️ Company Configuration</h3>
+        <h3>Company configuration</h3>
         <div className="header-actions">
-          <button onClick={load} className="refresh-button">🔄 Refresh</button>
-          <button onClick={handleSave} className="action-button success" disabled={saving || loading}>
-            {saving ? 'Saving...' : 'Save configuration'}
+          <button type="button" onClick={load} className="action-button action-button--ghost" disabled={loading || saving}>
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            className="action-button action-button--primary"
+            disabled={saving || loading}
+          >
+            {saving ? 'Saving…' : 'Save configuration'}
           </button>
         </div>
       </div>
@@ -2189,10 +2810,22 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
         below—no JSON editing required. Click <strong>Save configuration</strong> when you are done.
       </p>
 
-      {loading ? <div className="loading">Loading configuration...</div> : null}
+      {loading ? (
+        <div className="admin-loading-surface" aria-busy="true" aria-label="Loading configuration">
+          <div className="admin-skeleton admin-skeleton--block" />
+          <div className="admin-skeleton admin-skeleton--block admin-skeleton--short" />
+          <div className="admin-skeleton-rows">
+            <div className="admin-skeleton admin-skeleton--row" />
+            <div className="admin-skeleton admin-skeleton--row" />
+            <div className="admin-skeleton admin-skeleton--row" />
+          </div>
+          <span className="sr-only">Loading configuration…</span>
+        </div>
+      ) : null}
       {error ? <div className="error-message">{error}</div> : null}
       {success ? <div className="success-message">{success}</div> : null}
 
+      <div className="company-config-form-stack">
       <div className="form-section company-config-card">
         <h4>App behavior</h4>
         <p className="config-hint">These options control how the mobile/web app uses this company&apos;s data. If unsure, leave as-is and ask your administrator.</p>
@@ -2218,35 +2851,6 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
             <span className="config-sub"> (recommended; turn off only if support asks)</span>
           </span>
         </label>
-      </div>
-
-      <div className="form-section company-config-card">
-        <h4>Evaluation structure (Milestone 3)</h4>
-        <p className="config-hint">
-          Read-only summary of the published sections/criteria layout for the PWA. Editing and publishing use the API (
-          <code>POST /public-admin/companies/:id/evaluation-structure/publish</code>).
-        </p>
-        {!evaluationStructureActive || evaluationStructureActive.legacy || !evaluationStructureActive.hasPublishedStructure ? (
-          <p className="config-hint">No active custom structure, or legacy evaluation flow is on — the PWA uses the standard category layout.</p>
-        ) : (
-          <>
-            <p>
-              <strong>Version {evaluationStructureActive.currentVersionSummary?.version}</strong>
-              {' — '}
-              {evaluationStructureActive.currentVersionSummary?.sectionCount ?? 0} sections,{' '}
-              {evaluationStructureActive.currentVersionSummary?.criterionCount ?? 0} criteria
-              {evaluationStructureActive.currentVersionSummary?.publishedAt
-                ? ` — published ${new Date(evaluationStructureActive.currentVersionSummary.publishedAt).toLocaleString()}`
-                : ''}
-            </p>
-            <details>
-              <summary>Preview (ordered criteria)</summary>
-              <pre className="metadata-preview-json" style={{ marginTop: '0.5rem', maxHeight: '240px', overflow: 'auto' }}>
-                {JSON.stringify(evaluationStructureActive.evaluationStructurePreview, null, 2)}
-              </pre>
-            </details>
-          </>
-        )}
       </div>
 
       <div className="form-section company-config-card">
@@ -2288,7 +2892,11 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
                   ))}
                 </select>
               </label>
-              <button type="button" className="action-button danger subtle" onClick={() => removeHierarchyRule(rule.key)}>
+              <button
+                type="button"
+                className="action-button action-button--delete-subtle subtle"
+                onClick={() => removeHierarchyRule(rule.key)}
+              >
                 Remove rule
               </button>
             </div>
@@ -2309,8 +2917,8 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
             </fieldset>
           </div>
         ))}
-        <button type="button" className="action-button" onClick={addHierarchyRule}>
-          + Add rule
+        <button type="button" className="action-button action-button--primary subtle" onClick={addHierarchyRule}>
+          Add rule
         </button>
       </div>
 
@@ -2335,15 +2943,15 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
           <span className="preset-label">Load real prod baselines:</span>
           <button
             type="button"
-            className="action-button"
-            onClick={() => applyPreset(PROD_SALESPERSON_STANDARD_PRESET)}
+            className="action-button action-button--ghost subtle"
+            onClick={() => loadMetroBaseline('salesperson')}
           >
             Salesperson standard
           </button>
           <button
             type="button"
-            className="action-button"
-            onClick={() => applyPreset(PROD_COACHING_SALES_LEAD_PRESET)}
+            className="action-button action-button--ghost subtle"
+            onClick={() => loadMetroBaseline('sales_lead')}
           >
             RM -&gt; Sales Lead coaching
           </button>
@@ -2357,14 +2965,16 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
               onChange={(e) => setPwaFormView(e.target.value as FormTemplatePwaView)}
             >
               <option value="all">All categories (full template in database)</option>
-              <option value="sp_standard">Salesperson — standard visit (~categories with SALESPERSON, not high-share)</option>
-              <option value="sp_high_share">Salesperson — high-share visit (~HIGH_SHARE in name)</option>
+              <option value="sp_standard">Salesperson — low-mid / regular</option>
+              <option value="sp_high_share">Salesperson — high-share</option>
               <option value="sales_lead">Sales lead / coaching (~SALES_LEAD in name)</option>
             </select>
           </div>
         ) : null}
         {formCategories.length === 0 ? (
-          <p className="config-empty">No categories yet. Use <strong>Seed templates</strong> in the header, then refresh this page.</p>
+          <p className="config-empty">
+            No categories yet. Super administrators can use <strong>Seed templates</strong> in the header, then refresh this page.
+          </p>
         ) : null}
         {formCategories.length > 0 && visibleFormCategories.length === 0 ? (
           <p className="config-empty">
@@ -2382,7 +2992,11 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
                 onChange={(e) => updateCategory(cat.key, { name: e.target.value })}
                 aria-label="Category name"
               />
-              <button type="button" className="action-button danger subtle" onClick={() => removeCategory(cat.key)}>
+              <button
+                type="button"
+                className="action-button action-button--delete-subtle subtle"
+                onClick={() => removeCategory(cat.key)}
+              >
                 Remove category
               </button>
             </div>
@@ -2439,29 +3053,30 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
                   </label>
                   <button
                     type="button"
-                    className="action-button danger subtle"
+                    className="action-button action-button--delete-subtle subtle"
                     onClick={() => removeItem(cat.key, it.key)}
                   >
                     Remove
                   </button>
                 </div>
               ))}
-              <button type="button" className="action-button success subtle" onClick={() => addItem(cat.key)}>
-                + Add item to this category
+              <button type="button" className="action-button action-button--primary subtle" onClick={() => addItem(cat.key)}>
+                Add item
               </button>
             </div>
           </div>
         ))}
-        <button type="button" className="action-button success" onClick={addCategory}>
-          + Add category
+        <button type="button" className="action-button action-button--primary" onClick={addCategory}>
+          Add category
         </button>
+      </div>
       </div>
     </div>
   );
 };
 
 const AdminPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('teams');
+  const [activeTab, setActiveTab] = useState('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => localStorage.getItem('adminCompanyId') || 'all');
@@ -2471,6 +3086,55 @@ const AdminPanel: React.FC = () => {
   const [createCompanyForm, setCreateCompanyForm] = useState({ id: '', name: '', slug: '' });
   const [createCompanyError, setCreateCompanyError] = useState('');
   const [createCompanySaving, setCreateCompanySaving] = useState(false);
+  const [highlightUserId, setHighlightUserId] = useState<string | null>(null);
+  const [highlightTeamId, setHighlightTeamId] = useState<string | null>(null);
+  const [highlightRegionId, setHighlightRegionId] = useState<string | null>(null);
+
+  const clearHighlights = () => {
+    setHighlightUserId(null);
+    setHighlightTeamId(null);
+    setHighlightRegionId(null);
+  };
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
+  const navigateToTab = (tab: 'overview' | 'regions' | 'teams' | 'users' | 'configuration' | 'evaluation-structure') => {
+    clearHighlights();
+    setActiveTab(tab);
+    closeMobileMenu();
+  };
+
+  const handleSearchHit = (hit: AdminSearchHit) => {
+    clearHighlights();
+    if (hit.kind === 'company') {
+      apiService.setCompanyContext(hit.id);
+      setSelectedCompanyId(hit.id);
+      setActiveTab('configuration');
+      closeMobileMenu();
+      return;
+    }
+    if (hit.kind === 'user') {
+      setHighlightUserId(hit.id);
+      setActiveTab('users');
+      closeMobileMenu();
+      return;
+    }
+    if (hit.kind === 'team') {
+      setHighlightTeamId(hit.id);
+      setActiveTab('teams');
+      closeMobileMenu();
+      return;
+    }
+    setHighlightRegionId(hit.id);
+    setActiveTab('regions');
+    closeMobileMenu();
+  };
 
   const loadCompanies = async () => {
     try {
@@ -2484,14 +3148,6 @@ const AdminPanel: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     window.location.reload();
-  };
-
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  const closeMobileMenu = () => {
-    setIsMobileMenuOpen(false);
   };
 
   useEffect(() => {
@@ -2513,6 +3169,20 @@ const AdminPanel: React.FC = () => {
     })();
   }, []);
 
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') {
+      return undefined;
+    }
+    const prevTitle = document.title;
+    document.title = 'Admin (dev) · Sales Scorecard';
+    console.info(
+      '[Sales Scorecard Admin] Dev bundle. UI: grouped sidebar, blue primary, search in header. If this log is missing or the UI looks old: stop the dev server, run `npm start` again, open http://localhost:3002/ (root), hard-refresh.'
+    );
+    return () => {
+      document.title = prevTitle;
+    };
+  }, []);
+
   const handleNew = () => {
     if (adminRole === 'SUPER_ADMIN') {
       setCreateCompanyError('');
@@ -2520,8 +3190,14 @@ const AdminPanel: React.FC = () => {
       setShowCreateCompanyPanel(true);
       return;
     }
+    if (activeTab === 'overview') {
+      clearHighlights();
+      setActiveTab('teams');
+      setOpenCreateSignal((prev) => prev + 1);
+      return;
+    }
     if (activeTab === 'teams' || activeTab === 'users') {
-      setOpenCreateSignal(prev => prev + 1);
+      setOpenCreateSignal((prev) => prev + 1);
     }
   };
 
@@ -2575,15 +3251,25 @@ const AdminPanel: React.FC = () => {
   };
 
   const pageTitles: Record<string, string> = {
+    overview: 'Overview',
     regions: 'Regions',
-    teams: 'Team management',
-    users: 'User management',
-    configuration: 'Company configuration',
+    teams: 'Teams',
+    users: 'Users',
+    configuration: 'Configuration',
     'evaluation-structure': 'Evaluation structure (M3)'
   };
 
   return (
     <div className="admin-panel">
+      {process.env.NODE_ENV === 'development' ? (
+        <div className="admin-dev-banner" role="status">
+          <strong>Development</strong>
+          <span>
+            Live React app — use <code>http://localhost:3002/</code> (root). After changing{' '}
+            <code>.env</code>, restart <code>npm start</code>. Hard-refresh (⌘⇧R) if styles look cached.
+          </span>
+        </div>
+      ) : null}
       <div className="admin-shell">
         <aside className={`admin-sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`} aria-label="Main navigation">
           <div className="sidebar-brand">
@@ -2595,86 +3281,117 @@ const AdminPanel: React.FC = () => {
               <span className="sidebar-brand-sub">Admin console</span>
             </div>
           </div>
-          <nav className="admin-sidebar-nav">
-            <button
-              type="button"
-              className={activeTab === 'regions' ? 'nav-button active' : 'nav-button'}
-              onClick={() => {
-                setActiveTab('regions');
-                closeMobileMenu();
-              }}
-            >
-              Regions
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'teams' ? 'nav-button active' : 'nav-button'}
-              onClick={() => {
-                setActiveTab('teams');
-                closeMobileMenu();
-              }}
-            >
-              Team management
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'users' ? 'nav-button active' : 'nav-button'}
-              onClick={() => {
-                setActiveTab('users');
-                closeMobileMenu();
-              }}
-            >
-              User management
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'configuration' ? 'nav-button active' : 'nav-button'}
-              onClick={() => {
-                setActiveTab('configuration');
-                closeMobileMenu();
-              }}
-            >
-              Company configuration
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'evaluation-structure' ? 'nav-button active' : 'nav-button'}
-              onClick={() => {
-                setActiveTab('evaluation-structure');
-                closeMobileMenu();
-              }}
-            >
-              Evaluation structure (M3)
-            </button>
+          <nav className="admin-sidebar-nav" aria-label="Primary">
+            <div className="sidebar-nav-section">
+              <p className="sidebar-nav-label" id="nav-label-home">
+                Home
+              </p>
+              <div className="sidebar-nav-items" role="group" aria-labelledby="nav-label-home">
+                <button
+                  type="button"
+                  className={activeTab === 'overview' ? 'nav-button active' : 'nav-button'}
+                  onClick={() => navigateToTab('overview')}
+                >
+                  Overview
+                </button>
+              </div>
+            </div>
+            <div className="sidebar-nav-section">
+              <p className="sidebar-nav-label" id="nav-label-org">
+                Organization
+              </p>
+              <div className="sidebar-nav-items" role="group" aria-labelledby="nav-label-org">
+                <button
+                  type="button"
+                  className={activeTab === 'regions' ? 'nav-button active' : 'nav-button'}
+                  onClick={() => navigateToTab('regions')}
+                >
+                  Regions
+                </button>
+                <button
+                  type="button"
+                  className={activeTab === 'teams' ? 'nav-button active' : 'nav-button'}
+                  onClick={() => navigateToTab('teams')}
+                >
+                  Teams
+                </button>
+                <button
+                  type="button"
+                  className={activeTab === 'users' ? 'nav-button active' : 'nav-button'}
+                  onClick={() => navigateToTab('users')}
+                >
+                  Users
+                </button>
+              </div>
+            </div>
+            <div className="sidebar-nav-section">
+              <p className="sidebar-nav-label" id="nav-label-company">
+                Company
+              </p>
+              <div className="sidebar-nav-items" role="group" aria-labelledby="nav-label-company">
+                <button
+                  type="button"
+                  className={activeTab === 'configuration' ? 'nav-button active' : 'nav-button'}
+                  onClick={() => navigateToTab('configuration')}
+                >
+                  Configuration
+                </button>
+                <button
+                  type="button"
+                  className={activeTab === 'evaluation-structure' ? 'nav-button active' : 'nav-button'}
+                  onClick={() => navigateToTab('evaluation-structure')}
+                >
+                  Evaluation structure (M3)
+                </button>
+              </div>
+            </div>
+            <p className="sidebar-build-stamp" title="If this line is missing, the browser is serving an old build.">
+              Admin UI · 2026.04
+            </p>
           </nav>
         </aside>
 
         <div className="admin-main">
           <header className="admin-topbar">
-            <div className="topbar-left">
-              <button
-                type="button"
-                className={isMobileMenuOpen ? 'mobile-menu-toggle active' : 'mobile-menu-toggle'}
-                onClick={toggleMobileMenu}
-                aria-label="Toggle navigation menu"
-                aria-expanded={isMobileMenuOpen}
-              >
-                <span className="hamburger-line" />
-                <span className="hamburger-line" />
-                <span className="hamburger-line" />
-              </button>
-              <h1 className="topbar-page-title">{pageTitles[activeTab] ?? 'Admin'}</h1>
+            <div className="admin-topbar-row admin-topbar-row--main">
+              <div className="topbar-left">
+                <button
+                  type="button"
+                  className={isMobileMenuOpen ? 'mobile-menu-toggle active' : 'mobile-menu-toggle'}
+                  onClick={toggleMobileMenu}
+                  aria-label="Toggle navigation menu"
+                  aria-expanded={isMobileMenuOpen}
+                >
+                  <span className="hamburger-line" />
+                  <span className="hamburger-line" />
+                  <span className="hamburger-line" />
+                </button>
+                <h1 className="topbar-page-heading">
+                  <span className="topbar-breadcrumb-muted">Admin</span>
+                  <span className="topbar-breadcrumb-sep" aria-hidden="true">
+                    /
+                  </span>
+                  <span className="topbar-page-title-text">{pageTitles[activeTab] ?? 'Admin'}</span>
+                </h1>
+              </div>
+              <div className="topbar-search-wrap">
+                <AdminGlobalSearch selectedCompanyId={selectedCompanyId} onSelectHit={handleSearchHit} />
+              </div>
             </div>
-            <div className="topbar-actions">
+            <div className="admin-topbar-row admin-topbar-row--tools">
+              <div className="topbar-actions">
               <label className="topbar-company-field">
                 <span className="topbar-company-label">Company</span>
                 <select
                   className="topbar-company-select"
+                  title="Switching updates teams and users."
+                  aria-describedby="topbar-company-hint"
                   value={selectedCompanyId}
                   onChange={(e) => {
                     const v = e.target.value;
                     apiService.setCompanyContext(v === 'all' ? null : v);
                     setSelectedCompanyId(v);
+                    clearHighlights();
                   }}
                 >
                   <option value="all">All companies</option>
@@ -2684,7 +3401,9 @@ const AdminPanel: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <span className="topbar-company-hint">Switching updates teams and users.</span>
+                <span id="topbar-company-hint" className="sr-only">
+                  Switching updates teams and users.
+                </span>
               </label>
               {adminRole === 'SUPER_ADMIN' && showCreateCompanyPanel ? (
                 <button
@@ -2703,18 +3422,23 @@ const AdminPanel: React.FC = () => {
                   title={
                     adminRole === 'SUPER_ADMIN'
                       ? 'Create a new company'
-                      : 'Create team (Team Management) or user (User Management)'
+                      : activeTab === 'overview'
+                        ? 'Create a team (opens Team management)'
+                        : 'Create team (Team Management) or user (User Management)'
                   }
                 >
                   + New
                 </button>
               )}
-              <button type="button" className="action-button action-button--ghost" onClick={handleSeedTemplates}>
-                Seed templates
-              </button>
+              {adminRole === 'SUPER_ADMIN' ? (
+                <button type="button" className="action-button action-button--ghost" onClick={handleSeedTemplates}>
+                  Seed templates
+                </button>
+              ) : null}
               <button type="button" onClick={handleLogout} className="logout-button">
                 Log out
               </button>
+              </div>
             </div>
           </header>
 
@@ -2777,12 +3501,34 @@ const AdminPanel: React.FC = () => {
           ) : null}
 
           <main className="admin-content">
-            {activeTab === 'regions' && <RegionsManagement selectedCompanyId={selectedCompanyId} />}
+            {activeTab === 'overview' && (
+              <AdminOverview
+                selectedCompanyId={selectedCompanyId}
+                companies={companies}
+                adminRole={adminRole}
+                onGo={(tab) => navigateToTab(tab)}
+                onSeed={handleSeedTemplates}
+              />
+            )}
+            {activeTab === 'regions' && (
+              <RegionsManagement
+                selectedCompanyId={selectedCompanyId}
+                highlightRegionId={highlightRegionId}
+              />
+            )}
             {activeTab === 'teams' && (
-              <TeamMembers openCreateSignal={openCreateSignal} selectedCompanyId={selectedCompanyId} />
+              <TeamMembers
+                openCreateSignal={openCreateSignal}
+                selectedCompanyId={selectedCompanyId}
+                highlightTeamId={highlightTeamId}
+              />
             )}
             {activeTab === 'users' && (
-              <UserManagement openCreateSignal={openCreateSignal} selectedCompanyId={selectedCompanyId} />
+              <UserManagement
+                openCreateSignal={openCreateSignal}
+                selectedCompanyId={selectedCompanyId}
+                highlightUserId={highlightUserId}
+              />
             )}
             {activeTab === 'configuration' && <CompanyConfiguration selectedCompanyId={selectedCompanyId} />}
             {activeTab === 'evaluation-structure' && (
@@ -2860,3 +3606,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+

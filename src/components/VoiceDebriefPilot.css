@@ -1,0 +1,158 @@
+.voice-debrief-pilot {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem 1rem 2rem;
+}
+
+.voice-debrief-pilot__header h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.35rem;
+}
+
+.voice-debrief-pilot__lede {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.voice-debrief-pilot__form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  max-width: 20rem;
+}
+
+.voice-debrief-pilot__form-row label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.voice-debrief-pilot__form-row select {
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-size: 1rem;
+}
+
+.voice-debrief-pilot__markers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.voice-debrief-pilot__marker {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.voice-debrief-pilot__marker:disabled {
+  opacity: 0.85;
+  cursor: default;
+}
+
+.voice-debrief-pilot__progress {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+}
+
+.voice-debrief-pilot__card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #fff;
+}
+
+.voice-debrief-pilot__prompt {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #0f172a;
+}
+
+.voice-debrief-pilot__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-size: 16px;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 0.75rem;
+}
+
+.voice-debrief-pilot__voice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.voice-debrief-pilot__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.voice-debrief-pilot__primary {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.voice-debrief-pilot__danger {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: none;
+  background: #b91c1c;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.voice-debrief-pilot__ghost {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.voice-debrief-pilot__ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-debrief-pilot__err {
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
+.voice-debrief-pilot__notice {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #065f46;
+}

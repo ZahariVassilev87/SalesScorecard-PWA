@@ -120,6 +120,12 @@ function validateEvaluationStructureShapeDetailed(evaluationStructure) {
     if (typeof sec.title !== 'string' || !sec.title.trim()) {
       errors.push(`sections[${si}].title must be a non-empty string.`);
     }
+    if (sec.isScorable !== undefined && typeof sec.isScorable !== 'boolean') {
+      errors.push(`sections[${si}].isScorable must be a boolean when provided.`);
+    }
+    if (sec.naAllowed !== undefined && typeof sec.naAllowed !== 'boolean') {
+      errors.push(`sections[${si}].naAllowed must be a boolean when provided.`);
+    }
     if (!Number.isFinite(Number(sec.order))) {
       errors.push(`sections[${si}].order must be a number.`);
     }
@@ -187,6 +193,9 @@ function normalizeEvaluationStructureForStorage(evaluationStructure) {
       id: String(sec.id).trim(),
       order: Number(sec.order),
       title: String(sec.title).trim(),
+      // Safe defaults for backward compatibility.
+      isScorable: sec?.isScorable !== false,
+      naAllowed: sec?.naAllowed !== false,
       criteria: criteria.map((c) => ({
         id: String(c.id).trim(),
         order: Number(c.order),

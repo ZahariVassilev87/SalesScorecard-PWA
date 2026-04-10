@@ -16,11 +16,9 @@ backups
 # Local/dev docs and reports
 *.md
 
-# Admin source/build caches are not needed by backend runtime
+# Admin local caches are not needed in docker context
 admin-panel/node_modules
 admin-panel/build
-admin-panel/src
-admin-panel/public
 
 # Legacy backup dirs
 SalesScorecard-Backup-*

@@ -62,6 +62,8 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
   // Coaching scores and comments
   const [scores, setScores] = useState<Record<string, number>>({});
   const [clusterComments, setClusterComments] = useState<Record<string, string>>({});
+  const [sectionStates, setSectionStates] = useState<Record<string, { na: boolean; comment: string }>>({});
+  const sectionCommentRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [activeVoiceTarget, setActiveVoiceTarget] = useState<string | null>(null);
   const [transcribingTarget, setTranscribingTarget] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -173,6 +175,36 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
   const handleClusterCommentChange = (categoryId: string, comment: string) => {
     const cleaned = sanitizeObjectArtifacts(comment);
     setClusterComments(prev => ({ ...prev, [categoryId]: cleaned }));
+  };
+
+  const getSectionState = (sectionId: string) => sectionStates[sectionId] || { na: false, comment: '' };
+
+  const clearSectionScores = (itemIds: string[]) => {
+    setScores((prev) => {
+      const next = { ...prev };
+      itemIds.forEach((id) => delete next[id]);
+      return next;
+    });
+  };
+
+  const handleSectionNaToggle = (sectionId: string, nextNa: boolean, itemIds: string[]) => {
+    if (nextNa) {
+      const ok = window.confirm('Are you sure? This will remove all scores in this section.');
+      if (!ok) return;
+      clearSectionScores(itemIds);
+      setSectionStates((prev) => ({
+        ...prev,
+        [sectionId]: { na: true, comment: prev[sectionId]?.comment || '' },
+      }));
+      setTimeout(() => {
+        sectionCommentRefs.current[sectionId]?.focus();
+      }, 0);
+      return;
+    }
+    setSectionStates((prev) => ({
+      ...prev,
+      [sectionId]: { na: false, comment: '' },
+    }));
   };
 
   const appendWithLimit = (prev: string, incoming: string) => {
@@ -327,14 +359,15 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
   };
 
   const calculateClusterScore = (categoryId: string) => {
+    if (getSectionState(categoryId).na) return null;
     const category = categories.find(c => c.id === categoryId);
-    if (!category) return 0;
+    if (!category) return null;
 
     const itemScores = category.items
       .map(item => scores[item.id] || 0)
       .filter(score => score > 0);
 
-    if (itemScores.length === 0) return 0;
+    if (itemScores.length === 0) return null;
 
     const avgScore = itemScores.reduce((sum, score) => sum + score, 0) / itemScores.length;
     return (avgScore / 4) * 100;
@@ -346,7 +379,7 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
 
     categories.forEach(category => {
       const clusterScore = calculateClusterScore(category.id);
-      if (clusterScore > 0) {
+      if (typeof clusterScore === 'number' && clusterScore > 0) {
         totalWeightedScore += clusterScore * category.weight;
         totalWeight += category.weight;
       }
@@ -364,28 +397,39 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
     }
 
     const allItems = categories.flatMap(category => category.items);
-    
-    // Check for missing or invalid scores (must be between 1 and 4)
-    const missingScores = allItems.filter(item => {
-      const score = scores[item.id];
-      return !score || score < 1 || score > 4;
-    });
-    
-    if (missingScores.length > 0) {
-      setError('Моля, оценете всички критерии с оценка между 1 и 4');
+    const notNaCount = categories.filter((category) => !getSectionState(category.id).na).length;
+    if (notNaCount === 0) {
+      setError('At least one section must not be marked as N/A.');
       return;
     }
-
-    const missingClusterComments = categories.filter(
-      category => !(clusterComments[category.id] || '').trim()
-    );
-    if (missingClusterComments.length > 0) {
-      setError(
-        i18n.language === 'bg'
-          ? 'Трябва да дадете конкретен пример, като коментар след всяка секция.'
-          : 'You need to give a concrete example as a comment after each stage to submit the evaluation form.'
-      );
-      return;
+    for (const category of categories) {
+      const s = getSectionState(category.id);
+      if (s.na) {
+        if (!(clusterComments[category.id] || '').trim()) {
+          setError(
+            i18n.language === 'bg'
+              ? 'Добавете обяснение защо секцията е N/A.'
+              : 'Explain why this section is not applicable.'
+          );
+          return;
+        }
+        continue;
+      }
+      for (const item of category.items) {
+        const score = scores[item.id];
+        if (!score || score < 1 || score > 4) {
+          setError('Моля, оценете всички критерии с оценка между 1 и 4');
+          return;
+        }
+      }
+      if (!(clusterComments[category.id] || '').trim()) {
+        setError(
+          i18n.language === 'bg'
+            ? 'Трябва да дадете конкретен пример, като коментар след всяка секция.'
+            : 'You need to give a concrete example as a comment after each stage to submit the evaluation form.'
+        );
+        return;
+      }
     }
 
     // All items have valid scores, create evaluation items
@@ -396,7 +440,10 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
       return acc;
     }, {});
 
-    const evaluationItems = allItems.map(item => {
+    const evaluationItems = categories
+      .filter((category) => !getSectionState(category.id).na)
+      .flatMap((category) => category.items)
+      .map(item => {
       const categoryId = categoryByItemId[item.id];
       return {
         behaviorItemId: item.id, // Use actual item ID from database
@@ -519,11 +566,36 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
           <p>Rate each criterion on a scale of 1-4 (1 = Poor, 4 = Excellent)</p>
 
           {categories.map(category => (
-            <div key={category.id} className="category-section" style={{ backgroundColor: `${category.color}10`, borderColor: `${category.color}30` }}>
+            <div
+              key={category.id}
+              className={`category-section ${getSectionState(category.id).na ? 'evaluation-category-na' : ''}`}
+              style={{ backgroundColor: `${category.color}10`, borderColor: `${category.color}30` }}
+            >
               <h4 style={{ color: category.color }}>{category.name}</h4>
               <div className="category-weight">Weight: {(category.weight * 100).toFixed(0)}%</div>
+              <div className="section-na-row">
+                <label className="section-na-toggle">
+                  <input
+                    type="checkbox"
+                    checked={getSectionState(category.id).na}
+                    onChange={(e) =>
+                      handleSectionNaToggle(
+                        category.id,
+                        e.target.checked,
+                        category.items.map((item) => item.id)
+                      )
+                    }
+                  />
+                  <span>Not applicable for this visit</span>
+                </label>
+              </div>
+              {getSectionState(category.id).na && (
+                <div className="section-na-details">
+                  <p className="section-na-helper">This section will not affect the score</p>
+                </div>
+              )}
 
-              {category.items.map(item => (
+              {!getSectionState(category.id).na && category.items.map(item => (
                 <div key={item.id} className="behavior-item">
                   <div className="item-header">
                     <label className="item-label">{item.name}</label>
@@ -670,6 +742,9 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
                     placeholder={i18n.language === 'bg' ? 'Дай конкретен пример от разговора' : 'Give concrete example from the conversation'}
                     value={clusterComments[category.id] || ''}
                     onChange={(e) => handleClusterCommentChange(category.id, e.target.value)}
+                    ref={(el) => {
+                      sectionCommentRefs.current[category.id] = el;
+                    }}
                     rows={3}
                     style={{
                       width: '100%',
@@ -715,7 +790,9 @@ const CoachingEvaluationForm: React.FC<CoachingEvaluationFormProps> = ({ onSucce
                   Cluster Score
                 </div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 800, color: category.color }}>
-                  {calculateClusterScore(category.id).toFixed(1)}%
+                  {typeof calculateClusterScore(category.id) === 'number'
+                    ? `${calculateClusterScore(category.id)!.toFixed(1)}%`
+                    : 'N/A'}
                 </div>
               </div>
             </div>

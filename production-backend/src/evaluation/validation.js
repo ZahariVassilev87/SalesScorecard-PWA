@@ -50,7 +50,13 @@ function failResponse(message, error, extra = {}) {
 
 /**
  * Build ordered section ids and expected behaviorItemIds per section from pinned evaluationStructure.
- * @returns {{ sectionIds: string[], expectedBehaviorIdsBySection: Map<string, string[]>, behaviorToSection: Map<string, string> }}
+ * @returns {{
+ *   sectionIds: string[],
+ *   expectedBehaviorIdsBySection: Map<string, string[]>,
+ *   behaviorToSection: Map<string, string>,
+ *   sectionPolicyById: Map<string, { isScorable: boolean, naAllowed: boolean }>,
+ *   scorableSectionIds: Set<string>
+ * }}
  */
 function buildPinnedStructureIndex(evaluationStructure) {
   const sections = Array.isArray(evaluationStructure?.sections) ? [...evaluationStructure.sections] : [];
@@ -59,6 +65,8 @@ function buildPinnedStructureIndex(evaluationStructure) {
   const sectionIds = [];
   const expectedBehaviorIdsBySection = new Map();
   const behaviorToSection = new Map();
+  const sectionPolicyById = new Map();
+  const scorableSectionIds = new Set();
 
   for (const sec of sections) {
     const sid = typeof sec?.id === 'string' ? sec.id.trim() : '';
@@ -66,14 +74,18 @@ function buildPinnedStructureIndex(evaluationStructure) {
     const crits = Array.isArray(sec?.criteria) ? [...sec.criteria] : [];
     crits.sort((a, b) => Number(a?.order ?? 0) - Number(b?.order ?? 0));
     const bids = crits.map((c) => String(c?.behaviorItemId || '').trim()).filter(Boolean);
+    const isScorable = sec?.isScorable !== false;
+    const naAllowed = sec?.naAllowed !== false;
     sectionIds.push(sid);
     expectedBehaviorIdsBySection.set(sid, bids);
+    sectionPolicyById.set(sid, { isScorable, naAllowed });
+    if (isScorable) scorableSectionIds.add(sid);
     for (const bid of bids) {
       behaviorToSection.set(bid, sid);
     }
   }
 
-  return { sectionIds, expectedBehaviorIdsBySection, behaviorToSection };
+  return { sectionIds, expectedBehaviorIdsBySection, behaviorToSection, sectionPolicyById, scorableSectionIds };
 }
 
 /**
@@ -86,7 +98,8 @@ function buildPinnedStructureIndex(evaluationStructure) {
  * @returns {{ ok: true, normalizedSectionOverrides: object } | { ok: false, response: object }}
  */
 function validateEvaluationCreateWithPinnedStructure(body, evaluationStructure) {
-  const { sectionIds, expectedBehaviorIdsBySection, behaviorToSection } = buildPinnedStructureIndex(evaluationStructure);
+  const { sectionIds, expectedBehaviorIdsBySection, behaviorToSection, sectionPolicyById, scorableSectionIds } =
+    buildPinnedStructureIndex(evaluationStructure);
 
   if (sectionIds.length === 0) {
     return failResponse('Pinned evaluation structure has no sections.', 'INVALID_STRUCTURE');
@@ -114,8 +127,14 @@ function validateEvaluationCreateWithPinnedStructure(body, evaluationStructure) 
 
   const naSectionIds = new Set();
   for (const sid of sectionIds) {
+    const policy = sectionPolicyById.get(sid) || { isScorable: true, naAllowed: true };
     const entry = sectionOverrides[sid];
     if (entry && entry.notApplicable === true) {
+      if (!policy.naAllowed) {
+        return failResponse(`Section ${sid} cannot be marked N/A by policy.`, 'SECTION_NA_NOT_ALLOWED', {
+          sectionId: sid,
+        });
+      }
       const c = typeof entry.comment === 'string' ? entry.comment.trim() : '';
       if (!c) {
         return failResponse(`Section ${sid} is marked N/A but comment is required.`, 'SECTION_NA_COMMENT_REQUIRED', {
@@ -126,8 +145,12 @@ function validateEvaluationCreateWithPinnedStructure(body, evaluationStructure) 
     }
   }
 
-  if (naSectionIds.size === sectionIds.length) {
-    return failResponse('All sections are marked N/A; at least one scored section is required.', 'ALL_REQUIRED_SECTIONS_NA');
+  const scoredScorableSectionCount = Array.from(scorableSectionIds).filter((sid) => !naSectionIds.has(sid)).length;
+  if (scoredScorableSectionCount === 0) {
+    return failResponse(
+      'All scorable sections are marked N/A; at least one scorable section must be scored.',
+      'ALL_REQUIRED_SECTIONS_NA'
+    );
   }
 
   const items = Array.isArray(body.items) ? body.items : [];
