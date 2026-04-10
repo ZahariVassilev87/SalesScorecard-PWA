@@ -471,9 +471,25 @@ const EvaluationHistory: React.FC = () => {
             <div className="category-header">
               <h5>
                 {section.title}
-                {typeof section.score === 'number' ? ` (${((section.score / 4) * 100).toFixed(0)}%)` : ' (N/A)'}
+                {section.notApplicable ? ' (N/A)' : typeof section.score === 'number' ? ` (${((section.score / 4) * 100).toFixed(0)}%)` : ' (N/A)'}
               </h5>
             </div>
+            {section.notApplicable ? (
+              <div className="category-items">
+                <div className="item-detail">
+                  <div className="item-name">Not applicable</div>
+                  <div className="item-score">
+                    <span className="score">N/A</span>
+                  </div>
+                  <div className="item-comment">
+                    <div className="comment-label">Reason</div>
+                    <div className="comment-text">
+                      {getDisplayCommentText(section.comment) || <em>{t('history.noExampleProvided')}</em>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div className="category-items">
               {(section.criteria || []).map((crit) => (
                 <div key={crit.id || crit.behaviorItemId} className="item-detail">
@@ -490,6 +506,7 @@ const EvaluationHistory: React.FC = () => {
                 </div>
               ))}
             </div>
+            )}
           </div>
         ))}
         {Array.isArray(rv.unmappedItems) && rv.unmappedItems.length > 0 ? (

@@ -4,12 +4,18 @@
  *
  * GET /evaluations/my parity: same role branches, SQL, scope via resolveCompanyContext.
  */
-const { validateEvaluationItemsForCreate } = require('../evaluation/validation');
-const { calculateOverallScore, getInvalidOverallScoreResponse } = require('../evaluation/scoring');
+const {
+  validateEvaluationItemsForCreate,
+  validateEvaluationCreateWithPinnedStructure,
+} = require('../evaluation/validation');
+const {
+  calculateOverallScore,
+  calculateOverallScoreForPinnedStructure,
+  getInvalidOverallScoreResponse,
+} = require('../evaluation/scoring');
 const { tryDuplicateEvaluationResponse } = require('../evaluation/duplicatePrevention');
 const { mapMyEvaluationDto, buildResultView } = require('../evaluation/mappers');
 const {
-  evaluationStructureVersionExistsForCompany,
   getEvaluationStructureVersionForCompany,
 } = require('./evaluationStructureConfig.service');
 
@@ -66,55 +72,76 @@ function createEvaluationsHandlers(deps) {
           return res.status(duplicateEarly.status).json(duplicateEarly.body);
         }
       
-        const itemValidation = validateEvaluationItemsForCreate(req.body);
-        if (!itemValidation.ok) {
-          if (itemValidation.response.error === 'INVALID_SCORE') {
-            console.error(`❌ Invalid score for item ${itemValidation.response.itemId}: ${itemValidation.response.score}`);
+        const rawStructVer = req.body.evaluationStructureVersionId;
+        let evaluationStructureVersionId = null;
+        let pinnedStructureRow = null;
+        let normalizedSectionOverrides = null;
+
+        if (rawStructVer !== undefined && rawStructVer !== null && String(rawStructVer).trim()) {
+          const trimmed = String(rawStructVer).trim();
+          pinnedStructureRow = await getEvaluationStructureVersionForCompany(pool, trimmed, companyId);
+          if (!pinnedStructureRow || !pinnedStructureRow.evaluationStructure) {
+            return res.status(400).json({
+              message: 'Evaluation structure version could not be loaded for this company.',
+              error: 'STRUCTURE_VERSION_NOT_FOUND',
+              evaluationStructureVersionId: trimmed,
+            });
           }
-          return res.status(400).json(itemValidation.response);
+
+          const pinnedValidation = validateEvaluationCreateWithPinnedStructure(
+            req.body,
+            pinnedStructureRow.evaluationStructure
+          );
+          if (!pinnedValidation.ok) {
+            return res.status(400).json(pinnedValidation.response);
+          }
+          normalizedSectionOverrides = pinnedValidation.normalizedSectionOverrides;
+          evaluationStructureVersionId = trimmed;
+        } else {
+          const itemValidation = validateEvaluationItemsForCreate(req.body);
+          if (!itemValidation.ok) {
+            if (itemValidation.response.error === 'INVALID_SCORE') {
+              console.error(`❌ Invalid score for item ${itemValidation.response.itemId}: ${itemValidation.response.score}`);
+            }
+            return res.status(400).json(itemValidation.response);
+          }
         }
       
       const evaluationId = `eval_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const featureFlags = await getCompanyFeatureFlags(companyId);
         const scoringProfile = await getCompanyScoringProfile(companyId);
-        const overallScore = calculateOverallScore(req.body.items, scoringProfile, featureFlags);
+
+        let overallScore;
+        if (pinnedStructureRow) {
+          overallScore = calculateOverallScoreForPinnedStructure(
+            req.body.items,
+            pinnedStructureRow.evaluationStructure,
+            normalizedSectionOverrides,
+            scoringProfile,
+            featureFlags
+          );
+        } else {
+          overallScore = calculateOverallScore(req.body.items, scoringProfile, featureFlags);
+        }
         
-        const invalidOverall = getInvalidOverallScoreResponse(overallScore);
+        const invalidOverall = getInvalidOverallScoreResponse(overallScore, {
+          allowNullOverall: false,
+        });
         if (invalidOverall) {
           console.error(`❌ Calculated overallScore is invalid: ${overallScore}`);
           return res.status(400).json(invalidOverall);
         }
-
-        let evaluationStructureVersionId = null;
-        const rawStructVer = req.body.evaluationStructureVersionId;
-        if (rawStructVer !== undefined && rawStructVer !== null) {
-          if (typeof rawStructVer !== 'string' || !rawStructVer.trim()) {
-            return res.status(400).json({
-              message: 'evaluationStructureVersionId must be a non-empty string when provided.',
-              error: 'INVALID_EVALUATION_STRUCTURE_VERSION_ID',
-            });
-          }
-          const okVer = await evaluationStructureVersionExistsForCompany(
-            pool,
-            rawStructVer.trim(),
-            companyId
-          );
-          if (!okVer) {
-            return res.status(400).json({
-              message: 'Invalid evaluationStructureVersionId for this company.',
-              error: 'INVALID_EVALUATION_STRUCTURE_VERSION_ID',
-            });
-          }
-          evaluationStructureVersionId = rawStructVer.trim();
-        }
         
-        // Insert into evaluations table
-        await pool.query(`
+        const itemsToInsert = Array.isArray(req.body.items) ? req.body.items : [];
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(`
           INSERT INTO evaluations (
             id, "salespersonId", "managerId", "visitDate", 
             "customerName", "customerType", location, "overallComment", "overallScore",
-            version, "companyId", "evaluationStructureVersionId", "createdAt", "updatedAt"
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+            version, "companyId", "evaluationStructureVersionId", "sectionOverrides", "createdAt", "updatedAt"
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, NOW(), NOW())
         `, [
           evaluationId,
           req.body.salespersonId,
@@ -127,15 +154,15 @@ function createEvaluationsHandlers(deps) {
           overallScore,
           1,
           companyId,
-          evaluationStructureVersionId
+          evaluationStructureVersionId,
+          normalizedSectionOverrides && Object.keys(normalizedSectionOverrides).length > 0
+            ? JSON.stringify(normalizedSectionOverrides)
+            : null,
         ]);
-        
-        // Insert evaluation items (already validated above)
-        for (let i = 0; i < req.body.items.length; i++) {
-          const item = req.body.items[i];
-          const score = item.rating || item.score; // Already validated above
-          
-          await pool.query(`
+          for (let i = 0; i < itemsToInsert.length; i++) {
+            const item = itemsToInsert[i];
+            const score = item.rating || item.score;
+            await client.query(`
             INSERT INTO evaluation_items (
               id, "evaluationId", "behaviorItemId", rating, comment,
               "createdAt", "updatedAt"
@@ -144,9 +171,20 @@ function createEvaluationsHandlers(deps) {
             `item_${evaluationId}_${i}`,
             evaluationId,
             item.behaviorItemId,
-            score, // Use validated score (1-4)
-            item.comment || '' // Store the actual user's comment text
+            score,
+            item.comment || ''
           ]);
+          }
+          await client.query('COMMIT');
+        } catch (txError) {
+          try {
+            await client.query('ROLLBACK');
+          } catch (rollbackErr) {
+            console.error('❌ ROLLBACK failed:', rollbackErr);
+          }
+          throw txError;
+        } finally {
+          client.release();
         }
         
         console.log(`✅ Saved evaluation ${evaluationId} to database for user ${req.user.email}`);
@@ -171,7 +209,6 @@ function createEvaluationsHandlers(deps) {
       try {
         const { companyId, includeAllCompanies } = resolveCompanyContext(req);
         const { userCol, teamCol } = await getUserTeamsColumns(pool);
-        const hierarchyTemplate = await getCompanyHierarchyTemplate(companyId);
 
         const managerIds = new Set([req.user.id]);
         const salespersonIds = new Set([req.user.id]);
@@ -229,6 +266,7 @@ function createEvaluationsHandlers(deps) {
               e.id, e."salespersonId", e."managerId", e."visitDate",
               e."customerName", e.location, e."overallComment", e."overallScore",
               e.version, e."createdAt", e."updatedAt", e."companyId", e."evaluationStructureVersionId",
+              e."sectionOverrides",
               sp."displayName" as salesperson_name, sp.email as salesperson_email,
               sp.role as salesperson_role, sp."companyId" as salesperson_company_id, sp."isActive" as salesperson_is_active,
               mg."displayName" as manager_name, mg.email as manager_email,
@@ -256,6 +294,7 @@ function createEvaluationsHandlers(deps) {
               e.id, e."salespersonId", e."managerId", e."visitDate",
               e."customerName", e.location, e."overallComment", e."overallScore",
               e.version, e."createdAt", e."updatedAt", e."companyId", e."evaluationStructureVersionId",
+              e."sectionOverrides",
               sp."displayName" as salesperson_name, sp.email as salesperson_email,
               sp.role as salesperson_role, sp."companyId" as salesperson_company_id, sp."isActive" as salesperson_is_active,
               mg."displayName" as manager_name, mg.email as manager_email,

@@ -221,6 +221,12 @@ async function runMigrations() {
             ) THEN
               ALTER TABLE evaluations ADD COLUMN "evaluationStructureVersionId" TEXT;
             END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'evaluations' AND column_name = 'sectionOverrides'
+            ) THEN
+              ALTER TABLE evaluations ADD COLUMN "sectionOverrides" JSONB;
+            END IF;
           END $$;
         `);
 
@@ -2121,6 +2127,7 @@ app.get('/public-admin/evaluations', authenticateToken, async (req, res) => {
         e.id, e."salespersonId", e."managerId", e."visitDate",
         e."customerName", e.location, e."overallComment", e."overallScore",
         e.version, e."createdAt", e."updatedAt", e."companyId", e."evaluationStructureVersionId",
+        e."sectionOverrides",
         e.metadata, e."configVersionId",
         sp."displayName" as salesperson_name, sp.email as salesperson_email, sp.role as salesperson_role,
         mg."displayName" as manager_name, mg.email as manager_email, mg.role as manager_role
@@ -2183,6 +2190,7 @@ app.get('/public-admin/evaluations', authenticateToken, async (req, res) => {
         metadata:
           evalRow.metadata && typeof evalRow.metadata === 'object' ? evalRow.metadata : {},
         evaluationStructureVersionId: pinnedVersionId,
+        sectionOverrides: evalRow.sectionOverrides ?? null,
         resultView: buildResultView({
           evalRow,
           itemRows: itemsResult.rows,

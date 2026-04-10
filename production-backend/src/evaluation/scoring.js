@@ -1,6 +1,9 @@
 /**
  * Phase 2A — overall score calculation (moved verbatim from evaluations.service.js).
+ * Pinned structure — excludes N/A sections; formulas unchanged on applicable items only.
  */
+
+const { buildPinnedStructureIndex } = require('./validation');
 
 function calculateOverallScore(items, scoringProfile = { mode: 'legacy_average', settings: {} }, featureFlags = { enableCompanyCustomization: false, useLegacyEvaluationFlow: true }) {
   if (!items || items.length === 0) return null; // Return null instead of 0 for invalid data
@@ -35,10 +38,48 @@ function calculateOverallScore(items, scoringProfile = { mode: 'legacy_average',
 }
 
 /**
- * Returns the same 400 body as the previous inline check, or null if overallScore is acceptable.
+ * Overall score from only items whose section is not marked N/A in sectionOverrides.
+ * Same averaging logic as calculateOverallScore on the filtered list.
  */
-function getInvalidOverallScoreResponse(overallScore) {
-  if (!overallScore || overallScore < 1 || overallScore > 4) {
+function calculateOverallScoreForPinnedStructure(
+  items,
+  evaluationStructure,
+  sectionOverrides,
+  scoringProfile = { mode: 'legacy_average', settings: {} },
+  featureFlags = { enableCompanyCustomization: false, useLegacyEvaluationFlow: true }
+) {
+  const { behaviorToSection } = buildPinnedStructureIndex(evaluationStructure);
+  const na = sectionOverrides && typeof sectionOverrides === 'object' && !Array.isArray(sectionOverrides) ? sectionOverrides : {};
+  const naSections = new Set();
+  for (const [sid, v] of Object.entries(na)) {
+    if (v && v.notApplicable === true) naSections.add(sid);
+  }
+
+  const applicableItems = (items || []).filter((it) => {
+    const bid = String(it.behaviorItemId || '').trim();
+    const sec = behaviorToSection.get(bid);
+    if (!sec) return false;
+    return !naSections.has(sec);
+  });
+
+  return calculateOverallScore(applicableItems, scoringProfile, featureFlags);
+}
+
+/**
+ * @param {number|null|undefined} overallScore
+ * @param {{ allowNullOverall?: boolean }} [options]
+ */
+function getInvalidOverallScoreResponse(overallScore, options = {}) {
+  const allowNull = options.allowNullOverall === true;
+  if (overallScore === null || overallScore === undefined) {
+    if (allowNull) return null;
+    return {
+      message: 'Failed to calculate overall score. Please ensure all items have valid scores between 1 and 4.',
+      error: 'INVALID_OVERALL_SCORE',
+      calculatedScore: overallScore
+    };
+  }
+  if (overallScore < 1 || overallScore > 4) {
     return {
       message: 'Failed to calculate overall score. Please ensure all items have valid scores between 1 and 4.',
       error: 'INVALID_OVERALL_SCORE',
@@ -48,4 +89,4 @@ function getInvalidOverallScoreResponse(overallScore) {
   return null;
 }
 
-module.exports = { calculateOverallScore, getInvalidOverallScoreResponse };
+module.exports = { calculateOverallScore, calculateOverallScoreForPinnedStructure, getInvalidOverallScoreResponse };

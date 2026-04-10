@@ -122,7 +122,9 @@ export interface EvaluationResultView {
   sections?: Array<{
     id: string;
     title: string;
+    notApplicable: boolean;
     score: number | null;
+    comment?: string;
     criteria: Array<{
       id: string;
       behaviorItemId: string;
@@ -776,6 +778,13 @@ class ApiService {
     overallComment?: string;
     /** Milestone 3 — set when form used a published non-legacy structure */
     evaluationStructureVersionId?: string;
+    sectionOverrides?: Record<
+      string,
+      {
+        notApplicable: true;
+        comment: string;
+      }
+    >;
     items: Array<{
       behaviorItemId: string;
       rating: number; // Backend expects 'rating' not 'score'

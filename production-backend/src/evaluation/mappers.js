@@ -75,8 +75,24 @@ function getFallbackLabelForBehaviorItem(item) {
   return item.behaviorItemId;
 }
 
+function parseSectionOverridesRow(raw) {
+  if (raw == null || raw === '') return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const o = JSON.parse(raw);
+      return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 function buildResultView({ evalRow, itemRows, pinnedStructureRow }) {
   const pinnedId = evalRow.evaluationStructureVersionId || null;
+  const sectionOverrides = parseSectionOverridesRow(evalRow.sectionOverrides);
+
   if (!pinnedId) {
     return {
       legacy: true,
@@ -87,8 +103,8 @@ function buildResultView({ evalRow, itemRows, pinnedStructureRow }) {
   if (!pinnedStructureRow || !pinnedStructureRow.evaluationStructure) {
     return {
       legacy: true,
-      structureVersionId: pinnedId,
       structureMissing: true,
+      structureVersionId: pinnedId,
       unmappedItems: (itemRows || []).map((item) => ({
         behaviorItemId: item.behaviorItemId,
         label: getFallbackLabelForBehaviorItem(item),
@@ -111,8 +127,34 @@ function buildResultView({ evalRow, itemRows, pinnedStructureRow }) {
 
   const usedItemIds = new Set();
   const renderedSections = sections.map((sec) => {
+    const sectionId = typeof sec?.id === 'string' ? sec.id.trim() : '';
+    const naEntry = sectionId && sectionOverrides[sectionId]?.notApplicable === true ? sectionOverrides[sectionId] : null;
+
     const crits = Array.isArray(sec?.criteria) ? [...sec.criteria] : [];
     crits.sort((a, b) => Number(a?.order ?? 0) - Number(b?.order ?? 0));
+
+    if (naEntry) {
+      const criteriaNa = crits.map((c) => {
+        const behaviorItemId = String(c?.behaviorItemId || '');
+        const label =
+          typeof c?.label === 'string' && c.label.trim() ? c.label.trim() : behaviorItemId;
+        return {
+          id: c?.id || null,
+          behaviorItemId,
+          label,
+          rating: null,
+          comment: '',
+        };
+      });
+      return {
+        id: sec?.id || null,
+        title: sec?.title || 'Untitled Section',
+        notApplicable: true,
+        score: null,
+        comment: typeof naEntry.comment === 'string' ? naEntry.comment : '',
+        criteria: criteriaNa,
+      };
+    }
 
     const criteria = crits.map((c) => {
       const behaviorItemId = String(c?.behaviorItemId || '');
@@ -132,12 +174,13 @@ function buildResultView({ evalRow, itemRows, pinnedStructureRow }) {
       };
     });
 
-    const rated = criteria.filter((c) => typeof c.rating === 'number');
+    const rated = criteria.filter((c) => typeof c.rating === 'number' && c.rating >= 1 && c.rating <= 4);
     const score = rated.length > 0 ? rated.reduce((sum, c) => sum + c.rating, 0) / rated.length : null;
 
     return {
       id: sec?.id || null,
       title: sec?.title || 'Untitled Section',
+      notApplicable: false,
       score,
       criteria,
     };
@@ -201,6 +244,7 @@ function mapMyEvaluationDto(evalRow, itemRows, user, options = {}) {
     updatedAt: evalRow.updatedAt,
     companyId: evalRow.companyId,
     evaluationStructureVersionId: evalRow.evaluationStructureVersionId || null,
+    sectionOverrides: evalRow.sectionOverrides != null ? evalRow.sectionOverrides : null,
     resultView:
       options.resultView ||
       buildResultView({

@@ -114,6 +114,16 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
   const [structureDoc, setStructureDoc] = useState<EvaluationStructureDocument | null>(null);
   const [activeStructureVersionId, setActiveStructureVersionId] = useState<string | null>(null);
   const [structureLayoutActive, setStructureLayoutActive] = useState(false);
+  const [sectionStates, setSectionStates] = useState<
+    Record<
+      string,
+      {
+        na: boolean;
+        comment: string;
+      }
+    >
+  >({});
+  const sectionCommentRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   const applyStructureState = (cats: any[], structRes: EvaluationStructureResponse) => {
     if (cats.length === 0 || structRes.legacy) {
@@ -852,6 +862,57 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     setScores(prev => ({ ...prev, [criteriaId]: score }));
   };
 
+  const getSectionState = (sectionId: string) => {
+    return sectionStates[sectionId] || { na: false, comment: '' };
+  };
+
+  const clearSectionScores = (itemIds: string[]) => {
+    setScores((prev) => {
+      const next = { ...prev };
+      itemIds.forEach((id) => {
+        delete next[id];
+      });
+      return next;
+    });
+  };
+
+  const handleSectionNaToggle = (sectionId: string, nextNa: boolean, itemIds: string[]) => {
+    if (nextNa) {
+      const ok = window.confirm('Are you sure? This will remove all scores in this section.');
+      if (!ok) return;
+      clearSectionScores(itemIds);
+      setSectionStates((prev) => ({
+        ...prev,
+        [sectionId]: {
+          na: true,
+          comment: prev[sectionId]?.comment || '',
+        },
+      }));
+      setTimeout(() => {
+        sectionCommentRefs.current[sectionId]?.focus();
+      }, 0);
+      return;
+    }
+    setSectionStates((prev) => ({
+      ...prev,
+      [sectionId]: {
+        na: false,
+        comment: '',
+      },
+    }));
+  };
+
+  const handleSectionCommentChange = (sectionId: string, value: string) => {
+    const validation = validateInput(value, 2000);
+    setSectionStates((prev) => ({
+      ...prev,
+      [sectionId]: {
+        na: prev[sectionId]?.na === true,
+        comment: validation.sanitized,
+      },
+    }));
+  };
+
   const handleExampleChange = (itemId: string, value: string) => {
     const validation = validateInput(value, 1000);
     if (validation.isValid) {
@@ -868,14 +929,63 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     }
   };
 
-  const calculateClusterScore = (clusterId: string) => {
+  const calculateClusterScore = (clusterId: string): number | null => {
+    if (getSectionState(clusterId).na) return null;
     const categories = getEvaluationCategories();
     const cluster = categories.find(c => c.id === clusterId);
-    if (!cluster) return 0;
+    if (!cluster) return null;
 
-    const clusterScores = cluster.items.map((item: any) => scores[item.id] || 0);
+    const clusterScores = cluster.items
+      .map((item: any) => scores[item.id])
+      .filter((s: number | undefined): s is number => typeof s === 'number' && s >= 1 && s <= 4);
     const totalScore = clusterScores.reduce((sum: number, score: number) => sum + score, 0);
-    return clusterScores.length > 0 ? totalScore / clusterScores.length : 0; // Return average score (1-4)
+    return clusterScores.length > 0 ? totalScore / clusterScores.length : null; // Return average score (1-4)
+  };
+
+  const calculateOverallPreview = (): number | null => {
+    const categories = getEvaluationCategories();
+    const applicableCategories = categories.filter((category: any) => !getSectionState(category.id).na);
+    const allScores: number[] = [];
+    applicableCategories.forEach((category: any) => {
+      category.items.forEach((item: any) => {
+        const v = scores[item.id];
+        if (typeof v === 'number' && v >= 1 && v <= 4) allScores.push(v);
+      });
+    });
+    if (allScores.length === 0) return null;
+    const sum = allScores.reduce((acc, cur) => acc + cur, 0);
+    return sum / allScores.length;
+  };
+
+  const getInvalidReason = (): string | null => {
+    const categories = getEvaluationCategories();
+    if (!selectedUser) return t('evaluation.selectTeamMember');
+    if (!customerType) return `${t('evaluation.customerType')} is required`;
+    if (!location.trim()) return `${t('evaluation.location')} is required`;
+    if (categories.length === 0) return 'No sections available for evaluation';
+
+    const notNaSectionCount = categories.filter((category: any) => !getSectionState(category.id).na).length;
+    if (notNaSectionCount === 0) {
+      return 'At least one section must not be marked as N/A.';
+    }
+
+    for (const category of categories) {
+      const sectionState = getSectionState(category.id);
+      if (sectionState.na) {
+        if (!sectionState.comment.trim()) {
+          return `Please explain why "${category.name}" is not applicable.`;
+        }
+      } else {
+        for (const item of category.items || []) {
+          const rating = scores[item.id];
+          if (typeof rating !== 'number' || rating < 1 || rating > 4) {
+            return `Please rate all criteria in "${category.name}".`;
+          }
+        }
+      }
+    }
+
+    return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -904,12 +1014,59 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
     try {
       // Use the correct categories based on user role and selected user
       const categories = getEvaluationCategories();
-      const evaluationItems = categories.flatMap(category => 
-        category.items.map((item: any) => ({
-          behaviorItemId: item.id,
-          rating: scores[item.id] || 0, // Backend expects 'rating' not 'score'
-          comment: comments[item.id] || ''
-        }))
+
+      const notNaSectionCount = categories.filter((category: any) => !getSectionState(category.id).na).length;
+      if (notNaSectionCount === 0) {
+        setError('At least one section must not be marked as N/A.');
+        isSubmittingRef.current = false;
+        setIsSubmitting(false);
+        return;
+      }
+
+      for (const category of categories) {
+        const sectionState = getSectionState(category.id);
+        if (sectionState.na) {
+          if (!sectionState.comment.trim()) {
+            setError(`Please explain why "${category.name}" is not applicable.`);
+            isSubmittingRef.current = false;
+            setIsSubmitting(false);
+            return;
+          }
+          continue;
+        }
+        for (const item of category.items) {
+          const rating = scores[item.id];
+          if (typeof rating !== 'number' || rating < 1 || rating > 4) {
+            setError(`Please rate all criteria in "${category.name}".`);
+            isSubmittingRef.current = false;
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      }
+
+      const evaluationItems = categories
+        .filter((category: any) => !getSectionState(category.id).na)
+        .flatMap(category => 
+          category.items.map((item: any) => ({
+            behaviorItemId: item.id,
+            rating: scores[item.id], // Backend expects 'rating' not 'score'
+            comment: comments[item.id] || ''
+          }))
+        );
+
+      const sectionOverrides = categories.reduce<Record<string, { notApplicable: true; comment: string }>>(
+        (acc, category: any) => {
+          const sectionState = getSectionState(category.id);
+          if (sectionState.na) {
+            acc[category.id] = {
+              notApplicable: true,
+              comment: sectionState.comment.trim(),
+            };
+          }
+          return acc;
+        },
+        {}
       );
 
       evaluationData = {
@@ -923,6 +1080,9 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       };
       if (structureLayoutActive && activeStructureVersionId) {
         evaluationData.evaluationStructureVersionId = activeStructureVersionId;
+        if (Object.keys(sectionOverrides).length > 0) {
+          evaluationData.sectionOverrides = sectionOverrides;
+        }
       }
 
       try {
@@ -944,6 +1104,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
         setOverallComment('');
         setScores({});
         setComments({});
+        setSectionStates({});
         
         // Navigate to history after a longer delay to see the message
         setTimeout(() => {
@@ -1004,6 +1165,8 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
       </div>
     );
   }
+  const invalidReason = getInvalidReason();
+  const isFormInvalid = Boolean(invalidReason);
 
   return (
     <div className="evaluation-form">
@@ -1117,6 +1280,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                     // Reset scores and comments when categories change
                     setScores({});
                     setComments({});
+                    setSectionStates({});
                     console.log('✅ [PWA] Loaded categories for customerType:', newCustomerType, behaviorCategories.length);
                   } catch (err) {
                     console.error('❌ [PWA] Failed to reload categories:', err);
@@ -1137,6 +1301,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
                     // Reset scores and comments when categories change
                     setScores({});
                     setComments({});
+                    setSectionStates({});
                     console.log('✅ [PWA] Loaded default categories');
                   } catch (err) {
                     console.error('❌ [PWA] Failed to reload default categories:', err);
@@ -1183,15 +1348,69 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
           </p>
 
           {getEvaluationCategories().map(category => (
-            <div key={category.id} className="evaluation-category" style={{ backgroundColor: `${category.color}10` }}>
+            <div
+              key={category.id}
+              className={`evaluation-category ${getSectionState(category.id).na ? 'evaluation-category-na' : ''}`}
+              style={{ backgroundColor: `${category.color}10` }}
+            >
               <h4 className="category-title" style={{ color: category.color }}>
                 {category.name}
+                {getSectionState(category.id).na ? (
+                  <span className="category-score-badge"> (N/A)</span>
+                ) : (
+                  <span className="category-score-badge">
+                    {' '}
+                    ({(() => {
+                      const sectionScore = calculateClusterScore(category.id);
+                      return typeof sectionScore === 'number'
+                        ? `${((sectionScore / 4) * 100).toFixed(0)}%`
+                        : 'N/A';
+                    })()})
+                  </span>
+                )}
                 {(category as any).weight && (
                   <span className="category-weight"> (Weight: {((category as any).weight * 100).toFixed(1)}%)</span>
                 )}
               </h4>
+
+              <div className="section-na-row">
+                <label className="section-na-toggle">
+                  <input
+                    type="checkbox"
+                    checked={getSectionState(category.id).na}
+                    onChange={(e) =>
+                      handleSectionNaToggle(
+                        category.id,
+                        e.target.checked,
+                        (category.items || []).map((item: any) => item.id)
+                      )
+                    }
+                  />
+                  <span>Not applicable for this visit</span>
+                </label>
+              </div>
+
+              {getSectionState(category.id).na && (
+                <div className="section-na-details">
+                  <p className="section-na-helper">This section will not affect the score</p>
+                  <label className="section-na-comment-label">
+                    Explain why this section is not applicable
+                  </label>
+                  <textarea
+                    value={getSectionState(category.id).comment}
+                    onChange={(e) => handleSectionCommentChange(category.id, e.target.value)}
+                    ref={(el) => {
+                      sectionCommentRefs.current[category.id] = el;
+                    }}
+                    placeholder="Provide a brief explanation"
+                    required={getSectionState(category.id).na}
+                    rows={3}
+                    className="section-na-comment"
+                  />
+                </div>
+              )}
               
-              {category.items.map((item: any) => (
+              {!getSectionState(category.id).na && category.items.map((item: any) => (
                 <div key={item.id} className="behavior-item">
                   <div className="item-header">
                     <label className="item-label">{item.name}</label>
@@ -1240,6 +1459,14 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
               ))}
             </div>
           ))}
+
+          <div className="overall-preview">
+            <strong>Overall preview: </strong>
+            {(() => {
+              const overall = calculateOverallPreview();
+              return typeof overall === 'number' ? `${((overall / 4) * 100).toFixed(0)}%` : 'N/A';
+            })()}
+          </div>
         </div>
 
         <div className="form-section">
@@ -1269,6 +1496,11 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
             {error}
           </div>
         )}
+        {!error && isFormInvalid && (
+          <div className="validation-hint">
+            {invalidReason}
+          </div>
+        )}
 
         {successMessage && (
           <div className="success-message">
@@ -1280,7 +1512,7 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSuccess, onCancel }) 
           <button type="button" onClick={onCancel} className="cancel-button">
             {t('evaluation.cancel')}
           </button>
-          <button type="submit" disabled={isSubmitting} className="submit-button">
+          <button type="submit" disabled={isSubmitting || isFormInvalid} className="submit-button">
             {isSubmitting ? t('evaluation.submitting') : t('evaluation.submit')}
           </button>
         </div>

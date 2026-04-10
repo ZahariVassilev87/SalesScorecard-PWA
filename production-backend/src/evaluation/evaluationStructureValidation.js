@@ -161,7 +161,15 @@ function validateEvaluationStructureShapeDetailed(evaluationStructure) {
   }
 
   if (errors.length > 0) {
-    return { ok: false, error: errors[0], code: 'INVALID_STRUCTURE', validationErrors: errors };
+    const emptySection = errors.some((e) =>
+      typeof e === 'string' && e.includes('criteria must contain at least one criterion')
+    );
+    return {
+      ok: false,
+      error: errors[0],
+      code: emptySection ? 'EMPTY_SECTION_NOT_ALLOWED' : 'INVALID_STRUCTURE',
+      validationErrors: errors,
+    };
   }
   return { ok: true };
 }
