@@ -3171,9 +3171,23 @@ app.get('/public-admin/companies/:companyId/evaluation-structure-config', authen
         evaluationStructurePreview: null,
       });
     }
-    const normalizedSections = materializeAdminSections(
-      materializeSectionPolicyFields(cfg.evaluationStructure)
-    );
+    const rawConfigSections = Array.isArray(cfg?.evaluationStructure?.sections)
+      ? cfg.evaluationStructure.sections
+      : [];
+    const normalizedSections = rawConfigSections.map((s) => ({
+      id: s.id,
+      order: s.order,
+      title: s.title,
+      isScorable: s?.isScorable !== false,
+      naAllowed: s?.naAllowed !== false,
+      criteria: Array.isArray(s.criteria)
+        ? s.criteria.map((c) => ({
+            id: c.id,
+            order: c.order,
+            behaviorItemId: c.behaviorItemId,
+          }))
+        : [],
+    }));
     const normalizedStructure = { sections: normalizedSections };
     const rowForSummary = {
       versionId: cfg.versionId,
@@ -3212,9 +3226,23 @@ app.get('/public-admin/companies/:companyId/evaluation-structure/preview', authe
   try {
     const draft = await getEvaluationStructureDraft(pool, companyId);
     if (draft?.evaluationStructure) {
-      const normalizedDraftSections = materializeAdminSections(
-        materializeSectionPolicyFields(draft.evaluationStructure)
-      );
+      const rawDraftSections = Array.isArray(draft?.evaluationStructure?.sections)
+        ? draft.evaluationStructure.sections
+        : [];
+      const normalizedDraftSections = rawDraftSections.map((s) => ({
+        id: s.id,
+        order: s.order,
+        title: s.title,
+        isScorable: s?.isScorable !== false,
+        naAllowed: s?.naAllowed !== false,
+        criteria: Array.isArray(s.criteria)
+          ? s.criteria.map((c) => ({
+              id: c.id,
+              order: c.order,
+              behaviorItemId: c.behaviorItemId,
+            }))
+          : [],
+      }));
       return res.json({
         companyId,
         legacy: false,
@@ -3235,9 +3263,23 @@ app.get('/public-admin/companies/:companyId/evaluation-structure/preview', authe
         currentVersionSummary: null,
       });
     }
-    const normalizedSections = materializeAdminSections(
-      materializeSectionPolicyFields(cfg.evaluationStructure)
-    );
+    const rawPreviewSections = Array.isArray(cfg?.evaluationStructure?.sections)
+      ? cfg.evaluationStructure.sections
+      : [];
+    const normalizedSections = rawPreviewSections.map((s) => ({
+      id: s.id,
+      order: s.order,
+      title: s.title,
+      isScorable: s?.isScorable !== false,
+      naAllowed: s?.naAllowed !== false,
+      criteria: Array.isArray(s.criteria)
+        ? s.criteria.map((c) => ({
+            id: c.id,
+            order: c.order,
+            behaviorItemId: c.behaviorItemId,
+          }))
+        : [],
+    }));
     const normalizedStructure = { sections: normalizedSections };
     const rowForSummary = {
       versionId: cfg.versionId,
