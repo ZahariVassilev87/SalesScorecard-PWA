@@ -209,20 +209,27 @@ const PROD_COACHING_SALES_LEAD_PRESET: CompanyFormTemplatePayload['categories'] 
 /** Mirrors /scoring/categories filtering by category name (Metro-style tokens). View-only in admin. */
 type FormTemplatePwaView = 'all' | 'sp_standard' | 'sp_high_share' | 'sales_lead';
 
+/** Same naming convention as server.js /scoring/categories (HIGH_SHARE vs standard salesperson rows). */
+function isSalespersonHighShareCategoryName(categoryName: string): boolean {
+  const u = (categoryName || '').toUpperCase();
+  return u.includes('HIGH_SHARE') || u.includes('HIGH SHARE');
+}
+
 function categoryMatchesPwaView(categoryName: string, view: FormTemplatePwaView): boolean {
   if (view === 'all') return true;
   const n = categoryName || '';
   const u = n.toUpperCase();
   if (view === 'sales_lead') {
-    return u.includes('SALES_LEAD');
+    return u.includes('SALES_LEAD') || u.includes('COACHING SKILLS');
+  }
+  if (!u.includes('SALESPERSON')) {
+    return false;
   }
   if (view === 'sp_high_share') {
-    // Product rule: high-share and low-mid share use the same category set.
-    return u.includes('SALESPERSON');
+    return isSalespersonHighShareCategoryName(n);
   }
   if (view === 'sp_standard') {
-    // Product rule: high-share and low-mid share use the same category set.
-    return u.includes('SALESPERSON');
+    return !isSalespersonHighShareCategoryName(n);
   }
   return true;
 }
@@ -2640,15 +2647,20 @@ const CompanyConfiguration: React.FC<{ selectedCompanyId: string }> = ({ selecte
       ];
 
       const tokens = mode === 'salesperson' ? salespersonTokens : salesLeadTokens;
-      const filtered = sourceCategories.filter((c) => {
+      let filtered = sourceCategories.filter((c) => {
         const n = String(c?.name || '').toUpperCase();
         return tokens.some((t) => n.includes(t));
       });
 
+      // "Salesperson standard" must not pull the parallel HIGH_SHARE rows (same cluster tokens in the name).
+      if (mode === 'salesperson') {
+        filtered = filtered.filter((c) => !isSalespersonHighShareCategoryName(String(c?.name || '')));
+      }
+
       if (filtered.length === 0) {
         throw new Error(
           mode === 'salesperson'
-            ? 'Metro baseline does not contain the expected salesperson categories.'
+            ? 'Metro baseline does not contain the expected salesperson categories (non-high-share).'
             : 'Metro baseline does not contain the expected sales lead categories.'
         );
       }

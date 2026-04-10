@@ -15,8 +15,8 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}🚀 Deploying Backend with Delete Fixes${NC}"
 echo ""
 
-# Configuration
-ECR_REPOSITORY="221855463690.dkr.ecr.us-east-1.amazonaws.com/sales-scorecard-api"
+# Configuration (Fargate runs linux/amd64 — build on Apple Silicon with: docker build --platform linux/amd64)
+ECR_REPOSITORY="221855463690.dkr.ecr.eu-north-1.amazonaws.com/sales-scorecard-api"
 ECS_CLUSTER="sales-scorecard-cluster"
 ECS_SERVICE="sales-scorecard-service"
 REGION="eu-north-1"
@@ -33,7 +33,7 @@ echo -e "${BLUE}✅ AWS CLI configured${NC}"
 # Step 1: Build Docker image
 echo -e "${BLUE}📦 Building Docker image...${NC}"
 cd production-backend
-docker build -t sales-scorecard-api:latest .
+docker build --platform linux/amd64 -t sales-scorecard-api:latest .
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Docker image built successfully${NC}"
@@ -44,7 +44,7 @@ fi
 
 # Step 2: Login to ECR
 echo -e "${BLUE}🔐 Logging in to ECR...${NC}"
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REPOSITORY
+aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Logged in to ECR${NC}"

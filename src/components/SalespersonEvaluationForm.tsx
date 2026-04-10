@@ -100,34 +100,26 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
   useEffect(() => {
     const loadCategories = async () => {
       if (!customerType) return;
-      
+
       try {
-        // Only reload categories for HIGH_SHARE
-        // For LOW_SHARE and MID_SHARE, use hardcoded defaultCategories (don't reload from backend)
+        setIsLoading(true);
         if (customerType === 'HIGH_SHARE') {
-          // Convert HIGH_SHARE to high-share for API
-          const apiCustomerType = 'high-share';
-          console.log('🔍 [SalespersonForm] Loading HIGH_SHARE categories');
-          setIsLoading(true);
-          const behaviorCategories = await apiService.getBehaviorCategories(apiCustomerType);
-          console.log('🔍 [SalespersonForm] Received HIGH_SHARE categories:', behaviorCategories.length);
-          if (behaviorCategories.length > 0) {
-            console.log('🔍 [SalespersonForm] First category:', behaviorCategories[0].name);
-          }
-          setCategories(behaviorCategories);
-          // Reset scores and cluster comments when categories change
-          setScores({});
-          setClusterComments({});
+          const behaviorCategories = await apiService.getBehaviorCategories('high-share');
           console.log('✅ [SalespersonForm] Loaded HIGH_SHARE categories:', behaviorCategories.length);
+          setCategories(behaviorCategories);
         } else {
-          // For LOW_SHARE and MID_SHARE, clear categories to use defaultCategories fallback
-          console.log('🔍 [SalespersonForm] Using default categories for:', customerType);
-          setCategories([]); // Clear to trigger fallback to defaultCategories
-          // Reset scores and cluster comments when categories change
-          setScores({});
-          setClusterComments({});
-          console.log('✅ [SalespersonForm] Using default categories for:', customerType);
+          // LOW / MID: server excludes HIGH_SHARE-titled rows (see /scoring/categories).
+          const behaviorCategories = await apiService.getBehaviorCategories();
+          if (behaviorCategories.length > 0) {
+            console.log('✅ [SalespersonForm] Loaded standard categories:', behaviorCategories.length);
+            setCategories(behaviorCategories);
+          } else {
+            console.log('🔍 [SalespersonForm] No standard API categories; using built-in defaults for:', customerType);
+            setCategories([]);
+          }
         }
+        setScores({});
+        setClusterComments({});
       } catch (err) {
         console.error('❌ [SalespersonForm] Failed to reload categories:', err);
         setError(t('common:evaluation.error'));
@@ -135,7 +127,7 @@ const SalespersonEvaluationForm: React.FC<SalespersonEvaluationFormProps> = ({ o
         setIsLoading(false);
       }
     };
-    
+
     loadCategories();
   }, [customerType, t]);
 
