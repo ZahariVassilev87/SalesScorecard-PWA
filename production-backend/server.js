@@ -28,7 +28,7 @@ const {
   getCurrentPublishedEvaluationStructure,
   publishEvaluationStructure,
   buildStructureSummaryRow,
-  buildStructurePreviewPayload,
+  materializeSectionPolicyFields,
   getEvaluationStructureVersionForCompany,
   getEvaluationStructureDraft,
   upsertEvaluationStructureDraft,
@@ -38,6 +38,7 @@ const {
   batchCloneToDraft,
 } = require('./src/services/evaluationStructureConfig.service');
 const { buildResultView } = require('./src/evaluation/mappers');
+const { normalizeEvaluationStructureForStorage } = require('./src/evaluation/evaluationStructureValidation');
 
 const app = express();
 // Default 3001 so the root PWA can use 3000 in dev (see DEV-ENVIRONMENT.md, docker-compose.dev.yml).
@@ -56,6 +57,39 @@ const authenticateToken = createAuthenticateToken({
   jwtSecret: JWT_SECRET,
   defaultCompanyId: DEFAULT_COMPANY_ID,
 });
+
+function normalizeAdminEvaluationStructureForResponse(evaluationStructure) {
+  if (!evaluationStructure || typeof evaluationStructure !== 'object' || Array.isArray(evaluationStructure)) {
+    return { sections: [] };
+  }
+  return normalizeEvaluationStructureForStorage(evaluationStructure);
+}
+
+function buildAdminStructurePayload(evaluationStructure) {
+  const normalized = normalizeAdminEvaluationStructureForResponse(evaluationStructure);
+  const sections = Array.isArray(normalized.sections) ? normalized.sections : [];
+  return {
+    sections: sections.map((s) => ({
+      id: s.id,
+      title: s.title,
+      order: s.order,
+      isScorable: s.isScorable !== false,
+      naAllowed: s.naAllowed !== false,
+      criteria: Array.isArray(s.criteria)
+        ? s.criteria.map((c) => ({
+            id: c.id,
+            order: c.order,
+            behaviorItemId: c.behaviorItemId,
+          }))
+        : [],
+    })),
+  };
+}
+
+function materializeAdminSections(evaluationStructure) {
+  const payload = buildAdminStructurePayload(evaluationStructure);
+  return Array.isArray(payload.sections) ? payload.sections : [];
+}
 
 // Database migrations on startup
 async function runMigrations() {
@@ -3137,10 +3171,14 @@ app.get('/public-admin/companies/:companyId/evaluation-structure-config', authen
         evaluationStructurePreview: null,
       });
     }
+    const normalizedSections = materializeAdminSections(
+      materializeSectionPolicyFields(cfg.evaluationStructure)
+    );
+    const normalizedStructure = { sections: normalizedSections };
     const rowForSummary = {
       versionId: cfg.versionId,
       version: cfg.version,
-      evaluationStructure: cfg.evaluationStructure,
+      evaluationStructure: normalizedStructure,
       publishedAt: cfg.publishedAt,
       publishedBy: cfg.publishedBy,
       publishedByEmail: cfg.publishedByEmail,
@@ -3153,9 +3191,9 @@ app.get('/public-admin/companies/:companyId/evaluation-structure-config', authen
       publishedAt: cfg.publishedAt,
       publishedBy: cfg.publishedBy,
       publishedByEmail: cfg.publishedByEmail || null,
-      evaluationStructure: cfg.evaluationStructure,
+      evaluationStructure: normalizedStructure,
       currentVersionSummary: buildStructureSummaryRow(rowForSummary),
-      evaluationStructurePreview: buildStructurePreviewPayload(cfg.evaluationStructure),
+      evaluationStructurePreview: { sections: normalizedSections },
     });
   } catch (error) {
     console.error('Error getting evaluation structure config:', error);
@@ -3172,20 +3210,39 @@ app.get('/public-admin/companies/:companyId/evaluation-structure/preview', authe
     return res.status(400).json({ error: 'Company ID is required.' });
   }
   try {
+    const draft = await getEvaluationStructureDraft(pool, companyId);
+    if (draft?.evaluationStructure) {
+      const normalizedDraftSections = materializeAdminSections(
+        materializeSectionPolicyFields(draft.evaluationStructure)
+      );
+      return res.json({
+        companyId,
+        legacy: false,
+        source: 'draft',
+        preview: { sections: normalizedDraftSections },
+        currentVersionSummary: null,
+      });
+    }
+
     const flags = await getCompanyFeatureFlags(companyId);
     const cfg = await getCurrentPublishedEvaluationStructure(pool, companyId);
     if (flags.useLegacyEvaluationFlow !== false || !cfg) {
       return res.json({
         companyId,
         legacy: true,
+        source: null,
         preview: null,
         currentVersionSummary: null,
       });
     }
+    const normalizedSections = materializeAdminSections(
+      materializeSectionPolicyFields(cfg.evaluationStructure)
+    );
+    const normalizedStructure = { sections: normalizedSections };
     const rowForSummary = {
       versionId: cfg.versionId,
       version: cfg.version,
-      evaluationStructure: cfg.evaluationStructure,
+      evaluationStructure: normalizedStructure,
       publishedAt: cfg.publishedAt,
       publishedBy: cfg.publishedBy,
       publishedByEmail: cfg.publishedByEmail,
@@ -3193,7 +3250,8 @@ app.get('/public-admin/companies/:companyId/evaluation-structure/preview', authe
     return res.json({
       companyId,
       legacy: false,
-      preview: buildStructurePreviewPayload(cfg.evaluationStructure),
+      source: 'published',
+      preview: { sections: normalizedSections },
       currentVersionSummary: buildStructureSummaryRow(rowForSummary),
     });
   } catch (error) {
@@ -3291,10 +3349,13 @@ app.get('/public-admin/companies/:companyId/evaluation-structure/draft', authent
     if (!draft) {
       return res.json({ companyId, hasDraft: false, draft: null, updatedAt: null, updatedBy: null, updatedByEmail: null });
     }
+    const normalizedDraftSections = materializeAdminSections(
+      materializeSectionPolicyFields(draft.evaluationStructure)
+    );
     return res.json({
       companyId,
       hasDraft: true,
-      draft: draft.evaluationStructure,
+      draft: { sections: normalizedDraftSections },
       updatedAt: draft.updatedAt,
       updatedBy: draft.updatedBy,
       updatedByEmail: draft.updatedByEmail,

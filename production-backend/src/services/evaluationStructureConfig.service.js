@@ -2,7 +2,10 @@
  * Milestone 3 — published per-company evaluation structure (versioned sections + criteria).
  */
 const crypto = require('crypto');
-const { validateEvaluationStructureForPublish } = require('../evaluation/evaluationStructureValidation');
+const {
+  validateEvaluationStructureForPublish,
+  normalizeEvaluationStructureForStorage,
+} = require('../evaluation/evaluationStructureValidation');
 
 function buildStructureSummaryRow(row) {
   const structure =
@@ -23,6 +26,18 @@ function buildStructureSummaryRow(row) {
     sectionCount: sections.length,
     criterionCount,
   };
+}
+
+function withSectionPolicyDefaults(evaluationStructure) {
+  if (!evaluationStructure || typeof evaluationStructure !== 'object' || Array.isArray(evaluationStructure)) {
+    return { sections: [] };
+  }
+  return normalizeEvaluationStructureForStorage(evaluationStructure);
+}
+
+// Single canonical normalizer for all admin read surfaces.
+function materializeSectionPolicyFields(evaluationStructure) {
+  return withSectionPolicyDefaults(evaluationStructure);
 }
 
 /**
@@ -55,7 +70,7 @@ async function getCurrentPublishedEvaluationStructure(pool, companyId) {
   return {
     versionId: r.versionId,
     version: r.version,
-    evaluationStructure: r.evaluationStructure,
+    evaluationStructure: withSectionPolicyDefaults(r.evaluationStructure),
     publishedAt: r.publishedAt,
     publishedBy: r.publishedBy,
     publishedByEmail: r.publishedByEmail,
@@ -86,7 +101,7 @@ async function getEvaluationStructureVersionForCompany(pool, versionId, companyI
   return {
     versionId: r.versionId,
     version: r.version,
-    evaluationStructure: r.evaluationStructure,
+    evaluationStructure: withSectionPolicyDefaults(r.evaluationStructure),
     publishedAt: r.publishedAt,
     publishedBy: r.publishedBy,
     publishedByEmail: r.publishedByEmail,
@@ -120,7 +135,7 @@ async function getEvaluationStructureDraft(pool, companyId) {
   const r = rows[0];
   return {
     companyId: r.companyId,
-    evaluationStructure: r.evaluationStructure,
+    evaluationStructure: withSectionPolicyDefaults(r.evaluationStructure),
     updatedAt: r.updatedAt,
     updatedBy: r.updatedBy || null,
     updatedByEmail: r.updatedByEmail || null,
@@ -338,14 +353,15 @@ async function publishEvaluationStructure(pool, companyId, evaluationStructure, 
 }
 
 function buildStructurePreviewPayload(evaluationStructure) {
-  const structure =
-    evaluationStructure && typeof evaluationStructure === 'object' ? evaluationStructure : { sections: [] };
+  const structure = materializeSectionPolicyFields(evaluationStructure);
   const sections = Array.isArray(structure.sections) ? structure.sections : [];
   return {
     sections: sections.map((s) => ({
       id: s.id,
       title: s.title,
       order: s.order,
+      isScorable: s.isScorable !== false,
+      naAllowed: s.naAllowed !== false,
       criteria: Array.isArray(s.criteria)
         ? s.criteria.map((c) => ({
             id: c.id,
@@ -358,6 +374,7 @@ function buildStructurePreviewPayload(evaluationStructure) {
 }
 
 module.exports = {
+  materializeSectionPolicyFields,
   getCurrentPublishedEvaluationStructure,
   publishEvaluationStructure,
   evaluationStructureVersionExistsForCompany,
